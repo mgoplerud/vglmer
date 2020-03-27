@@ -7,6 +7,6 @@ Author: Max Goplerud
 Maintainer: Max Goplerud <goplerud@g.harvard.edu>
 Encoding: UTF-8
 Description: Variational Inference for Hierarchical Non-Linear Models.
-Imports: Rcpp (>= 1.0.1), RcppEigen (>= 0.3.3.4.0)
+Imports: Rcpp (>= 1.0.1), RcppEigen (>= 0.3.3.4.0), lme4, CholWishart, purrr, stringr, mvtnorm
 LinkingTo: Rcpp, RcppEigen
 RoxygenNote: 6.1.0
