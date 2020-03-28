@@ -14,6 +14,7 @@ extract_group_memberships <- function(x, fr, drop.unused.levels){
   return(ff)
 }
 
+#' @export
 format_glmer <- function(glmer_obj){
   output <- bind_rows(lapply(ranef(glmer_obj), FUN=function(i){
     obj <- data.frame(var = as.vector(apply(attributes(i)$postVar, MARGIN = 3, FUN=function(i){diag(i)})),
@@ -27,6 +28,7 @@ format_glmer <- function(glmer_obj){
   return(output)
 }
 
+#' @export
 format_vglmer <- function(vglmer_obj){
   beta.output <- data.frame(name = rownames(vglmer_obj$beta$mean), mean = as.vector(vglmer_obj$beta$mean), var = diag(vglmer_obj$beta$var), stringsAsFactors = F)
   alpha.output <- data.frame(name = rownames(vglmer_obj$alpha$mean), mean = as.vector(vglmer_obj$alpha$mean), var = as.vector(vglmer_obj$alpha$dia.var), stringsAsFactors = F)
@@ -34,9 +36,10 @@ format_vglmer <- function(vglmer_obj){
   return(output)
 }
 
+#' @export
 format_stan <- function(stan_obj, useSigma = FALSE){
   require(stringr)
-  post_stan <- posterior_samples(stan_obj)
+  post_stan <- as.matrix(stan_obj)
   if (!useSigma){
     post_stan <- post_stan[,!grepl(names(post_stan), pattern='^Sigma')]
   }
@@ -182,7 +185,7 @@ make_log_invwishart_constant <- function(nu, Phi){
 
 calculate_ELBO <- function(factorization.method,
    #Fixed constants or priors
-   d_j, g_j, prior_sigma_alpha_phi, prior_sigma_alpha_nu, iw_prior_constant,
+   d_j, g_j, prior_sigma_alpha_phi, prior_sigma_alpha_nu, iw_prior_constant, choose_term,
    #Data
    X, Z, s, 
    #PolyaGamma Parameters
@@ -192,7 +195,7 @@ calculate_ELBO <- function(factorization.method,
    #Beta Parameters / Alpha Parameters
    vi_beta_mean, vi_beta_decomp,
    vi_alpha_mean, vi_alpha_decomp,
-   log_det_beta_var, log_det_alpha_var,
+   log_det_beta_var, log_det_alpha_var, 
    log_det_joint_var = NULL,
    vi_joint_decomp = NULL){
   ####
@@ -259,6 +262,8 @@ calculate_ELBO <- function(factorization.method,
     1/2 * mapply(vi_sigma_alpha, inv_sigma_alpha, FUN=function(a,b){sum(diag(a %*% b))})
   entropy_3 <- sum(entropy_3)
   
+  logcomplete <- logcomplete + choose_term
+  
   entropy <- entropy_1 + entropy_2 + entropy_3
   ELBO <- entropy + logcomplete
   return(data.frame(ELBO, logcomplete, entropy, logcomplete_1, logcomplete_2, logcomplete_3, entropy_1, entropy_2, entropy_3))
@@ -290,7 +295,7 @@ if (FALSE){
 #' @useDynLib vglmer
 #' @export
 vglmer_logit <- function(formula, data, iterations, factorization.method, 
-                         tolerance_elbo = 1e-4, prevent_degeneracy = FALSE,
+                         tolerance_elbo = 1e-4, prevent_degeneracy = FALSE, force_whole = TRUE,
                          prior_variance, parameter.expansion = 'mean', random.seed = 1,
                          debug.ELBO = FALSE, print.prog = NULL, tolerance_parameters = 1e-4, quiet = T, init = 'EM'){
   
@@ -301,7 +306,29 @@ vglmer_logit <- function(formula, data, iterations, factorization.method,
   y <- model.response(model.frame(nobars(formula), data = data))
   names(y) <- NULL
   if (class(y) != 'numeric'){
-    stop('Need single column for outcome | adjust N')
+    if (min(y) < 0){
+      stop('Negative Numbers not Permitted in outcome')
+    }
+    is.wholenumber <- function(x, tol = .Machine$double.eps^0.5)  abs(x - round(x)) < tol
+    if (any(is.wholenumber(y) == FALSE)){
+      if (force_whole){
+        stop('If force_whole = TRUE, must provide whole numbers')
+      }else{
+        warning('Non-integer numbers in y')
+      }
+    }
+    #Total trials (Success + Failure)
+    trials <- rowSums(y)
+    rownames(trials) <- NULL
+    #Successes
+    y <- y[,1]
+    rownames(y) <- NULL
+    
+  }else{
+    if (!all(y %in% c(0,1))){
+      stop('Only {0,1} outcomes permitted for numeric y.')
+    }
+    trials <- rep(1, length(y))
   }
   N <- length(y)
   
@@ -379,10 +406,9 @@ vglmer_logit <- function(formula, data, iterations, factorization.method,
   ###
 
     
-    if (any(y > 1)){stop('Fix y and vi_pg_b and fix chose_term')}
-    s <- (y - 1/2)
-    vi_pg_b <- rep(1, N)
-    choose_term <- N
+    s <- y - trials/2
+    vi_pg_b <- trials
+    choose_term <- sum(lchoose(n = round(trials), k = round(y)))
 
     #Initalize variational parameters.
     #Note that we keep a sparse matrix or lowertri such that
@@ -449,7 +475,8 @@ vglmer_logit <- function(formula, data, iterations, factorization.method,
       })
     }else if (init == 'zero'){
       vi_beta_mean <- rep(0, ncol(X))
-      vi_beta_mean[1] <- qlogis(mean(y))
+      
+      vi_beta_mean[1] <- qlogis(sum(y)/sum(trials))
       
       vi_alpha_mean <- rep(0, ncol(Z))
       
@@ -548,7 +575,7 @@ vglmer_logit <- function(formula, data, iterations, factorization.method,
           vi_beta_mean = vi_beta_mean, vi_alpha_mean = vi_alpha_mean,
           log_det_beta_var = log_det_beta_var, log_det_alpha_var = log_det_alpha_var,
           vi_beta_decomp = vi_beta_decomp, vi_alpha_decomp = vi_alpha_decomp, 
-          vi_joint_decomp = vi_joint_decomp,
+          vi_joint_decomp = vi_joint_decomp, choose_term = choose_term,
           log_det_joint_var = log_det_joint_var
         )
       }
@@ -726,7 +753,7 @@ vglmer_logit <- function(formula, data, iterations, factorization.method,
           vi_beta_mean = vi_beta_mean, vi_alpha_mean = vi_alpha_mean,
           log_det_beta_var = log_det_beta_var, log_det_alpha_var = log_det_alpha_var,
           vi_beta_decomp = vi_beta_decomp, vi_alpha_decomp = vi_alpha_decomp, 
-          vi_joint_decomp = vi_joint_decomp,
+          vi_joint_decomp = vi_joint_decomp, choose_term = choose_term,
           log_det_joint_var = log_det_joint_var
         )
       }
@@ -764,7 +791,7 @@ vglmer_logit <- function(formula, data, iterations, factorization.method,
           log_det_beta_var = log_det_beta_var, log_det_alpha_var = log_det_alpha_var,
           vi_beta_decomp = vi_beta_decomp, vi_alpha_decomp = vi_alpha_decomp, 
           vi_joint_decomp = vi_joint_decomp,
-          log_det_joint_var = log_det_joint_var
+          log_det_joint_var = log_det_joint_var, choose_term = choose_term
         )
       }
       
@@ -797,7 +824,7 @@ vglmer_logit <- function(formula, data, iterations, factorization.method,
           vi_beta_mean = vi_beta_mean, vi_alpha_mean = vi_alpha_mean,
           log_det_beta_var = log_det_beta_var, log_det_alpha_var = log_det_alpha_var,
           vi_beta_decomp = vi_beta_decomp, vi_alpha_decomp = vi_alpha_decomp, 
-          vi_joint_decomp = vi_joint_decomp,
+          vi_joint_decomp = vi_joint_decomp, choose_term = choose_term,
           log_det_joint_var = log_det_joint_var
         )
         
@@ -876,10 +903,11 @@ vglmer_logit <- function(formula, data, iterations, factorization.method,
           X = X, Z = Z, s = s,
           vi_pg_b = vi_pg_b, vi_pg_mean = vi_pg_mean, vi_pg_c = vi_pg_c,
           vi_sigma_alpha = prop_vi_sigma_alpha, vi_sigma_alpha_nu = vi_sigma_alpha_nu, 
-          vi_sigma_outer_alpha = prop_vi_sigma_outer_alpha,
+          vi_sigma_outer_alpha = prop_vi_sigma_outer_alpha, choose_term = choose_term,
           vi_beta_mean = prop_vi_beta_mean, vi_alpha_mean = prop_vi_alpha_mean,
           log_det_beta_var = log_det_beta_var, log_det_alpha_var = prop_log_det_alpha_var,
-          vi_beta_decomp = vi_beta_decomp, vi_alpha_decomp = prop_vi_alpha_decomp
+          vi_beta_decomp = vi_beta_decomp, vi_alpha_decomp = prop_vi_alpha_decomp, 
+          choose_term = choose_term
         )
         
         if (prop.ELBO$ELBO > prior.ELBO$ELBO){
@@ -921,7 +949,7 @@ vglmer_logit <- function(formula, data, iterations, factorization.method,
           vi_beta_mean = vi_beta_mean, vi_alpha_mean = vi_alpha_mean,
           log_det_beta_var = log_det_beta_var, log_det_alpha_var = log_det_alpha_var,
           vi_beta_decomp = vi_beta_decomp, vi_alpha_decomp = vi_alpha_decomp, 
-          vi_joint_decomp = vi_joint_decomp,
+          vi_joint_decomp = vi_joint_decomp, choose_term = choose_term,
           log_det_joint_var = log_det_joint_var
         )
       }else{
@@ -1023,7 +1051,8 @@ vglmer_logit <- function(formula, data, iterations, factorization.method,
     return(output)
 }
 
-
+#' Predict linear predictor vglmer.
+#' @export
 vglmer_predict <- function(model, newdata, samples, samples.only = FALSE, summary = TRUE){
   
   fmla <- model$formula
@@ -1355,8 +1384,10 @@ custom_HMC_linpred <- function(HMC, data){
   return(hmc.linpred)
 }
 
+#' Get HMC samples but ordered to match vector
+#' @export
 custom_HMC_samples <- function(HMC, ordering){
-  hmc.samples <- as.matrix(posterior_samples(HMC))
+  hmc.samples <- as.matrix(HMC)
   hmc.samples <- hmc.samples[, !grepl(colnames(hmc.samples), pattern='^Sigma')]
   
   parse_stan_names <- str_split(colnames(hmc.samples), pattern='^b\\[| |\\]')
@@ -1396,6 +1427,9 @@ custom_HMC_samples <- function(HMC, ordering){
 
 if (T){
   
+
+#' MAVB but slow.
+#' @export
 legacy_MAVB <- function(model, samples, var_px){
 
   M_prime <- model$MIVI_parameters$M_prime
