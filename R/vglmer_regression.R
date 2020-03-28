@@ -1362,7 +1362,7 @@ rowVar <- function(matrix){apply(matrix, MARGIN = 1, var)}
 colVar <- function(matrix){apply(matrix, MARGIN = 2, var)}
 
 custom_HMC_linpred <- function(HMC, data){
-  hmc.samples <- as.matrix(posterior_samples(HMC))
+  hmc.samples <- as.matrix(HMC)
   hmc.samples <- hmc.samples[, !grepl(colnames(hmc.samples), pattern='^Sigma')]
   
   parse_stan_names <- str_split(colnames(hmc.samples), pattern='^b\\[| |\\]')
@@ -1424,9 +1424,6 @@ custom_HMC_samples <- function(HMC, ordering){
 #      rowVar(XZ[,-grep(colnames(XZ), pattern='^eth @ ')] %*% t(permute.HMC[,-grep(colnames(XZ), pattern='^eth @')])), col = match(store_data$z.inc, unique(store_data$z.inc)))
 # 
 # grep(colnames(XZ), pattern='^eth @', value = T)
-
-if (T){
-  
 
 #' MAVB but slow.
 #' @export
@@ -1500,6 +1497,4 @@ legacy_MAVB <- function(model, samples, var_px){
   }
   
   return(MIVI_sims)
-}
-  
 }

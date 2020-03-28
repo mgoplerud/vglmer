@@ -5,10 +5,10 @@
 \title{Regression}
 \usage{
 vglmer_logit(formula, data, iterations, factorization.method,
-  tolerance_elbo = 1e-04, prevent_degeneracy = FALSE, prior_variance,
-  parameter.expansion = "mean", random.seed = 1, debug.ELBO = FALSE,
-  print.prog = NULL, tolerance_parameters = 1e-04, quiet = T,
-  init = "EM")
+  tolerance_elbo = 1e-04, prevent_degeneracy = FALSE,
+  force_whole = TRUE, prior_variance, parameter.expansion = "mean",
+  random.seed = 1, debug.ELBO = FALSE, print.prog = NULL,
+  tolerance_parameters = 1e-04, quiet = T, init = "EM")
 }
 \description{
 Regression
