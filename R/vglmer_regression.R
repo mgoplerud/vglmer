@@ -742,7 +742,7 @@ vglmer_logit <- function(formula, data, iterations, factorization.method,
             term_j <- cbind(term_j, mod_j %*% t(Z_j) %*% diag_vi_pg_mean %*% X)
             
             bind_lhs_j[[j]] <- term_j
-            bind_rhs_j[[j]] <- mod_j %*% t(Z_j) %*% s #(outcome_s - diag_vi_pg_mean %*% X %*% vi_beta_mean)
+            bind_rhs_j[[j]] <- mod_j %*% t(Z_j) %*% s
             
             running_log_det_alpha_var[j] <- 2 * sum(log(diag(chol_var_j)))
             vi_alpha_decomp[index_j, index_j] <- as(chol_var_j, 'dgTMatrix')
@@ -782,7 +782,7 @@ vglmer_logit <- function(formula, data, iterations, factorization.method,
             Z_negj <- Z[,-index_j, drop= F]
             
             chol.j <- LinRegChol(X = Z_j, omega = diag_vi_pg_mean, prior_precision =  Tinv[[j]], 
-                                 y = as.vector(outcome_s - diag_vi_pg_mean %*% (X %*% vi_beta_mean + Z_negj %*% vi_alpha_mean[-index_j])))
+                                 y = as.vector(s - diag_vi_pg_mean %*% (X %*% vi_beta_mean + Z_negj %*% vi_alpha_mean[-index_j])))
             vi_alpha_mean[index_j] <- chol.j$mean 
             
             Pmatrix <- sparseMatrix(i = 1:ncol(Z_j), j = 1 + chol.j$Pindex, x = 1)
