@@ -695,7 +695,7 @@ vglmer_logit <- function(formula, data, iterations, factorization.method,
         if (linpred.method == 'joint'){
           
           joint.XZ <- cbind(X,Z)  
-          chol.update.joint <- LinRegChol(X = joint.XZ, omega = diag_vi_pg_mean, prior_precision =  bdiag(zero_mat, bdiag(Tinv)), y = outcome_s)
+          chol.update.joint <- LinRegChol(X = joint.XZ, omega = diag_vi_pg_mean, prior_precision =  bdiag(zero_mat, bdiag(Tinv)), y = s)
           vi_beta_mean <- Matrix(chol.update.joint$mean[1:p.X], dimnames = list(colnames(X), NULL))
           vi_alpha_mean <- Matrix(chol.update.joint$mean[-1:-p.X], dimnames = list(fmt_names_Z, NULL))
           
@@ -742,7 +742,7 @@ vglmer_logit <- function(formula, data, iterations, factorization.method,
             term_j <- cbind(term_j, mod_j %*% t(Z_j) %*% diag_vi_pg_mean %*% X)
             
             bind_lhs_j[[j]] <- term_j
-            bind_rhs_j[[j]] <- mod_j %*% t(Z_j) %*% outcome_s #(outcome_s - diag_vi_pg_mean %*% X %*% vi_beta_mean)
+            bind_rhs_j[[j]] <- mod_j %*% t(Z_j) %*% s #(outcome_s - diag_vi_pg_mean %*% X %*% vi_beta_mean)
             
             running_log_det_alpha_var[j] <- 2 * sum(log(diag(chol_var_j)))
             vi_alpha_decomp[index_j, index_j] <- as(chol_var_j, 'dgTMatrix')
@@ -765,7 +765,7 @@ vglmer_logit <- function(formula, data, iterations, factorization.method,
           # vi_beta_mean <- Matrix(vi_beta_mean)
           
           bind_lhs_j <- drop0(rbind(bind_lhs_j, cbind(vi_beta_var %*% t(X) %*% diag_vi_pg_mean %*% Z, Diagonal(n = ncol(X)))))
-          bind_rhs_j <- rbind(bind_rhs_j, vi_beta_var %*% t(X) %*% outcome_s)
+          bind_rhs_j <- rbind(bind_rhs_j, vi_beta_var %*% t(X) %*% s)
           # 
           bind_solution <- solve(bind_lhs_j) %*% bind_rhs_j
           #print(cbind(bind_solution, rbind(vi_alpha_mean, vi_beta_mean)))
