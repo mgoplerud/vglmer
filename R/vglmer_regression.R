@@ -41,7 +41,7 @@ format_stan <- function(stan_obj, useSigma = FALSE){
   require(stringr)
   post_stan <- as.matrix(stan_obj)
   if (!useSigma){
-    post_stan <- post_stan[,!grepl(names(post_stan), pattern='^Sigma')]
+    post_stan <- post_stan[,!grepl(colnames(post_stan), pattern='^Sigma')]
   }
   parse_stan_names <- str_split(colnames(post_stan), pattern='^b\\[| |\\]')
 
@@ -170,7 +170,7 @@ EM_prelim <- function(X, Z, s, pg_b, iter, ridge = 2){
     EM_pg_mean <- pg_b/(2 * EM_pg_c) * tanh(EM_pg_c / 2)
     EM_pg_diag <- sparseMatrix(i=1:N, j=1:N, x = EM_pg_mean)
     
-    EM_beta <- LinRegChol(X = jointXZ, omega = EM_pg_diag, y = s, prior_variance = EM_variance)$mean
+    EM_beta <- LinRegChol(X = jointXZ, omega = EM_pg_diag, y = s, prior_precision =  EM_variance)$mean
     
   }
   output <- list(beta = EM_beta[1:ncol(X)], alpha = EM_beta[-1:-ncol(X)])
@@ -297,6 +297,7 @@ if (FALSE){
 vglmer_logit <- function(formula, data, iterations, factorization.method, 
                          tolerance_elbo = 1e-4, prevent_degeneracy = FALSE, force_whole = TRUE,
                          prior_variance, parameter.expansion = 'mean', random.seed = 1,
+                         debug.param = FALSE, return.data = FALSE, linpred.method = 'joint',
                          debug.ELBO = FALSE, print.prog = NULL, tolerance_parameters = 1e-4, quiet = T, init = 'EM'){
   
   if (is.null(print.prog)){
@@ -542,6 +543,9 @@ vglmer_logit <- function(formula, data, iterations, factorization.method,
     }
     store_ELBO <- data.frame()
     
+    if (debug.param){
+      store_beta <- array(NA, dim = c(iterations, ncol(X)))
+    }
     ##Begin VI algorithm:
     message('Begin Regression')
     for (it in 1:iterations){
@@ -600,7 +604,7 @@ vglmer_logit <- function(formula, data, iterations, factorization.method,
       
       if (factorization.method == 'weak'){
         ##Update <beta, alpha> jointly
-        chol.update.joint <- LinRegChol(X = joint.XZ, omega = diag_vi_pg_mean, prior_variance = bdiag(zero_mat, Tinv), y = s)
+        chol.update.joint <- LinRegChol(X = joint.XZ, omega = diag_vi_pg_mean, prior_precision =  bdiag(zero_mat, Tinv), y = s)
         Pmatrix <- sparseMatrix(i = 1:ncol(joint.XZ), j = 1 + chol.update.joint$Pindex, x = 1)
         
         
@@ -615,126 +619,195 @@ vglmer_logit <- function(formula, data, iterations, factorization.method,
         log_det_joint_var <- - 2 * sum(log(diag(chol.update.joint$origL)))
         
       }else if (factorization.method == 'partial'){
-        # Do not run except as backup
-        # ###Non optimized
-        # precision_beta <- t(X) %*% diag_vi_pg_mean %*% X
-        # nonopt_beta <- solve(precision_beta, t(X) %*% (s - diag_vi_pg_mean %*% Z %*% vi_alpha_mean))
-        # precision_alpha <- t(Z) %*% diag_vi_pg_mean %*% Z + Tinv
-        # nonopt_alpha <- solve(precision_alpha, t(Z) %*% (s - diag_vi_pg_mean %*% X %*% nonopt_beta))
         
-        chol.update.beta <- LinRegChol(X = as(X, 'sparseMatrix'), omega = diag_vi_pg_mean, prior_variance = zero_mat, 
-                                  y = as.vector(s - diag_vi_pg_mean %*% Z %*% vi_alpha_mean))
-        Pmatrix <- sparseMatrix(i = 1:p.X, j = 1 + chol.update.beta$Pindex, x = 1)
-        
-        #P origL oriL^T P^T = PRECISION
-        #t(decompVar) %*%  decompVar = VARIANCE = (origL^{-1} t(P))^T (origL^{-1} t(P))
-        
-        vi_beta_decomp <- solve(chol.update.beta$origL) %*% t(Pmatrix)
-        vi_beta_mean <- chol.update.beta$mean
-        log_det_beta_var <- - 2 * sum(log(diag(chol.update.beta$origL)))
-
-        chol.update.alpha <- LinRegChol(X = Z, omega = diag_vi_pg_mean, prior_variance = Tinv, 
-            y = as.vector(s - diag_vi_pg_mean %*% X %*% vi_beta_mean))
-        Pmatrix <- sparseMatrix(i = 1:p.Z, j = 1 + chol.update.alpha$Pindex, x = 1)
-        
-        vi_alpha_decomp <- solve(chol.update.alpha$origL) %*% t(Pmatrix)
-        vi_alpha_decomp <- drop0(vi_alpha_decomp)
-        vi_alpha_mean <- chol.update.alpha$mean
-        log_det_alpha_var <- - 2 * sum(log(diag(chol.update.alpha$origL)))
-
-        vi_beta_mean <- Matrix(vi_beta_mean, dimnames = list(colnames(X), NULL))
-        vi_alpha_mean <- Matrix(vi_alpha_mean, dimnames = list(fmt_names_Z, NULL))
+        if (linpred.method == 'cyclical'){
+          # Do not run except as backup
+          # ###Non optimized
+          # precision_beta <- t(X) %*% diag_vi_pg_mean %*% X
+          # nonopt_beta <- solve(precision_beta, t(X) %*% (s - diag_vi_pg_mean %*% Z %*% vi_alpha_mean))
+          # precision_alpha <- t(Z) %*% diag_vi_pg_mean %*% Z + Tinv
+          # nonopt_alpha <- solve(precision_alpha, t(Z) %*% (s - diag_vi_pg_mean %*% X %*% nonopt_beta))
+          
+          chol.update.beta <- LinRegChol(X = as(X, 'sparseMatrix'), omega = diag_vi_pg_mean, prior_precision =  zero_mat, 
+                                         y = as.vector(s - diag_vi_pg_mean %*% Z %*% vi_alpha_mean))
+          Pmatrix <- sparseMatrix(i = 1:p.X, j = 1 + chol.update.beta$Pindex, x = 1)
+          
+          #P origL oriL^T P^T = PRECISION
+          #t(decompVar) %*%  decompVar = VARIANCE = (origL^{-1} t(P))^T (origL^{-1} t(P))
+          
+          vi_beta_decomp <- solve(chol.update.beta$origL) %*% t(Pmatrix)
+          vi_beta_mean <- chol.update.beta$mean
+          log_det_beta_var <- - 2 * sum(log(diag(chol.update.beta$origL)))
+          
+          chol.update.alpha <- LinRegChol(X = Z, omega = diag_vi_pg_mean, prior_precision =  Tinv, 
+                                          y = as.vector(s - diag_vi_pg_mean %*% X %*% vi_beta_mean))
+          Pmatrix <- sparseMatrix(i = 1:p.Z, j = 1 + chol.update.alpha$Pindex, x = 1)
+          
+          vi_alpha_decomp <- solve(chol.update.alpha$origL) %*% t(Pmatrix)
+          vi_alpha_decomp <- drop0(vi_alpha_decomp)
+          vi_alpha_mean <- chol.update.alpha$mean
+          log_det_alpha_var <- - 2 * sum(log(diag(chol.update.alpha$origL)))
+          
+          vi_beta_mean <- Matrix(vi_beta_mean, dimnames = list(colnames(X), NULL))
+          vi_alpha_mean <- Matrix(vi_alpha_mean, dimnames = list(fmt_names_Z, NULL))
+          
+        }else if (linpred.method == 'joint'){
+          joint.XZ <- cbind(X,Z)  
+          chol.update.joint <- LinRegChol(X = joint.XZ, omega = diag_vi_pg_mean, prior_precision =  bdiag(zero_mat, Tinv), y = s)
+          vi_beta_mean <- Matrix(chol.update.joint$mean[1:p.X], dimnames = list(colnames(X), NULL))
+          vi_alpha_mean <- Matrix(chol.update.joint$mean[-1:-p.X], dimnames = list(fmt_names_Z, NULL))
+          
+          vi_beta_decomp <- solve(t(chol(as.matrix(t(X) %*% diag_vi_pg_mean %*% X))))
+          log_det_beta_var <- 2 * sum(log(diag(vi_beta_decomp)))
+          
+          chol.update.alpha <- LinRegChol(X = Z, omega = diag_vi_pg_mean, prior_precision =  Tinv, 
+                                          y = s)
+          Pmatrix <- sparseMatrix(i = 1:p.Z, j = 1 + chol.update.alpha$Pindex, x = 1)
+          
+          vi_alpha_decomp <- solve(chol.update.alpha$origL) %*% t(Pmatrix)
+          vi_alpha_decomp <- drop0(vi_alpha_decomp)
+          log_det_alpha_var <- - 2 * sum(log(diag(chol.update.alpha$origL)))
+          
+        }else{stop('Invalid linpred method for partial scheme')}
         
       }else if (factorization.method == 'strong'){
         
-        o_vi_a_mean <- vi_alpha_mean
-        
-        vi_alpha_mean <- o_vi_a_mean
+        running_log_det_alpha_var <- rep(NA, number_of_RE)
         vi_alpha_decomp <- sparseMatrix(i = 1, j =1, x = 0, dims = rep(p.Z, 2))
-        for (j in 1:number_of_RE){
-          # de.1 <- calculate_ELBO(
-          #   factorization.method = factorization.method,
-          #   d_j = d_j, g_j = g_j, prior_sigma_alpha_phi = prior_sigma_alpha_phi, 
-          #   prior_sigma_alpha_nu = prior_sigma_alpha_nu,
-          #   iw_prior_constant = iw_prior_constant,
-          #   X = X, Z = Z, s = s,
-          #   vi_pg_b = vi_pg_b, vi_pg_mean = vi_pg_mean, vi_pg_c = vi_pg_c,
-          #   vi_sigma_alpha = vi_sigma_alpha, vi_sigma_alpha_nu = vi_sigma_alpha_nu, 
-          #   vi_sigma_outer_alpha = vi_sigma_outer_alpha,
-          #   vi_beta_mean = vi_beta_mean, vi_alpha_mean = vi_alpha_mean,
-          #   log_det_beta_var = log_det_beta_var, log_det_alpha_var = sum(running_log_det_alpha_var),
-          #   vi_beta_decomp = vi_beta_decomp, vi_alpha_decomp = vi_alpha_decomp, 
-          #   vi_joint_decomp = vi_joint_decomp,
-          #   log_det_joint_var = log_det_joint_var
-          # )
+        
+        # 
+        # vi_alpha_mean <<- vi_alpha_mean
+        # vi_beta_mean <<- vi_beta_mean
+        # vi_alpha_decomp <<- vi_alpha_decomp
+        # X <<- X
+        # Z <<- Z
+        # fmt_names_Z <<- fmt_names_Z
+        # Tinv <<- Tinv
+        # cyclical_pos <<- cyclical_pos
+        # outcome_s <<- s
+        # diag_vi_pg_mean <<- diag_vi_pg_mean
+        # running_log_det_alpha_var <<- running_log_det_alpha_var
+        # number_of_RE <<- number_of_RE
+        # zero_mat <<- zero_mat
+        # p.X <<- p.X
+        
+        
+        if (linpred.method == 'joint'){
           
-          index_j <- cyclical_pos[[j]]
-          Z_j <- Z[,index_j, drop = F]
-          Z_negj <- Z[,-index_j, drop= F]
+          joint.XZ <- cbind(X,Z)  
+          chol.update.joint <- LinRegChol(X = joint.XZ, omega = diag_vi_pg_mean, prior_precision =  bdiag(zero_mat, bdiag(Tinv)), y = outcome_s)
+          vi_beta_mean <- Matrix(chol.update.joint$mean[1:p.X], dimnames = list(colnames(X), NULL))
+          vi_alpha_mean <- Matrix(chol.update.joint$mean[-1:-p.X], dimnames = list(fmt_names_Z, NULL))
           
-          chol.j <- LinRegChol(X = Z_j, omega = diag_vi_pg_mean, prior_variance = Tinv[[j]], 
-                     y = as.vector(s - diag_vi_pg_mean %*% (X %*% vi_beta_mean + Z_negj %*% vi_alpha_mean[-index_j])))
-          vi_alpha_mean[index_j] <- chol.j$mean 
+          vi_beta_decomp <- solve(t(chol(as.matrix(t(X) %*% diag_vi_pg_mean %*% X))))
+          log_det_beta_var <- 2 * sum(log(diag(vi_beta_decomp)))
+            #-log(det(t(X) %*% diag_vi_pg_mean %*% X))
           
-          Pmatrix <- sparseMatrix(i = 1:ncol(Z_j), j = 1 + chol.j$Pindex, x = 1)
+          running_log_det_alpha_var <- rep(NA, number_of_RE)
           
-          running_log_det_alpha_var[j] <- - 2 * sum(log(diag(chol.j$origL)))
-          vi_alpha_decomp[index_j, index_j] <- solve(chol.j$origL) %*% t(Pmatrix)
+          for (j in 1:number_of_RE){
+            
+            index_j <- cyclical_pos[[j]]
+            Z_j <- Z[,index_j, drop = F]
+            prec_j <- t(Z_j) %*% diag_vi_pg_mean %*% Z_j + Tinv[[j]]
+            
+            chol_var_j <- solve(t(chol(prec_j)))
+            running_log_det_alpha_var[j] <- 2 * sum(log(diag(chol_var_j)))
+            
+            vi_alpha_decomp[index_j, index_j] <- as(chol_var_j, 'dgTMatrix')
+            
+          }
           
-          # calculate_expected_outer_alpha(L = vi_alpha_decomp, alpha_mu = as.vector(vi_alpha_mean), re_position_list = outer_alpha_RE_positions)
-          # vi_sigma_outer_alpha <- variance_by_alpha_jg$outer_alpha
-          # vi_sigma_alpha <- mapply(vi_sigma_outer_alpha, prior_sigma_alpha_phi, SIMPLIFY = FALSE, FUN=function(i,j){i+j})
+          log_det_alpha_var <- sum(running_log_det_alpha_var)
+          
+        }else if (linpred.method == 'solve_normal'){
+          
+          bind_rhs_j <- list()
+          bind_lhs_j <- list()
+          
+          for (j in 1:number_of_RE){
+            
+            index_j <- cyclical_pos[[j]]
+            Z_j <- Z[,index_j, drop = F]
+            Z_negj <- Z[,-index_j, drop= F]
+            prec_j <- t(Z_j) %*% diag_vi_pg_mean %*% Z_j + Tinv[[j]]
+            
+            chol_prec_j <- t(chol(prec_j))
+            chol_var_j <- solve(chol_prec_j)
+            
+            mod_j <- solve(prec_j)
+            
+            term_j <- mod_j %*% t(Z_j) %*% diag_vi_pg_mean %*% Z
+            term_j[,index_j, drop = F] <- Diagonal(n = ncol(Z_j))
+            term_j <- cbind(term_j, mod_j %*% t(Z_j) %*% diag_vi_pg_mean %*% X)
+            
+            bind_lhs_j[[j]] <- term_j
+            bind_rhs_j[[j]] <- mod_j %*% t(Z_j) %*% outcome_s #(outcome_s - diag_vi_pg_mean %*% X %*% vi_beta_mean)
+            
+            running_log_det_alpha_var[j] <- 2 * sum(log(diag(chol_var_j)))
+            vi_alpha_decomp[index_j, index_j] <- as(chol_var_j, 'dgTMatrix')
+            
+          }
+          
+          log_det_alpha_var <- sum(running_log_det_alpha_var)
+          
+          bind_lhs_j <- drop0(do.call('rbind', bind_lhs_j))
+          bind_rhs_j <- do.call('rbind', bind_rhs_j)
+          
+          vi_beta_decomp <- solve(t(chol(as.matrix(t(X) %*% diag_vi_pg_mean %*% X))))
+          vi_beta_var <- solve(t(X) %*% diag_vi_pg_mean %*% X)
+          log_det_beta_var <- 2 * sum(log(diag(vi_beta_decomp)))
+          
+          # vi_beta_mean <- vi_beta_var %*% t(X) %*% (s - diag_vi_pg_mean %*% Z %*% vi_alpha_mean)
+          # vi_alpha_mean <- solve(bind_lhs_j[,1:ncol(Z)], bind_rhs_j)
           # 
-          # de.2 <- calculate_ELBO(
-          #   factorization.method = factorization.method,
-          #   d_j = d_j, g_j = g_j, prior_sigma_alpha_phi = prior_sigma_alpha_phi, 
-          #   prior_sigma_alpha_nu = prior_sigma_alpha_nu,
-          #   iw_prior_constant = iw_prior_constant,
-          #   X = X, Z = Z, s = s,
-          #   vi_pg_b = vi_pg_b, vi_pg_mean = vi_pg_mean, vi_pg_c = vi_pg_c,
-          #   vi_sigma_alpha = vi_sigma_alpha, vi_sigma_alpha_nu = vi_sigma_alpha_nu, 
-          #   vi_sigma_outer_alpha = vi_sigma_outer_alpha,
-          #   vi_beta_mean = vi_beta_mean, vi_alpha_mean = vi_alpha_mean,
-          #   log_det_beta_var = log_det_beta_var, log_det_alpha_var = sum(running_log_det_alpha_var),
-          #   vi_beta_decomp = vi_beta_decomp, vi_alpha_decomp = vi_alpha_decomp, 
-          #   vi_joint_decomp = vi_joint_decomp,
-          #   log_det_joint_var = log_det_joint_var
-          # )
-          # print(de.2 - de.1)
+          # vi_alpha_mean <- Matrix(vi_alpha_mean)
+          # vi_beta_mean <- Matrix(vi_beta_mean)
           
-        }
-        #vi_alpha_decomp <- bdiag(vi_alpha_decomp)
-        log_det_alpha_var <- sum(running_log_det_alpha_var)
-        # mod_Z <- Diagonal(x = sqrt(vi_pg_mean)) %*% Z
-        # mod_y <- s / sqrt(vi_pg_mean)
-        # mod_X <- Diagonal(x = sqrt(vi_pg_mean)) %*% X
-        # 
-        # cyclical.chol <- cyclical_descent_LinReg(X = mod_Z, y = as.vector(mod_y - mod_X %*% vi_beta_mean), 
-        #                         old_eb = as.vector(o_vi_a_mean),
-        #                         cyclical_list = cyclical_pos, precision_list = Tinv, sigmasq = 1)
-        # 
-        # vi_alpha_decomp <- mapply(cyclical.chol$chol_list, cyclical.chol$permute_list, SIMPLIFY = FALSE, FUN=function(chol.i, p.i){
-        #   
-        #   Pmatrix_i <- sparseMatrix(i = 1:ncol(chol.i), j = 1 + p.i, x = 1)
-        #   vi_alpha_decomp_i <- solve(chol.i) %*% t(Pmatrix_i)
-        #   return(vi_alpha_decomp_i)
-        # })
-        # 
-        # vi_alpha_decomp <- bdiag(vi_alpha_decomp)
-        # vi_alpha_mean <- cyclical.chol$mean
-        # log_det_alpha_var <- sapply(cyclical.chol$chol_list, FUN=function(i){-2 * sum(log(diag(i)))})  
+          bind_lhs_j <- drop0(rbind(bind_lhs_j, cbind(vi_beta_var %*% t(X) %*% diag_vi_pg_mean %*% Z, Diagonal(n = ncol(X)))))
+          bind_rhs_j <- rbind(bind_rhs_j, vi_beta_var %*% t(X) %*% outcome_s)
+          # 
+          bind_solution <- solve(bind_lhs_j) %*% bind_rhs_j
+          #print(cbind(bind_solution, rbind(vi_alpha_mean, vi_beta_mean)))
+          # 
+          vi_beta_mean <- Matrix(bind_solution[-1:-ncol(Z)], dimnames = list(colnames(X), NULL))
+          vi_alpha_mean <- Matrix(bind_solution[1:ncol(Z)], dimnames = list(fmt_names_Z, NULL))
+          
+          
+        }else if (linpred.method == 'cyclical'){
+          
+          for (j in 1:number_of_RE){
+            index_j <- cyclical_pos[[j]]
+            Z_j <- Z[,index_j, drop = F]
+            Z_negj <- Z[,-index_j, drop= F]
+            
+            chol.j <- LinRegChol(X = Z_j, omega = diag_vi_pg_mean, prior_precision =  Tinv[[j]], 
+                                 y = as.vector(outcome_s - diag_vi_pg_mean %*% (X %*% vi_beta_mean + Z_negj %*% vi_alpha_mean[-index_j])))
+            vi_alpha_mean[index_j] <- chol.j$mean 
+            
+            Pmatrix <- sparseMatrix(i = 1:ncol(Z_j), j = 1 + chol.j$Pindex, x = 1)
+            
+            running_log_det_alpha_var[j] <- - 2 * sum(log(diag(chol.j$origL)))
+            vi_alpha_decomp[index_j, index_j] <- solve(chol.j$origL) %*% t(Pmatrix)
+          }
+          
+          #vi_alpha_decomp <- bdiag(vi_alpha_decomp)
+          log_det_alpha_var <- sum(running_log_det_alpha_var)
+          
+          chol.update.beta <- LinRegChol(X = as(X, 'sparseMatrix'), omega = diag_vi_pg_mean, prior_precision =  zero_mat, 
+                                         y = as.vector(s - diag_vi_pg_mean %*% Z %*% vi_alpha_mean))
+          Pmatrix <- sparseMatrix(i = 1:p.X, j = 1 + chol.update.beta$Pindex, x = 1)
+          
+          vi_beta_decomp <- solve(chol.update.beta$origL) %*% t(Pmatrix)
+          vi_beta_mean <- chol.update.beta$mean
+          log_det_beta_var <- - 2 * sum(log(diag(chol.update.beta$origL)))
+          
+          vi_beta_mean <- Matrix(vi_beta_mean, dimnames = list(colnames(X), NULL))
+          vi_alpha_mean <- Matrix(vi_alpha_mean, dimnames = list(fmt_names_Z, NULL))
+        }else{stop('Invalid linpred method')}
         
-        chol.update.beta <- LinRegChol(X = as(X, 'sparseMatrix'), omega = diag_vi_pg_mean, prior_variance = zero_mat, 
-                                       y = as.vector(s - diag_vi_pg_mean %*% Z %*% vi_alpha_mean))
-        Pmatrix <- sparseMatrix(i = 1:p.X, j = 1 + chol.update.beta$Pindex, x = 1)
-        
-        vi_beta_decomp <- solve(chol.update.beta$origL) %*% t(Pmatrix)
-        vi_beta_mean <- chol.update.beta$mean
-        log_det_beta_var <- - 2 * sum(log(diag(chol.update.beta$origL)))
 
-        vi_beta_mean <- Matrix(vi_beta_mean, dimnames = list(colnames(X), NULL))
-        vi_alpha_mean <- Matrix(vi_alpha_mean, dimnames = list(fmt_names_Z, NULL))
-        
+
       }else{stop('Invalid factorization method.')}
 
       if (debug.ELBO & it != 1){
@@ -903,7 +976,7 @@ vglmer_logit <- function(formula, data, iterations, factorization.method,
           X = X, Z = Z, s = s,
           vi_pg_b = vi_pg_b, vi_pg_mean = vi_pg_mean, vi_pg_c = vi_pg_c,
           vi_sigma_alpha = prop_vi_sigma_alpha, vi_sigma_alpha_nu = vi_sigma_alpha_nu, 
-          vi_sigma_outer_alpha = prop_vi_sigma_outer_alpha, choose_term = choose_term,
+          vi_sigma_outer_alpha = prop_vi_sigma_outer_alpha, 
           vi_beta_mean = prop_vi_beta_mean, vi_alpha_mean = prop_vi_alpha_mean,
           log_det_beta_var = log_det_beta_var, log_det_alpha_var = prop_log_det_alpha_var,
           vi_beta_decomp = vi_beta_decomp, vi_alpha_decomp = prop_vi_alpha_decomp, 
@@ -988,6 +1061,9 @@ vglmer_logit <- function(formula, data, iterations, factorization.method,
         change_beta_var <- max(abs(vi_beta_decomp - lagged_beta_decomp))
       }
       
+      if (debug.param){
+        store_beta[it,] <- as.vector(vi_beta_mean)
+      }
       change_all <- data.frame(change_alpha_mean, change_beta_mean, t(change_sigma_mean), change_alpha_var, change_beta_var, change_joint_var)
       if ( (max(change_all) < tolerance_parameters) | (change_elbo$ELBO > 0 & change_elbo$ELBO < tolerance_elbo) ){
         message(paste0('Converged after ', it, ' iterations with ELBO change of ', round(change_elbo[1], 1 + abs(floor(log(tolerance_elbo)/log(10))))))
@@ -1029,8 +1105,14 @@ vglmer_logit <- function(formula, data, iterations, factorization.method,
                    alpha = list(mean = vi_alpha_mean)
     )
     
+    if (debug.param){
+      output$parameter_trajectory <- list(beta = store_beta)
+    }
     if (factorization.method == 'weak'){
       output$joint <- vi_joint_decomp
+    }
+    if (return.data){
+      output$data <- list(X = X, Z = Z, y = y, trials = trials)
     }
     output$formula <- formula
     output$factorization.method <- factorization.method
@@ -1498,3 +1580,5 @@ legacy_MAVB <- function(model, samples, var_px){
   
   return(MIVI_sims)
 }
+
+

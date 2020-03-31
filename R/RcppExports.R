@@ -3,8 +3,8 @@
 
 #' Linergchol
 #' @export
-LinRegChol <- function(X, omega, prior_variance, y) {
-    .Call('_vglmer_LinRegChol', PACKAGE = 'vglmer', X, omega, prior_variance, y)
+LinRegChol <- function(X, omega, prior_precision, y) {
+    .Call('_vglmer_LinRegChol', PACKAGE = 'vglmer', X, omega, prior_precision, y)
 }
 
 #' Fast Calculation of E[alpha alpha^T] - Chol

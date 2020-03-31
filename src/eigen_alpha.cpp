@@ -17,11 +17,11 @@ using namespace Rcpp;
 List LinRegChol(
      const Eigen::MappedSparseMatrix<double> X,
      const Eigen::MappedSparseMatrix<double> omega,
-     const Eigen::MappedSparseMatrix<double> prior_variance,
+     const Eigen::MappedSparseMatrix<double> prior_precision,
      const Eigen::Map<Eigen::VectorXd> y
   ){
   Eigen::SparseMatrix<double> adj_X = X.adjoint();
-  Eigen::SimplicialLLT<Eigen::SparseMatrix<double> > Ch(adj_X * omega * X + prior_variance);
+  Eigen::SimplicialLLT<Eigen::SparseMatrix<double> > Ch(adj_X * omega * X + prior_precision);
   Eigen::VectorXd mean = Ch.solve(adj_X * y);
   //Extract L to get the transformation of the std.normal
   //Into the correct form of N(0, Q^{-1}) and add the mean.
