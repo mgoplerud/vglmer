@@ -1441,6 +1441,9 @@ simple_blist <- function(x, frloc, drop.unused.levels = TRUE, reorder.vars = FAL
 }
 
 rowVar <- function(matrix){apply(matrix, MARGIN = 1, var)}
+
+#' Do the variance of each column
+#' @export
 colVar <- function(matrix){apply(matrix, MARGIN = 2, var)}
 
 custom_HMC_linpred <- function(HMC, data){
@@ -1468,6 +1471,7 @@ custom_HMC_linpred <- function(HMC, data){
 
 #' Get HMC samples but ordered to match vector
 #' @export
+#' @importFrom mvtnorm rmvnorm
 custom_HMC_samples <- function(HMC, ordering){
   hmc.samples <- as.matrix(HMC)
   hmc.samples <- hmc.samples[, !grepl(colnames(hmc.samples), pattern='^Sigma')]
@@ -1487,25 +1491,19 @@ custom_HMC_samples <- function(HMC, ordering){
   return(return(hmc.samples))
 }
 
-# plot(rowMeans(mg.linpred), rowMeans(hmc.linpred))
-# points(rowMeans(mg.linpred), rowMeans(sim.MAVB.lp), col = 'red', pch = 3)
-# abline(a=0,b=1)
-# plot(rowVar(mg.linpred), rowVar(hmc.linpred))
-# plot(rowVar(mg.linpred), rowVar(sim.MAVB.lp), col = 'red', pch =3)
-# abline(a=0,b=1)
-# 
-# MAVB <- vglmer_MAVB(model = est_vglmer, samples = 4000, summary = F)
-# 
-# permute.HMC <- hmc.samples[,match(colnames(XZ), fmt_stan_names)]
-# 
-# plot(colMeans(MAVB), colMeans(permute.HMC))
-# plot(colVar(MAVB), colVar(permute.HMC))
-# 
-# plot(rowMeans(XZ %*% t(MAVB)), rowMeans(XZ %*% t(permute.HMC)))
-# plot(rowVar(XZ[, -grep(colnames(XZ), pattern='^eth @ ')] %*% t(MAVB[,-grep(colnames(XZ), pattern='^eth @')])), 
-#      rowVar(XZ[,-grep(colnames(XZ), pattern='^eth @ ')] %*% t(permute.HMC[,-grep(colnames(XZ), pattern='^eth @')])), col = match(store_data$z.inc, unique(store_data$z.inc)))
-# 
-# grep(colnames(XZ), pattern='^eth @', value = T)
+#' Get samples from GLMER
+#' @export
+custom_glmer_samples <- function(glmer, samples, ordering){
+  
+  fmt_glmer <- format_glmer(glmer)
+  
+  glmer_samples <- mapply(fmt_glmer$mean, fmt_glmer$var, FUN=function(m,v){rnorm(samples, mean = m, sd = sqrt(v))})
+  colnames(glmer_samples) <- fmt_glmer$name
+  
+  glmer_samples <- glmer_samples[, match(ordering, colnames(glmer_samples))]
+  return(glmer_samples)  
+}
+
 
 #' MAVB but slow.
 #' @export

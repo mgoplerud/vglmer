@@ -4,7 +4,7 @@
 \alias{LinRegChol}
 \title{Linergchol}
 \usage{
-LinRegChol(X, omega, prior_variance, y)
+LinRegChol(X, omega, prior_precision, y)
 }
 \description{
 Linergchol
