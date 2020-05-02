@@ -3,7 +3,6 @@
 
 using namespace Rcpp;
 
-//' @export
 // [[Rcpp::export]]
 Eigen::MatrixXd vecR_ridge_general(
     const Eigen::MappedSparseMatrix<double> L,    //Decomposition of variance L^T L = VAR(alpha)
@@ -90,7 +89,6 @@ Eigen::MatrixXd vecR_ridge_general(
 // }
 
 
-//' @export
 // [[Rcpp::export]]
 Eigen::MatrixXd vecR_design(
     const Eigen::Map<Eigen::VectorXd> alpha_mu,

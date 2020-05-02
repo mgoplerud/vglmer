@@ -6,40 +6,67 @@ extract_group_memberships <- function(x, fr, drop.unused.levels){
     stop("couldn't evaluate grouping factor ", deparse(x[[3]]), 
          " within model frame:", " try adding grouping factor to data ", 
          "frame explicitly if possible", call. = FALSE)
-  if (all(is.na(ff))) 
+  if (all(is.na(ff))){ 
     stop("Invalid grouping factor specification, ", deparse(x[[3]]), 
          call. = FALSE)
-  if (drop.unused.levels) 
+  }
+  if (drop.unused.levels){
     ff <- factor(ff, exclude = NA)
+  }
   return(ff)
 }
 
+#' Format Existing Objects
+#' 
+#' Takes a regression output from glmer, stan, or vglmer and extracts the fixed
+#' and random effects.
+#'
+#' @name format_obj
+#' 
+#' @param object Object from glmer, vglmer, or stan to the respective "format_"
+#'   function
+#' @importFrom dplyr bind_rows mutate
+#' @importFrom lme4 fixef ranef
+#' @importFrom stats vcov
+#' @importFrom rlang .data
 #' @export
-format_glmer <- function(glmer_obj){
-  output <- bind_rows(lapply(ranef(glmer_obj), FUN=function(i){
+format_glmer <- function(object){
+  output <- bind_rows(lapply(ranef(object), FUN=function(i){
     obj <- data.frame(var = as.vector(apply(attributes(i)$postVar, MARGIN = 3, FUN=function(i){diag(i)})),
                       mean = as.vector(t(as.matrix(i))),
                       name = paste0(rep(colnames(i), nrow(i)), ' @ ', rep(rownames(i), each = ncol(i))), stringsAsFactors = F)
     return(obj)
-  }), .id = '.re') %>%
-    mutate(name = paste0(.re, ' @ ', name))
-  output <- bind_rows(output, data.frame(mean = fixef(glmer_obj)) %>% mutate(name = rownames(.)) %>% mutate(var = diag(vcov(glmer_obj))))
-  output <- output %>% dplyr::select(-.re)
+  }), .id = '.re')
+  output$name <- with(output, paste(.re, ' @ ', name))
+  output_fe <- data.frame(mean = fixef(object), var = diag(vcov(object)))
+  output_fe$name <- rownames(output_fe)
+  
+  output <- bind_rows(output, output_fe)
+  output <- output[, (names(output) != '.re')]
+  
+  rownames(output) <- NULL
+  
   return(output)
 }
 
+#' Format vglmer
+#' @rdname format_obj
 #' @export
-format_vglmer <- function(vglmer_obj){
-  beta.output <- data.frame(name = rownames(vglmer_obj$beta$mean), mean = as.vector(vglmer_obj$beta$mean), var = diag(vglmer_obj$beta$var), stringsAsFactors = F)
-  alpha.output <- data.frame(name = rownames(vglmer_obj$alpha$mean), mean = as.vector(vglmer_obj$alpha$mean), var = as.vector(vglmer_obj$alpha$dia.var), stringsAsFactors = F)
+format_vglmer <- function(object){
+  beta.output <- data.frame(name = rownames(object$beta$mean), mean = as.vector(object$beta$mean), var = diag(object$beta$var), stringsAsFactors = F)
+  alpha.output <- data.frame(name = rownames(object$alpha$mean), mean = as.vector(object$alpha$mean), var = as.vector(object$alpha$dia.var), stringsAsFactors = F)
   output <- bind_rows(beta.output, alpha.output)
   return(output)
 }
 
+#' Format Stan
+#' @param useSigma Return variance component parameters from STAN? Default "FALSE".
+#' @rdname format_obj
+#' @importFrom stringr str_split
+#' @importFrom stats var
 #' @export
-format_stan <- function(stan_obj, useSigma = FALSE){
-  require(stringr)
-  post_stan <- as.matrix(stan_obj)
+format_stan <- function(object, useSigma = FALSE){
+  post_stan <- as.matrix(object)
   if (!useSigma){
     post_stan <- post_stan[,!grepl(colnames(post_stan), pattern='^Sigma')]
   }
@@ -54,7 +81,9 @@ format_stan <- function(stan_obj, useSigma = FALSE){
     }
   })
   colnames(post_stan) <- fmt_stan_names
-  output <- data.frame(var = apply(post_stan, MARGIN = 2, var), mean = colMeans(post_stan)) %>% mutate(name = rownames(.))
+  output <- data.frame(var = apply(post_stan, MARGIN = 2, var), mean = colMeans(post_stan))
+  output$name <- rownames(output)
+  rownames(output) <- NULL
   return(output)
 }
 
@@ -157,6 +186,10 @@ multi_digamma <- function(a, p){
 }
 
 
+#' Simple EM algorithm for starting values.
+#' 
+#' Use ridge penalty to prevent separation. Not be called by user!
+#' 
 EM_prelim <- function(X, Z, s, pg_b, iter, ridge = 2){
   
   jointXZ <- cbind(X, Z)
@@ -183,7 +216,7 @@ make_log_invwishart_constant <- function(nu, Phi){
   return(output)
 }
 
-calculate_ELBO <- function(factorization.method,
+calculate_ELBO <- function(factorization_method,
    #Fixed constants or priors
    d_j, g_j, prior_sigma_alpha_phi, prior_sigma_alpha_nu, iw_prior_constant, choose_term,
    #Data
@@ -204,7 +237,7 @@ calculate_ELBO <- function(factorization.method,
     #linear predictor: E[XB + ZA]
     ex_XBZA <- (X %*% vi_beta_mean + Z %*% vi_alpha_mean)
     #quadratic var, i.e. Var(x_i^T beta + z_i^T alpha)
-    if (factorization.method == 'weak'){
+    if (factorization_method == 'weak'){
       if (is.null(vi_joint_decomp) | is.null(log_det_joint_var)){stop('Need to provide joint decomposition for ELBO weak')}
       var_XBZA <- rowSums( (cbind(X,Z) %*% t(vi_joint_decomp))^2 )
     }else{
@@ -247,7 +280,7 @@ calculate_ELBO <- function(factorization.method,
   logcomplete <- logcomplete_1 + logcomplete_2 + logcomplete_3
   ##GET THE ENTROPY
    #Entropy for p(beta,alpha)
-  if (factorization.method == 'weak'){
+  if (factorization_method == 'weak'){
     entropy_1 <-  ncol(vi_joint_decomp)/2 * log(2 * pi * exp(1)) + 
       1/2 * log_det_joint_var 
   }else{
@@ -269,44 +302,73 @@ calculate_ELBO <- function(factorization.method,
   return(data.frame(ELBO, logcomplete, entropy, logcomplete_1, logcomplete_2, logcomplete_3, entropy_1, entropy_2, entropy_3))
 }
 
-if (FALSE){
-  formula <- fake_outcome ~ z.inc + (1 + z.inc | eth) + ( 1  |stt) + (1 | stt.age)
-}
-if (FALSE){
-  data <- store_data
-  iterations <- 100
-  factorization.method <- 'strong'
-  quiet <- F
-  init <- 'EM'
-  print.prog = 10
-  alpha_tol = 1e-5
-  prior_variance <- 'jeffreys'
-  parameter.expansion <- 'translation'
-  debug.ELBO <- T
-  prevent_degeneracy <- F
-  tolerance_elbo <- 1e-5
-  tolerance_parameters <- 1e-5
-}
-
-#' Regression
+#' Variational Inference for Non-Linear Hierarchical Models
+#' 
+#' Estimate a hierarchical model (logistic) using mean-field variational
+#' inference. Accepts identical syntax to glmer. Options are described below.
+#' 
+#' @param formula Standard glmer-style formula for random effects.
+#' @param data data.frame containing the outcome and variables.
+#' @param iterations Number of iterations for the model.
+#' @param factorization_method The factorization method to use. Described in
+#'   detail in the dissertation. strong, partial, and weak correspond to Schemes
+#'   I, II, and III respectively. "weak" should have best performance but is
+#'   slowest.
+#' @param prior_variance Options are jeffreys, mcmcglmm, mvD, mean_exists,
+#'   limit, and uniform. They are defined as an Inverse Wishart with the
+#'   following parameters where d is the dimensionality of the random effect. At
+#'   present, all models use "mean_exists" for a well-defined proper prior. 
+#'   \itemize{
+#'   \item jeffreys: IW(0, 0)
+#'   \item mcmcglmm: IW(0, I)
+#'   \item mvD: IW(-d, I)
+#'   \item mean_exists: IW(d + 1, I)
+#'   \item limit: IW(d - 1, 0)
+#'   \item uniform: IW(-[d+1], 0)
+#'   }
+#'   The model may fail to converge   
+#' @param tolerance_elbo Change in ELBO to stop algorithm.
+#' @param tolerance_parameters Change in value of any parameter to stop algorithm.
+#' 
+#' @param parameter_expansion At moment, accepts 'mean' or 'none'. 'mean' is
+#'   costless and should always be used!
+#' @param prevent_degeneracy Ignored for the moment.
+#' @param force_whole Require whole numbers. Set to FALSE to allow "quasi-binomial".
+#' 
+#' @param init Initialization method can be EM, zero, or random at moment.
+#' @param random_seed Set seed for initialization.
+#' 
+#' @param debug_param Debug parameter convergence.
+#' @param debug_ELBO Debug ELBO trajectory.
+#' 
+#' @param linpred_method Method for updating means of beta and alpha. "joint" is best.
+#' @param print_prog Print after print_prog iterations to show progress.
+#' @param quiet Don't print noisy intermediate output.
+#' @param return_data Return the design (X,Z) for debugging afterwards.
+#' 
 #' @import CholWishart purrr stringr
-#' @importFrom dplyr select
+#' @importFrom dplyr select group_by summarize
 #' @importFrom lme4 mkReTrms findbars subbars
+#' @importFrom stats model.response model.matrix model.frame rnorm rWishart qlogis
 #' @useDynLib vglmer
 #' @export
-vglmer_logit <- function(formula, data, iterations, factorization.method, 
-                         tolerance_elbo = 1e-4, prevent_degeneracy = FALSE, force_whole = TRUE,
-                         prior_variance, parameter.expansion = 'mean', random.seed = 1,
-                         debug.param = FALSE, return.data = FALSE, linpred.method = 'joint',
-                         debug.ELBO = FALSE, print.prog = NULL, tolerance_parameters = 1e-4, quiet = T, init = 'EM'){
+vglmer_logit <- function(formula, data, iterations, prior_variance, factorization_method = 'weak', 
+     tolerance_elbo = 1e-4, tolerance_parameters = 1e-4,
+     prevent_degeneracy = FALSE, force_whole = TRUE,
+     parameter_expansion = 'mean', random_seed = 1,
+     debug_param = FALSE, return_data = FALSE, linpred_method = 'joint',
+     debug_ELBO = FALSE, print_prog = NULL, quiet = T, init = 'EM'){
   
-  if (is.null(print.prog)){
-    print.prog <- floor(iterations / 20)
+  if (!(factorization_method %in% c('weak', 'strong', 'partial'))){
+    stop('factorization_method must be in weak, strong, or partial.')
+  }
+  if (is.null(print_prog)){
+    print_prog <- floor(iterations / 20)
   }
   #Extract outcome y
   y <- model.response(model.frame(nobars(formula), data = data))
   names(y) <- NULL
-  if (class(y) != 'numeric'){
+  if (!(class(y) %in% c('numeric', 'integer'))){
     if (min(y) < 0){
       stop('Negative Numbers not Permitted in outcome')
     }
@@ -337,8 +399,8 @@ vglmer_logit <- function(formula, data, iterations, factorization.method,
   X <- model.matrix(nobars(formula), data = data)
   
   #Extract the Z (Random Effect) design matrix.
-  mk.Z <- mkReTrms(findbars(formula), model.frame(subbars(formula), data = data), reorder.terms = FALSE, reorder.vars = FALSE)
-  Z <- t(mk.Z$Zt)
+  mk_Z <- mkReTrms(findbars(formula), model.frame(subbars(formula), data = data), reorder.terms = FALSE, reorder.vars = FALSE)
+  Z <- t(mk_Z$Zt)
 
   p.X <- ncol(X)
   p.Z <- ncol(Z)
@@ -347,17 +409,19 @@ vglmer_logit <- function(formula, data, iterations, factorization.method,
   #Process the REs to get various useful terms.
   ####
     #RE names and names of variables included for each.
-    names_of_RE <- mk.Z$cnms
+    names_of_RE <- mk_Z$cnms
   
-    number_of_RE <- length(mk.Z$Gp) - 1
+    number_of_RE <- length(mk_Z$Gp) - 1
+    
+    if (number_of_RE < 1){stop('Need to provide at least one random effect...')}
     #The position that demarcates each random effect.
     #That is, breaks_for_RE[2] means at that position + 1 does RE2 start.
-    breaks_for_RE <- c(0, cumsum(diff(mk.Z$Gp)))
+    breaks_for_RE <- c(0, cumsum(diff(mk_Z$Gp)))
     #Dimensionality of \alpha_{j,g}, i.e. 1 if random intercept
     #2 if random intercept + random slope
     d_j <- lengths(names_of_RE)
     #Number of GROUPs for each random effect.
-    g_j <- diff(mk.Z$Gp)/d_j
+    g_j <- diff(mk_Z$Gp)/d_j
     
     #Empty vector to build the formatted names for each random effect.
     fmt_names_Z <- c()
@@ -467,7 +531,7 @@ vglmer_logit <- function(formula, data, iterations, factorization.method,
         re_position_list = outer_alpha_RE_positions)
       vi_sigma_alpha <- mapply(vi_sigma_alpha$outer_alpha, prior_sigma_alpha_phi, SIMPLIFY = FALSE, FUN=function(i,j){i+j})
     }else if (init == 'random'){
-      set.seed(random.seed)
+      set.seed(random_seed)
       vi_beta_mean <- rnorm(ncol(X))
       vi_alpha_mean <- rep(0, ncol(Z))
       
@@ -490,7 +554,7 @@ vglmer_logit <- function(formula, data, iterations, factorization.method,
     zero_mat <- sparseMatrix(i=1,j=1,x=0,dims = c(ncol(X), ncol(X)))
     zero_mat <- drop0(zero_mat)
     
-    if (factorization.method == 'weak'){
+    if (factorization_method == 'weak'){
       vi_joint_decomp <- bdiag(vi_beta_decomp, vi_alpha_decomp)
       joint.XZ <- cbind(X, Z)
     }else{
@@ -508,7 +572,7 @@ vglmer_logit <- function(formula, data, iterations, factorization.method,
     lagged_alpha_mean <- rep(-Inf, ncol(Z))
     lagged_beta_mean <- rep(-Inf, ncol(X))
     lagged_sigma_alpha <- vi_sigma_alpha
-    if (factorization.method == 'weak'){
+    if (factorization_method == 'weak'){
       lagged_joint_decomp <- vi_joint_decomp
     }else{
       lagged_alpha_decomp <- vi_alpha_decomp
@@ -518,7 +582,7 @@ vglmer_logit <- function(formula, data, iterations, factorization.method,
     lagged_ELBO <- -Inf
     accepted_times <- NA
     
-    if (parameter.expansion == 'translation'){
+    if (parameter_expansion == 'translation'){
       accepted_times <- 0
       zeromat_beta <- drop0(Diagonal(x = rep(0, ncol(X))))
       
@@ -543,18 +607,18 @@ vglmer_logit <- function(formula, data, iterations, factorization.method,
     }
     store_ELBO <- data.frame()
     
-    if (debug.param){
+    if (debug_param){
       store_beta <- array(NA, dim = c(iterations, ncol(X)))
     }
     ##Begin VI algorithm:
-    message('Begin Regression')
+    if (!quiet){message('Begin Regression')}
     for (it in 1:iterations){
-      if (it %% print.prog == 0){cat('.')}
+      if (it %% print_prog == 0){cat('.')}
       ###
       ##Polya-Gamma Updates
       ###
       #Get the x_i^T Var(beta) x_i terms.
-      if (factorization.method == 'weak'){
+      if (factorization_method == 'weak'){
         joint_quad <- rowSums( (joint.XZ %*% t(vi_joint_decomp))^2 )
         vi_pg_c <- sqrt(as.vector(X %*% vi_beta_mean + Z %*% vi_alpha_mean)^2 + joint_quad)
       }else{
@@ -566,9 +630,9 @@ vglmer_logit <- function(formula, data, iterations, factorization.method,
 
       diag_vi_pg_mean <- sparseMatrix(i = 1:N, j = 1:N, x = vi_pg_mean)
       
-      if (debug.ELBO & it != 1){
-        debug.ELBO.1 <- calculate_ELBO(
-          factorization.method = factorization.method,
+      if (debug_ELBO & it != 1){
+        debug_ELBO.1 <- calculate_ELBO(
+          factorization_method = factorization_method,
           d_j = d_j, g_j = g_j, prior_sigma_alpha_phi = prior_sigma_alpha_phi, 
           prior_sigma_alpha_nu = prior_sigma_alpha_nu,
           iw_prior_constant = iw_prior_constant,
@@ -587,7 +651,7 @@ vglmer_logit <- function(formula, data, iterations, factorization.method,
       #Process Sigma_j for manipulation      
       #if Sigma_{j} is InverseWishart(a,Phi)
       #Then E[Sigma^{-1}_j] = a * Phi^{-1}
-      if (factorization.method == 'strong'){
+      if (factorization_method == 'strong'){
         cyclical_T <- TRUE
       }else{
         cyclical_T <- FALSE
@@ -602,7 +666,7 @@ vglmer_logit <- function(formula, data, iterations, factorization.method,
         Tinv <- lapply(Tinv, FUN=function(i){as(i, 'dgCMatrix')})  
       }
       
-      if (factorization.method == 'weak'){
+      if (factorization_method == 'weak'){
         ##Update <beta, alpha> jointly
         chol.update.joint <- LinRegChol(X = joint.XZ, omega = diag_vi_pg_mean, prior_precision =  bdiag(zero_mat, Tinv), y = s)
         Pmatrix <- sparseMatrix(i = 1:ncol(joint.XZ), j = 1 + chol.update.joint$Pindex, x = 1)
@@ -618,9 +682,9 @@ vglmer_logit <- function(formula, data, iterations, factorization.method,
         
         log_det_joint_var <- - 2 * sum(log(diag(chol.update.joint$origL)))
         
-      }else if (factorization.method == 'partial'){
+      }else if (factorization_method == 'partial'){
         
-        if (linpred.method == 'cyclical'){
+        if (linpred_method == 'cyclical'){
           # Do not run except as backup
           # ###Non optimized
           # precision_beta <- t(X) %*% diag_vi_pg_mean %*% X
@@ -651,7 +715,7 @@ vglmer_logit <- function(formula, data, iterations, factorization.method,
           vi_beta_mean <- Matrix(vi_beta_mean, dimnames = list(colnames(X), NULL))
           vi_alpha_mean <- Matrix(vi_alpha_mean, dimnames = list(fmt_names_Z, NULL))
           
-        }else if (linpred.method == 'joint'){
+        }else if (linpred_method == 'joint'){
           joint.XZ <- cbind(X,Z)  
           chol.update.joint <- LinRegChol(X = joint.XZ, omega = diag_vi_pg_mean, prior_precision =  bdiag(zero_mat, Tinv), y = s)
           vi_beta_mean <- Matrix(chol.update.joint$mean[1:p.X], dimnames = list(colnames(X), NULL))
@@ -670,7 +734,7 @@ vglmer_logit <- function(formula, data, iterations, factorization.method,
           
         }else{stop('Invalid linpred method for partial scheme')}
         
-      }else if (factorization.method == 'strong'){
+      }else if (factorization_method == 'strong'){
         
         running_log_det_alpha_var <- rep(NA, number_of_RE)
         vi_alpha_decomp <- sparseMatrix(i = 1, j =1, x = 0, dims = rep(p.Z, 2))
@@ -692,7 +756,7 @@ vglmer_logit <- function(formula, data, iterations, factorization.method,
         # p.X <<- p.X
         
         
-        if (linpred.method == 'joint'){
+        if (linpred_method == 'joint'){
           
           joint.XZ <- cbind(X,Z)  
           chol.update.joint <- LinRegChol(X = joint.XZ, omega = diag_vi_pg_mean, prior_precision =  bdiag(zero_mat, bdiag(Tinv)), y = s)
@@ -720,7 +784,7 @@ vglmer_logit <- function(formula, data, iterations, factorization.method,
           
           log_det_alpha_var <- sum(running_log_det_alpha_var)
           
-        }else if (linpred.method == 'solve_normal'){
+        }else if (linpred_method == 'solve_normal'){
           
           bind_rhs_j <- list()
           bind_lhs_j <- list()
@@ -774,7 +838,7 @@ vglmer_logit <- function(formula, data, iterations, factorization.method,
           vi_alpha_mean <- Matrix(bind_solution[1:ncol(Z)], dimnames = list(fmt_names_Z, NULL))
           
           
-        }else if (linpred.method == 'cyclical'){
+        }else if (linpred_method == 'cyclical'){
           
           for (j in 1:number_of_RE){
             index_j <- cyclical_pos[[j]]
@@ -810,12 +874,12 @@ vglmer_logit <- function(formula, data, iterations, factorization.method,
 
       }else{stop('Invalid factorization method.')}
 
-      if (debug.ELBO & it != 1){
+      if (debug_ELBO & it != 1){
         variance_by_alpha_jg <- calculate_expected_outer_alpha(L = vi_alpha_decomp, alpha_mu = as.vector(vi_alpha_mean), re_position_list = outer_alpha_RE_positions)
         vi_sigma_outer_alpha <- variance_by_alpha_jg$outer_alpha
 
-        debug.ELBO.2 <- calculate_ELBO(
-          factorization.method = factorization.method,
+        debug_ELBO.2 <- calculate_ELBO(
+          factorization_method = factorization_method,
           d_j = d_j, g_j = g_j, prior_sigma_alpha_phi = prior_sigma_alpha_phi, 
           prior_sigma_alpha_nu = prior_sigma_alpha_nu,
           iw_prior_constant = iw_prior_constant,
@@ -850,9 +914,9 @@ vglmer_logit <- function(formula, data, iterations, factorization.method,
       # if (any(!sapply(comp, isTRUE))){print(comp); stop()}
       
       ###PARAMETER EXPANSIONS!
-      if (debug.ELBO){
-        debug.ELBO.3 <- calculate_ELBO(
-          factorization.method = factorization.method,
+      if (debug_ELBO){
+        debug_ELBO.3 <- calculate_ELBO(
+          factorization_method = factorization_method,
           d_j = d_j, g_j = g_j, prior_sigma_alpha_phi = prior_sigma_alpha_phi, 
           prior_sigma_alpha_nu = prior_sigma_alpha_nu,
           iw_prior_constant = iw_prior_constant,
@@ -868,7 +932,7 @@ vglmer_logit <- function(formula, data, iterations, factorization.method,
         )
       }
       
-      if (parameter.expansion == 'mean'){
+      if (parameter_expansion == 'mean'){
         #Do a simple mean adjusted expansion.
         
         #Get the mean of each random effect.
@@ -883,10 +947,10 @@ vglmer_logit <- function(formula, data, iterations, factorization.method,
         vi_sigma_outer_alpha <- variance_by_alpha_jg$outer_alpha
         
         accept.PX <- TRUE
-      }else if (parameter.expansion == 'translation'){
+      }else if (parameter_expansion == 'translation'){
         
         prior.ELBO <- calculate_ELBO(
-          factorization.method = factorization.method,
+          factorization_method = factorization_method,
           d_j = d_j, g_j = g_j, prior_sigma_alpha_phi = prior_sigma_alpha_phi, 
           prior_sigma_alpha_nu = prior_sigma_alpha_nu,
           iw_prior_constant = iw_prior_constant,
@@ -901,7 +965,7 @@ vglmer_logit <- function(formula, data, iterations, factorization.method,
           log_det_joint_var = log_det_joint_var
         )
         
-        if (factorization.method == 'weak'){
+        if (factorization_method == 'weak'){
           stop('no Translation PX for weak yet...')
         }
         R_ridge <- vecR_ridge_general(
@@ -969,7 +1033,7 @@ vglmer_logit <- function(formula, data, iterations, factorization.method,
         prop_vi_sigma_outer_alpha <- prop_variance_by_alpha_jg$outer_alpha
         
         prop.ELBO <- calculate_ELBO(
-          factorization.method = factorization.method,
+          factorization_method = factorization_method,
           d_j = d_j, g_j = g_j, prior_sigma_alpha_phi = prior_sigma_alpha_phi, 
           prior_sigma_alpha_nu = prior_sigma_alpha_nu,
           iw_prior_constant = iw_prior_constant,
@@ -1004,14 +1068,14 @@ vglmer_logit <- function(formula, data, iterations, factorization.method,
         
         rownames(vi_alpha_mean) <- fmt_names_Z
         
-      }else if (parameter.expansion == 'none'){
+      }else if (parameter_expansion == 'none'){
         accept.PX <- TRUE
       }else{stop('Invalid PX method.')}
       #Adjust the terms in the ELBO calculation that are different.
 
       if (accept.PX){
         final.ELBO <- calculate_ELBO(
-          factorization.method = factorization.method,
+          factorization_method = factorization_method,
           d_j = d_j, g_j = g_j, prior_sigma_alpha_phi = prior_sigma_alpha_phi, 
           prior_sigma_alpha_nu = prior_sigma_alpha_nu,
           iw_prior_constant = iw_prior_constant,
@@ -1033,14 +1097,14 @@ vglmer_logit <- function(formula, data, iterations, factorization.method,
         }
       }
       
-      if (debug.ELBO & it != 1){
-        update_ELBO <- bind_rows(debug.ELBO.1 %>% mutate(step = 1), 
-                                 debug.ELBO.2 %>% mutate(step = 2), 
-                                 debug.ELBO.3 %>% mutate(step = 3),
-                                 final.ELBO %>% mutate(step = 4))
-        store_ELBO <- bind_rows(store_ELBO, update_ELBO %>% mutate(it = it))
-        
-        
+      if (debug_ELBO & it != 1){
+        debug_ELBO.1$step <- 1
+        debug_ELBO.2$step <- 2
+        debug_ELBO.3$step <- 3
+        final.ELBO$step <- 4
+        update_ELBO <- bind_rows(debug_ELBO.1, debug_ELBO.2, debug_ELBO.3, final.ELBO)
+        update_ELBO$it <- it
+        store_ELBO <- bind_rows(store_ELBO, update_ELBO)
       }else{
         store_ELBO <- bind_rows(store_ELBO, final.ELBO %>% mutate(it = it))
       }
@@ -1052,7 +1116,7 @@ vglmer_logit <- function(formula, data, iterations, factorization.method,
       change_beta_mean <- max(abs(vi_beta_mean - lagged_beta_mean))
       change_sigma_mean <- mapply(vi_sigma_alpha, lagged_sigma_alpha, FUN=function(i,j){max(abs(i-j))})
       
-      if (factorization.method == 'weak'){
+      if (factorization_method == 'weak'){
         change_joint_var <- 0 #change_joint_var <- max(abs(vi_joint_decomp - lagged_joint_decomp))
         change_alpha_var <- change_beta_var <- 0
       }else{
@@ -1061,16 +1125,18 @@ vglmer_logit <- function(formula, data, iterations, factorization.method,
         change_beta_var <- max(abs(vi_beta_decomp - lagged_beta_decomp))
       }
       
-      if (debug.param){
+      if (debug_param){
         store_beta[it,] <- as.vector(vi_beta_mean)
       }
       change_all <- data.frame(change_alpha_mean, change_beta_mean, t(change_sigma_mean), change_alpha_var, change_beta_var, change_joint_var)
       if ( (max(change_all) < tolerance_parameters) | (change_elbo$ELBO > 0 & change_elbo$ELBO < tolerance_elbo) ){
-        message(paste0('Converged after ', it, ' iterations with ELBO change of ', round(change_elbo[1], 1 + abs(floor(log(tolerance_elbo)/log(10))))))
-        message(paste0('The largest change in any variational parameter was ', round(max(change_all), 1 + abs(floor(log(tolerance_parameters)/log(10))))))
+        if (!quiet){
+          message(paste0('Converged after ', it, ' iterations with ELBO change of ', round(change_elbo[1], 1 + abs(floor(log(tolerance_elbo)/log(10))))))
+          message(paste0('The largest change in any variational parameter was ', round(max(change_all), 1 + abs(floor(log(tolerance_parameters)/log(10))))))
+        }
         break
       }
-      if (!quiet & (it %% print.prog == 0)){
+      if (!quiet & (it %% print_prog == 0)){
         plot(vi_alpha_mean)
         message(paste0('ELBO Change: ', round(change_elbo$ELBO, 10)))
         message('Other Parameter Changes')
@@ -1088,13 +1154,13 @@ vglmer_logit <- function(formula, data, iterations, factorization.method,
       message(paste0('Ended without Convergence after', it, ' iterations : ELBO change of ', round(change_elbo[1], abs(floor(log(tolerance_elbo)/log(10))))))
     }
     
-    if (debug.ELBO){
+    if (debug_ELBO){
       d.ELBO <- store_ELBO %>% mutate(diff = ELBO - dplyr::lag(ELBO))
       sum.ELBO <- d.ELBO %>% group_by(step) %>% summarize(negative = mean(diff < 0, na.rm=T))  
     }else{
       d.ELBO <- NULL
     }
-    if (parameter.expansion == 'translation'){
+    if (parameter_expansion == 'translation'){
       final.ELBO$accepted_PX <- accepted_times / it
     }
     output <- list(beta = list(mean = vi_beta_mean),
@@ -1105,20 +1171,22 @@ vglmer_logit <- function(formula, data, iterations, factorization.method,
                    alpha = list(mean = vi_alpha_mean)
     )
     
-    if (debug.param){
+    if (debug_param){
       output$parameter_trajectory <- list(beta = store_beta)
     }
-    if (factorization.method == 'weak'){
+    if (factorization_method == 'weak'){
       output$joint <- vi_joint_decomp
     }
-    if (return.data){
+    if (return_data){
       output$data <- list(X = X, Z = Z, y = y, trials = trials)
     }
     output$formula <- formula
-    output$factorization.method <- factorization.method
+    output$factorization_method <- factorization_method
     output$alpha$dia.var <- unlist(lapply(variance_by_alpha_jg$variance_jg, FUN=function(i){as.vector(sapply(i, diag))}))
     output$beta$var <- t(vi_beta_decomp) %*% vi_beta_decomp
     output$beta$decomp_var <- vi_beta_decomp
+    
+    output$internal.parameters <- list(names_of_RE = names_of_RE, d_j = d_j, g_j = g_j)
     
     output$alpha$var <- variance_by_alpha_jg$variance_jg
     output$alpha$decomp_var <- vi_alpha_decomp
@@ -1130,33 +1198,58 @@ vglmer_logit <- function(formula, data, iterations, factorization.method,
       outer_alpha_RE_positions = outer_alpha_RE_positions,
       d_j = d_j, g_j = g_j
     )
+    class(output) <- 'vglmer'
     return(output)
 }
 
-#' Predict linear predictor vglmer.
+#' Predict after vglmer
+#' 
+#' Get linear predictor for new observations after using vglmer.
+#' 
+#' @param model Object from vglmer.
+#' @param newdata Data to get predictions on.
+#' @param samples How many samples to draw? 0, default, gets the expected value.
+#'   Two methods: 
+#'   \itemize{
+#'   \item Number - draw that many samples.
+#'   \item Matrix - use previous samples for prediction. Currently used for MAVB
+#'   but will be depreciated in updated version.
+#'   }
+#' @param samples_only Return only samples *not* linear predictor.
+#' @param summary Return summary of linear predictor, not full posterior.
+#' @param allow_missing_levels Allow prediction for random effects not in model.
+#'   As is standard, give an estimate of "0" for that effect.
 #' @export
-vglmer_predict <- function(model, newdata, samples, samples.only = FALSE, summary = TRUE){
+vglmer_predict <- function(model, newdata, 
+                           samples = 0, samples_only = FALSE, 
+                           summary = TRUE, allow_missing_levels = FALSE){
   
   fmla <- model$formula
   #Extract X (FE design matrix)
   X <- model.matrix(nobars(fmla), data = newdata)
   
-  #Extract the Z (Random Effect) design matrix.
-  mk.Z <- mkReTrms(findbars(fmla), model.frame(subbars(fmla), data = newdata), reorder.terms = FALSE, reorder.vars = FALSE)
-  Z <- t(mk.Z$Zt)
-
-  #RE names and names of variables included for each.
-  names_of_RE <- mk.Z$cnms
+  orig_X_names <- rownames(model$beta$mean)
+  if (!identical(colnames(X), orig_X_names)){
+    print(all.equal(colnames(X), origi_X_names))
+    stop('Misaligned Fixed Effects')
+  }
   
-  number_of_RE <- length(mk.Z$Gp) - 1
+  #Extract the Z (Random Effect) design matrix.
+  mk_Z <- mkReTrms(findbars(fmla), model.frame(subbars(fmla), data = newdata), reorder.terms = FALSE, reorder.vars = FALSE)
+  Z <- t(mk_Z$Zt)
+  
+  #RE names and names of variables included for each.
+  names_of_RE <- mk_Z$cnms
+  
+  number_of_RE <- length(mk_Z$Gp) - 1
   #The position that demarcates each random effect.
   #That is, breaks_for_RE[2] means at that position + 1 does RE2 start.
-  breaks_for_RE <- c(0, cumsum(diff(mk.Z$Gp)))
+  breaks_for_RE <- c(0, cumsum(diff(mk_Z$Gp)))
   #Dimensionality of \alpha_{j,g}, i.e. 1 if random intercept
   #2 if random intercept + random slope
   d_j <- lengths(names_of_RE)
   #Number of GROUPs for each random effect.
-  g_j <- diff(mk.Z$Gp)/d_j
+  g_j <- diff(mk_Z$Gp)/d_j
   
   #Empty vector to build the formatted names for each random effect.
   fmt_names_Z <- c()
@@ -1172,17 +1265,51 @@ vglmer_predict <- function(model, newdata, samples, samples.only = FALSE, summar
     
   }
   colnames(Z) <- fmt_names_Z
+  #####
+  ###Confirm Alignment of the Z
+  #####
+  orig_Z_names <- rownames(model$alpha$mean)
+  
+  not_in_original_Z <- setdiff(fmt_names_Z, orig_Z_names)
+  not_in_new_Z <- setdiff(orig_Z_names, fmt_names_Z)
+  
+  if (length(not_in_original_Z) > 0){
+    if (!allow_missing_levels){stop('New levels not allowed unless allow_missing_levels = TRUE')}
+  }
+  
+  in_both <- intersect(fmt_names_Z, orig_Z_names)
+  recons_Z <- drop0(sparseMatrix(i = 1, j = 1, x = 0, dims = c(nrow(Z), length(orig_Z_names))))
+  colnames(recons_Z) <- orig_Z_names
+  rownames(recons_Z) <- 1:nrow(recons_Z)
+  
+  recons_Z[,match(in_both, orig_Z_names)] <- Z[,match(in_both, fmt_names_Z)] 
+  
+  #Check that the entirely missing columns match those not in the original
+  checksum_align <- setdiff(not_in_new_Z, sort(names(which(colSums(recons_Z != 0) == 0))))
+  if (length(checksum_align) > 0){
+    stop('Alignment Error')
+  }
+  
+  Z <- recons_Z
+  rm(recons_Z)
+  ####
   
   XZ <- cbind(X, Z)
-  factorization.method <- model$factorization.method
+  factorization_method <- model$factorization_method
   if (is.matrix(samples)){
     if (ncol(samples) != ncol(XZ)){
       stop('Samples must be {m, ncol(Z) + ncol(X)}')
     }
     samples <- t(samples)
+    only.lp <- FALSE
     print('Using Provided Samples')
   }else{
-    if (factorization.method %in% c('strong', 'partial')){
+    if (samples == 0){
+      only.lp <- TRUE
+    }else{
+      only.lp <- FALSE
+    }
+    if (factorization_method %in% c('strong', 'partial')){
       
       vi_alpha_mean <- model$alpha$mean
       vi_alpha_decomp <- model$alpha$decomp_var
@@ -1194,16 +1321,20 @@ vglmer_predict <- function(model, newdata, samples, samples.only = FALSE, summar
       
       p.X <- nrow(vi_beta_mean)
       
+      if (!only.lp){
+        sim_init_alpha <- matrix(rnorm(samples * p.Z), ncol = samples)
+        sim_init_alpha <- t(vi_alpha_decomp) %*% sim_init_alpha
+        sim_init_alpha <- sim_init_alpha + kronecker(vi_alpha_mean, t(matrix(1, samples)))
+        
+        sim_init_beta <- matrix(rnorm(samples * p.X), ncol = samples)
+        sim_init_beta <- t(vi_beta_decomp) %*% sim_init_beta
+        sim_init_beta <- sim_init_beta + kronecker(vi_beta_mean, t(matrix(1,samples)))
+      }else{
+        sim_init_alpha<- vi_alpha_mean
+        sim_init_beta <- vi_beta_mean
+      }
       
-      sim_init_alpha <- matrix(rnorm(samples * p.Z), ncol = samples)
-      sim_init_alpha <- t(vi_alpha_decomp) %*% sim_init_alpha
-      sim_init_alpha <- sim_init_alpha + kronecker(vi_alpha_mean, t(matrix(1, samples)))
-      
-      sim_init_beta <- matrix(rnorm(samples * p.X), ncol = samples)
-      sim_init_beta <- t(vi_beta_decomp) %*% sim_init_beta
-      sim_init_beta <- sim_init_beta + kronecker(vi_beta_mean, t(matrix(1,samples)))
-      
-    }else if (factorization.method == 'weak'){
+    }else if (factorization_method == 'weak'){
       
       vi_alpha_mean <- model$alpha$mean
       p.Z <- nrow(vi_alpha_mean)
@@ -1211,39 +1342,41 @@ vglmer_predict <- function(model, newdata, samples, samples.only = FALSE, summar
       vi_beta_mean <- model$beta$mean
       p.X <- nrow(vi_beta_mean)
       
-      vi_joint_decomp <- model$joint
-      sim_init_joint <- matrix(rnorm(samples * (p.X + p.Z)), ncol = samples)
-      sim_init_joint <- t(vi_joint_decomp) %*% sim_init_joint
-      
-      sim_init_beta <- sim_init_joint[1:p.X, , drop = F]
-      sim_init_alpha <- sim_init_joint[-1:-p.X, ,drop = F]
-      
-      rm(sim_init_joint)
-      
-      sim_init_alpha <- sim_init_alpha + kronecker(vi_alpha_mean, t(matrix(1, samples)))
-      sim_init_beta <- sim_init_beta + kronecker(vi_beta_mean, t(matrix(1,samples)))
+      if (!only.lp){
+        vi_joint_decomp <- model$joint
+        sim_init_joint <- matrix(rnorm(samples * (p.X + p.Z)), ncol = samples)
+        sim_init_joint <- t(vi_joint_decomp) %*% sim_init_joint
+        
+        sim_init_beta <- sim_init_joint[1:p.X, , drop = F]
+        sim_init_alpha <- sim_init_joint[-1:-p.X, ,drop = F]
+        
+        rm(sim_init_joint)
+        
+        sim_init_alpha <- sim_init_alpha + kronecker(vi_alpha_mean, t(matrix(1, samples)))
+        sim_init_beta <- sim_init_beta + kronecker(vi_beta_mean, t(matrix(1,samples)))
+      }else{
+        sim_init_alpha <- vi_alpha_mean
+        sim_init_beta <- vi_beta_mean
+      }
       
     }else{stop('')}
-    
-    if (!all.equal(rownames(vi_alpha_mean), fmt_names_Z)){
-      stop('Names for New Z Does not Equal Names from Original Model ')
-    }
-    if (!all.equal(rownames(vi_beta_mean), colnames(X))){
-      stop('Names for New X Does not Equal Names from Original Model ')
-    }
     
     samples <- rbind(sim_init_beta, sim_init_alpha)
     rm(sim_init_beta, sim_init_alpha)
   }
   
-  if (samples.only){
+  if (samples_only){
     return(samples)
   }
   
   lp <- XZ %*% samples
   if (summary){
-    lp <- t(apply(lp, MARGIN = 1, FUN=function(i){c(mean(i), var(i))}))
-    lp <- data.frame(mean = lp[,1], var = lp[,2])  
+    if (!only.lp){
+      lp <- t(apply(lp, MARGIN = 1, FUN=function(i){c(mean(i), var(i))}))
+      lp <- data.frame(mean = lp[,1], var = lp[,2])  
+    }else{
+      lp <- as.vector(t(apply(lp, MARGIN = 1, FUN=function(i){mean(i)})))
+    }
     return(lp)
   }else{
     return(lp)
@@ -1252,272 +1385,35 @@ vglmer_predict <- function(model, newdata, samples, samples.only = FALSE, summar
 
 
 
+#' Perform MAVB after fitting vglmer
+#' 
+#' Given a model from vglmer, perform MAVB to improve approximation quality. See
+#' dissertation for details. This function uses a naive loop so is slower than
+#' necessary. This will be updated shortly.
+#' 
+#' @param model Model fit using vglmer
+#' @param samples Samples to draw from MAVB distribution.
+#' @param var_px Default (Inf); variance of working prior. Higher is more
+#'   diffuse and thus likely better.
+#' 
 #' @importFrom purrr array_branch
 #' @importFrom mvtnorm rmvnorm
-vglmer_MAVB <- function(model, samples, parameter.expansion = 'mean', var_px, summary = TRUE, store.diff = FALSE){
-  if (is.infinite(var_px)){stop('NOT supported for inf now')}
-  #Get initial parameers
+#' @export
+MAVB <- function(model, samples, var_px = Inf){
+  
+  # if (!inherits(model, 'vglmer')){
+  #   stop('Must provide model from vglmer')
+  # }
+  
   M_prime <- model$MIVI_parameters$M_prime
   M_prime_one <- model$MIVI_parameters$M_prime_one
   M_mu_to_beta <- model$MIVI_parameters$M_mu_to_beta
   d_j <- model$MIVI_parameters$d_j
   g_j <- model$MIVI_parameters$g_j
   outer_alpha_RE_positions <- model$MIVI_parameters$outer_alpha_RE_positions
-  factorization.method <- model$factorization.method
+  factorization_method <- model$factorization_method
   
-  
-  MAVB_sims <- matrix(NA, nrow = samples, ncol = nrow(M_prime) + length(model$beta$mean))
-  
-  if (store.diff){
-    MAVB_diff <- matrix(NA, nrow = samples, ncol = sum(d_j))
-  }
-  
-  vi_sigma_alpha <- model$sigma
-  if (factorization.method %in% c('strong', 'partial')){
-    
-    vi_alpha_mean <- model$alpha$mean
-    vi_alpha_decomp <- model$alpha$decomp_var
-    
-    p.Z <- nrow(vi_alpha_mean)
-    
-    vi_beta_mean <- model$beta$mean
-    vi_beta_decomp <- model$beta$decomp_var
-    
-    p.X <- nrow(vi_beta_mean)
-    
-  
-    # sim_init_alpha <- matrix(rnorm(samples * p.Z), ncol = samples)
-    # sim_init_alpha <- t(vi_alpha_decomp) %*% sim_init_alpha
-    # sim_init_alpha <- sim_init_alpha + kronecker(vi_alpha_mean, t(matrix(1, samples)))
-
-    sim_init_alpha <- sapply(1:samples, FUN=function(i){
-      as.vector(vi_alpha_mean + t(vi_alpha_decomp) %*% rnorm(ncol(vi_alpha_decomp)))
-    })    
-    
-    # sim_init_beta <- matrix(rnorm(samples * p.X), ncol = samples)
-    # sim_init_beta <- t(vi_beta_decomp) %*% sim_init_beta
-    # sim_init_beta <- sim_init_beta + kronecker(vi_beta_mean, t(matrix(1,samples)))
-
-    sim_init_beta <- sapply(1:samples, FUN=function(i){
-      as.vector(vi_beta_mean + t(vi_beta_decomp) %*% rnorm(ncol(vi_beta_decomp)))
-    })    
-    
-  }else if (factorization.method == 'weak'){
-    
-    vi_alpha_mean <- model$alpha$mean
-    p.Z <- nrow(vi_alpha_mean)
-    
-    vi_beta_mean <- model$beta$mean
-    p.X <- nrow(vi_beta_mean)
-    
-    vi_joint_decomp <- model$joint
-    sim_init_joint <- matrix(rnorm(samples * (p.X + p.Z)), ncol = samples)
-    sim_init_joint <- t(vi_joint_decomp) %*% sim_init_joint
-    
-    sim_init_beta <- sim_init_joint[1:p.X, , drop = F]
-    sim_init_alpha <- sim_init_joint[-1:-p.X, ,drop = F]
-    
-    rm(sim_init_joint)
-    
-    sim_init_alpha <- sim_init_alpha + kronecker(vi_alpha_mean, t(matrix(1, samples)))
-    sim_init_beta <- sim_init_beta + kronecker(vi_beta_mean, t(matrix(1,samples)))
-    
-    stop('"""""""')
-  }else{stop('')}
-  
-  if (var_px == Inf){  ###1/m * Sigma_j
-    stop()
-    sim_mu_sigma <- mapply(vi_sigma_alpha$df, vi_sigma_alpha$cov, g_j, SIMPLIFY = FALSE, FUN=function(nu, Phi, g){
-      rInvWishart(n = samples, df = nu, Sigma = Phi) * 1/g
-    })
-    sim_mu_sigma <- lapply(sim_mu_sigma, FUN=function(i){array_branch(i, margin = 3)})
-    sim_mu_sigma <- pmap(sim_mu_sigma, .f = bdiag)
-    sim_mu_sigma <- lapply(sim_mu_sigma, as.matrix)
-    
-    sim_mu_mean <- array_branch(t(M_prime) %*% sim_init_alpha, margin = 2)
-    
-    sim_px_mu <- mapply(sim_mu_mean, sim_mu_sigma, FUN=function(mu, vr){rmvnorm(1, mu, vr)})
-    
-    sim_px_beta <- sim_init_beta + t(M_mu_to_beta) %*% sim_px_mu
-    sim_px_alpha <- M_prime_one %*% sim_px_mu + sim_init_alpha
-  }else{
-    #Draw from working prior
-    sim_px_0 <- matrix(rnorm(samples * ncol(M_prime), sd = sqrt(var_px)), nrow = samples)
-  
-    #Create adjusted versions:  
-    sim_tilde_beta <- mapply(array_branch(sim_init_beta, margin = 2), array_branch(sim_px_0, margin = 1), FUN=function(b,mu){
-      as.vector(b - t(M_mu_to_beta) %*% mu)
-    })
-    sim_tilde_alpha <- mapply(array_branch(sim_init_alpha, margin = 2), array_branch(sim_px_0, margin = 1), FUN=function(a,mu){
-      as.vector(a + M_prime_one %*% mu)
-    })
-    
-    # sim_tilde_beta <- sim_init_beta - t(M_mu_to_beta) %*% t(sim_px_0)
-    # sim_tilde_alpha <- sim_init_alpha + (M_prime_one) %*% t(sim_px_0)
-    
-    sim_sigma <- lapply(1:samples, FUN=function(i){
-      as.matrix(bdiag(mapply(vi_sigma_alpha$df, vi_sigma_alpha$cov, 
-        SIMPLIFY = FALSE, FUN=function(i,j){rInvWishart(n = 1, df = i, Sigma = j)[,,1]})))
-    })
-    
-    # sim_sigma <- mapply(vi_sigma_alpha$df, vi_sigma_alpha$cov, SIMPLIFY = FALSE, FUN=function(nu, Phi){
-    #   rInvWishart(n = samples, df = nu, Sigma = Phi)
-    # })
-    # sim_sigma <- lapply(sim_sigma, FUN=function(i){array_branch(i, margin = 3)})
-    # sim_sigma <- pmap(sim_sigma, .f = bdiag)
-    # sim_sigma <- lapply(sim_sigma, as.matrix)
-    
-    prec_px <- diag(x=rep(1/var_px, ncol(M_prime)))
-    
-    var_redux <- lapply(sim_sigma, FUN=function(S){
-      solve(prec_px + solve(S) * diag(rep(g_j, d_j)))
-    })
-
-    mean_redux <- mapply(var_redux, sim_sigma, array_branch(sim_tilde_alpha, margin = 2), SIMPLIFY = FALSE, FUN=function(v,S, a){
-      as.matrix(v %*% solve(S) %*% t(M_prime_one) %*% a)
-    })
-    
-    sim_px_1 <- t(mapply(mean_redux, var_redux, FUN=function(m,vr){rmvnorm(1, mean = m, sigma = vr)}))
-    
-    sim_px_beta <- sim_tilde_beta + t(M_mu_to_beta) %*% t(sim_px_1)
-    sim_px_alpha <- sim_tilde_alpha - (M_prime_one) %*% t(sim_px_1)
-    
-  }
-  
-  sim_px_beta <- as.matrix(t(sim_px_beta))    
-  sim_px_alpha <- as.matrix(t(sim_px_alpha))
-  
-  if (summary){
-    summary_MAVB <- data.frame(name = c(rownames(vi_beta_mean), rownames(vi_alpha_mean)),
-                               mean = c(colMeans(sim_px_beta), colMeans(sim_px_alpha)),
-                               var = c(apply(sim_px_beta, MARGIN = 2, var), apply(sim_px_alpha, MARGIN = 2, var)),
-                               stringsAsFactors = F)
-    return(summary_MAVB)
-  }else{
-    return(cbind(sim_px_beta, sim_px_alpha))
-  }
-}
-
-MAVB_linpred <- function(model, newdata, samples, var_px, summary = TRUE){
-  pxSamples <- vglmer_MAVB(model = model, samples = samples, parameter.expansion = 'mean', summary = FALSE, 
-                           var_px = var_px, store.diff = FALSE)
-  lp <- vglmer_predict(model, newdata = newdata, samples = pxSamples, summary = summary)
-  return(lp)
-}
-
-get_RE_groups <- function(formula, data){
-  
-  bars <- findbars(formula)
-  names(bars) <- lme4:::barnames(bars)
-  fr <- model.frame(subbars(formula), data = data)
-  blist <- lapply(bars, simple_blist, fr, drop.unused.levels = F, reorder.vars = FALSE)
-  blist <- lapply(blist, FUN=function(i){i[c('ff', 'mm')]})
-  
-  ff <- lapply(blist, FUN=function(i){i$ff})
-  ff <- lapply(ff, FUN=function(i){match(i, levels(i))})
-  mm <- lapply(blist, FUN=function(i){i$mm})
-  return(list(factor = ff, design = mm))
-}
-
-simple_blist <- function(x, frloc, drop.unused.levels = TRUE, reorder.vars = FALSE){
-  frloc <- factorize(x, frloc)
-  if (is.null(ff <- tryCatch(eval(substitute(lme4:::makeFac(fac), 
-                                             list(fac = x[[3]])), frloc), error = function(e) NULL))) 
-    stop("couldn't evaluate grouping factor ", deparse(x[[3]]), 
-         " within model frame:", " try adding grouping factor to data ", 
-         "frame explicitly if possible", call. = FALSE)
-  if (all(is.na(ff))) 
-    stop("Invalid grouping factor specification, ", deparse(x[[3]]), 
-         call. = FALSE)
-  if (drop.unused.levels) 
-    ff <- factor(ff, exclude = NA)
-  nl <- length(levels(ff))
-  mm <- model.matrix(eval(substitute(~foo, list(foo = x[[2]]))), 
-                     frloc)
-  if (reorder.vars) {
-    mm <- mm[colSort(colnames(mm)), ]
-  }
-  list(ff = ff, nl = nl, mm = mm, cnms = colnames(mm))
-}
-
-rowVar <- function(matrix){apply(matrix, MARGIN = 1, var)}
-
-#' Do the variance of each column
-#' @export
-colVar <- function(matrix){apply(matrix, MARGIN = 2, var)}
-
-custom_HMC_linpred <- function(HMC, data){
-  hmc.samples <- as.matrix(HMC)
-  hmc.samples <- hmc.samples[, !grepl(colnames(hmc.samples), pattern='^Sigma')]
-  
-  parse_stan_names <- str_split(colnames(hmc.samples), pattern='^b\\[| |\\]')
-  
-  fmt_stan_names <- sapply(parse_stan_names, FUN=function(i){
-    if (length(i) == 1){
-      return(i)
-    }else{
-      i_one <- unlist(str_split(i[3], pattern=':'))
-      return(paste(i_one[1], i[2], i_one[2], sep=' @ '))
-    }
-  })
-  colnames(hmc.samples) <- fmt_stan_names
-  
-  hmc.XZ <- posterior_linpred(HMC, data = data, XZ = TRUE)
-  
-  hmc.linpred <- hmc.XZ %*% t(hmc.samples)
-  
-  return(hmc.linpred)
-}
-
-#' Get HMC samples but ordered to match vector
-#' @export
-#' @importFrom mvtnorm rmvnorm
-custom_HMC_samples <- function(HMC, ordering){
-  hmc.samples <- as.matrix(HMC)
-  hmc.samples <- hmc.samples[, !grepl(colnames(hmc.samples), pattern='^Sigma')]
-  
-  parse_stan_names <- str_split(colnames(hmc.samples), pattern='^b\\[| |\\]')
-  
-  fmt_stan_names <- sapply(parse_stan_names, FUN=function(i){
-    if (length(i) == 1){
-      return(i)
-    }else{
-      i_one <- unlist(str_split(i[3], pattern=':'))
-      return(paste(i_one[1], i[2], i_one[2], sep=' @ '))
-    }
-  })
-  colnames(hmc.samples) <- fmt_stan_names
-  hmc.samples <- hmc.samples[, match(ordering, colnames(hmc.samples))]
-  return(return(hmc.samples))
-}
-
-#' Get samples from GLMER
-#' @export
-custom_glmer_samples <- function(glmer, samples, ordering){
-  
-  fmt_glmer <- format_glmer(glmer)
-  
-  glmer_samples <- mapply(fmt_glmer$mean, fmt_glmer$var, FUN=function(m,v){rnorm(samples, mean = m, sd = sqrt(v))})
-  colnames(glmer_samples) <- fmt_glmer$name
-  
-  glmer_samples <- glmer_samples[, match(ordering, colnames(glmer_samples))]
-  return(glmer_samples)  
-}
-
-
-#' MAVB but slow.
-#' @export
-legacy_MAVB <- function(model, samples, var_px){
-
-  M_prime <- model$MIVI_parameters$M_prime
-  M_prime_one <- model$MIVI_parameters$M_prime_one
-  M_mu_to_beta <- model$MIVI_parameters$M_mu_to_beta
-  d_j <- model$MIVI_parameters$d_j
-  g_j <- model$MIVI_parameters$g_j
-  outer_alpha_RE_positions <- model$MIVI_parameters$outer_alpha_RE_positions
-  factorization.method <- model$factorization.method
-  
-  if (model$factorization.method == 'weak'){
+  if (model$factorization_method == 'weak'){
     decomp_joint <- model$joint
     joint_mean <- rbind(model$beta$mean, model$alpha$mean)
     p.XZ <- ncol(decomp_joint)
@@ -1533,10 +1429,12 @@ legacy_MAVB <- function(model, samples, var_px){
   regen_store <- MIVI_diff <- matrix(NA, nrow = samples, ncol = sum(d_j))
   
   n_MIVI <- samples
+  
+  
   for (it in 1:n_MIVI){
     if (it %% 1000 == 0){cat('.')}
     #Sim from VARIATIONAL approximation to posterior.
-    if (factorization.method == 'weak'){
+    if (factorization_method == 'weak'){
       sim_joint <- joint_mean + t(decomp_joint) %*% rnorm(p.XZ)
       sim_beta <- sim_joint[1:p.X,,drop=F]
       sim_a <- sim_joint[-1:-p.X,,drop=F]
@@ -1573,10 +1471,135 @@ legacy_MAVB <- function(model, samples, var_px){
     final_btilde <- sim_btilde + t(M_mu_to_beta) %*% regen_px
     
     MIVI_sims[it,] <- c(as.vector(final_btilde), as.vector(final_atilde))
-    
   }
-  
   return(MIVI_sims)
 }
+
+#' Linear Predictor Following MAVB
+#' 
+#' Combine prediction and MAVB into a single function.
+#' 
+#' @inheritParams MAVB
+#' @inheritParams vglmer_predict
+#' @export
+MAVB_linpred <- function(model, newdata, samples, var_px = Inf, summary = TRUE){
+  pxSamples <- MAVB(model = model, samples = samples, parameter_expansion = 'mean', summary = FALSE, 
+                    var_px = var_px)
+  lp <- vglmer_predict(model, newdata = newdata, samples = pxSamples, summary = summary)
+  return(lp)
+}
+
+
+#' @import lme4
+get_RE_groups <- function(formula, data){
+  bars <- findbars(formula)
+  names(bars) <- lme4:::barnames(bars)
+  fr <- model.frame(subbars(formula), data = data)
+  blist <- lapply(bars, simple_blist, fr, drop.unused.levels = F, reorder.vars = FALSE)
+  blist <- lapply(blist, FUN=function(i){i[c('ff', 'mm')]})
+  
+  ff <- lapply(blist, FUN=function(i){i$ff})
+  ff <- lapply(ff, FUN=function(i){match(i, levels(i))})
+  mm <- lapply(blist, FUN=function(i){i$mm})
+  return(list(factor = ff, design = mm))
+}
+
+#' @import lme4
+simple_blist <- function(x, frloc, drop.unused.levels = TRUE, reorder.vars = FALSE){
+  frloc <- factorize(x, frloc)
+  if (is.null(ff <- tryCatch(eval(substitute(lme4:::makeFac(fac), 
+                                             list(fac = x[[3]])), frloc), error = function(e) NULL))) 
+    stop("couldn't evaluate grouping factor ", deparse(x[[3]]), 
+         " within model frame:", " try adding grouping factor to data ", 
+         "frame explicitly if possible", call. = FALSE)
+  if (all(is.na(ff))) 
+    stop("Invalid grouping factor specification, ", deparse(x[[3]]), 
+         call. = FALSE)
+  if (drop.unused.levels) 
+    ff <- factor(ff, exclude = NA)
+  nl <- length(levels(ff))
+  mm <- model.matrix(eval(substitute(~foo, list(foo = x[[2]]))), 
+                     frloc)
+  if (reorder.vars) {
+    mm <- mm[colSort(colnames(mm)), ]
+  }
+  list(ff = ff, nl = nl, mm = mm, cnms = colnames(mm))
+}
+
+
+#' Variance of Rows or Columns of Matrices
+#' 
+#' Base R implementation for variance. Analogue of rowMeans.
+#' @name var_mat
+#' 
+rowVar <- function(matrix){apply(matrix, MARGIN = 1, var)}
+
+#' @importFrom stats var
+#' @rdname var_mat
+colVar <- function(matrix){apply(matrix, MARGIN = 2, var)}
+
+
+custom_HMC_linpred <- function(HMC, data){
+  hmc_samples <- as.matrix(HMC)
+  hmc_samples <- hmc_samples[, !grepl(colnames(hmc_samples), pattern='^Sigma')]
+  
+  parse_stan_names <- str_split(colnames(hmc_samples), pattern='^b\\[| |\\]')
+  
+  fmt_stan_names <- sapply(parse_stan_names, FUN=function(i){
+    if (length(i) == 1){
+      return(i)
+    }else{
+      i_one <- unlist(str_split(i[3], pattern=':'))
+      return(paste(i_one[1], i[2], i_one[2], sep=' @ '))
+    }
+  })
+  colnames(hmc_samples) <- fmt_stan_names
+  
+  hmc.XZ <- posterior_linpred(HMC, data = data, XZ = TRUE)
+  
+  hmc.linpred <- hmc.XZ %*% t(hmc_samples)
+  
+  return(hmc.linpred)
+}
+
+#' Get HMC samples but ordered to match vector
+#' @export
+#' @importFrom mvtnorm rmvnorm
+custom_HMC_samples <- function(HMC, ordering){
+  hmc_samples <- as.matrix(HMC)
+  hmc_samples <- hmc_samples[, !grepl(colnames(hmc_samples), pattern='^Sigma')]
+  
+  parse_stan_names <- str_split(colnames(hmc_samples), pattern='^b\\[| |\\]')
+  
+  fmt_stan_names <- sapply(parse_stan_names, FUN=function(i){
+    if (length(i) == 1){
+      return(i)
+    }else{
+      i_one <- unlist(str_split(i[3], pattern=':'))
+      return(paste(i_one[1], i[2], i_one[2], sep=' @ '))
+    }
+  })
+  colnames(hmc_samples) <- fmt_stan_names
+  hmc_samples <- hmc_samples[, match(ordering, colnames(hmc_samples))]
+  return(return(hmc_samples))
+}
+
+#' Get samples from GLMER
+#' @export
+#' @importFrom stats rnorm
+custom_glmer_samples <- function(glmer, samples, ordering){
+  
+  fmt_glmer <- format_glmer(glmer)
+  
+  glmer_samples <- mapply(fmt_glmer$mean, fmt_glmer$var, FUN=function(m,v){rnorm(samples, mean = m, sd = sqrt(v))})
+  colnames(glmer_samples) <- fmt_glmer$name
+  
+  glmer_samples <- glmer_samples[, match(ordering, colnames(glmer_samples))]
+  return(glmer_samples)  
+}
+
+
+
+
 
 

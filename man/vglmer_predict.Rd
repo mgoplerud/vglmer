@@ -2,11 +2,31 @@
 % Please edit documentation in R/vglmer_regression.R
 \name{vglmer_predict}
 \alias{vglmer_predict}
-\title{Predict linear predictor vglmer.}
+\title{Predict after vglmer}
 \usage{
-vglmer_predict(model, newdata, samples, samples.only = FALSE,
-  summary = TRUE)
+vglmer_predict(model, newdata, samples = 0, samples_only = FALSE,
+  summary = TRUE, allow_missing_levels = FALSE)
+}
+\arguments{
+\item{model}{Object from vglmer.}
+
+\item{newdata}{Data to get predictions on.}
+
+\item{samples}{How many samples to draw? 0, default, gets the expected value.
+Two methods: 
+\itemize{
+\item Number - draw that many samples.
+\item Matrix - use previous samples for prediction. Currently used for MAVB
+but will be depreciated in updated version.
+}}
+
+\item{samples_only}{Return only samples *not* linear predictor.}
+
+\item{summary}{Return summary of linear predictor, not full posterior.}
+
+\item{allow_missing_levels}{Allow prediction for random effects not in model.
+As is standard, give an estimate of "0" for that effect.}
 }
 \description{
-Predict linear predictor vglmer.
+Get linear predictor for new observations after using vglmer.
 }

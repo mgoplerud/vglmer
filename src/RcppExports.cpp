@@ -37,17 +37,17 @@ BEGIN_RCPP
 END_RCPP
 }
 // GibbsLinRegChol
-List GibbsLinRegChol(const Eigen::MappedSparseMatrix<double> X, const Eigen::MappedSparseMatrix<double> omega, const Eigen::MappedSparseMatrix<double> precision, const Eigen::Map<Eigen::VectorXd> y, const Eigen::Map<Eigen::VectorXd> stdnorm);
-RcppExport SEXP _vglmer_GibbsLinRegChol(SEXP XSEXP, SEXP omegaSEXP, SEXP precisionSEXP, SEXP ySEXP, SEXP stdnormSEXP) {
+List GibbsLinRegChol(const Eigen::MappedSparseMatrix<double> X, const Eigen::MappedSparseMatrix<double> omega, const Eigen::MappedSparseMatrix<double> prior_precision, const Eigen::Map<Eigen::VectorXd> y, const Eigen::Map<Eigen::VectorXd> stdnorm);
+RcppExport SEXP _vglmer_GibbsLinRegChol(SEXP XSEXP, SEXP omegaSEXP, SEXP prior_precisionSEXP, SEXP ySEXP, SEXP stdnormSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< const Eigen::MappedSparseMatrix<double> >::type X(XSEXP);
     Rcpp::traits::input_parameter< const Eigen::MappedSparseMatrix<double> >::type omega(omegaSEXP);
-    Rcpp::traits::input_parameter< const Eigen::MappedSparseMatrix<double> >::type precision(precisionSEXP);
+    Rcpp::traits::input_parameter< const Eigen::MappedSparseMatrix<double> >::type prior_precision(prior_precisionSEXP);
     Rcpp::traits::input_parameter< const Eigen::Map<Eigen::VectorXd> >::type y(ySEXP);
     Rcpp::traits::input_parameter< const Eigen::Map<Eigen::VectorXd> >::type stdnorm(stdnormSEXP);
-    rcpp_result_gen = Rcpp::wrap(GibbsLinRegChol(X, omega, precision, y, stdnorm));
+    rcpp_result_gen = Rcpp::wrap(GibbsLinRegChol(X, omega, prior_precision, y, stdnorm));
     return rcpp_result_gen;
 END_RCPP
 }

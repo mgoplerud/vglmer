@@ -4,6 +4,7 @@
 
 using namespace Rcpp;
 
+
 // Q = (X^T X + precision)
 // "Ch" finds L L^T = Q.
 // "Ch.solve" finds "x" such that (X^T X + precision) "x" = X^T Y
@@ -11,8 +12,18 @@ using namespace Rcpp;
 // If z is from i.i.d. Gaussian, then
 // L^T \alpha = z
 // L^T \alpha = z where \alpha \sim N(0, Q^{-1})
-//' Linergchol
-//' @export
+
+//' Linear Regression by Cholesky
+//' 
+//' Do linear regression of form (X^T O X + P)^{-1} X^T y where O is omega, P is
+//' precision. Gibbs version also provided.
+//' 
+//' @name ccp_linreg
+//' 
+//' @param X Design Matrix
+//' @param omega Polya-Gamma weights
+//' @param prior_precision Prior Precision for Regression
+//' @param y Outcome
 // [[Rcpp::export]]
 List LinRegChol(
      const Eigen::MappedSparseMatrix<double> X,
@@ -57,8 +68,6 @@ List LinRegChol(
 }
 
 
-//' Fast Calculation of E[alpha alpha^T] - Chol
-//' @export
 // [[Rcpp::export]]
 List chol_calculate_outer_alpha(
     const Eigen::MappedSparseMatrix<double> cholL, // Choleksy factor for Precision Matrix
@@ -112,16 +121,17 @@ List chol_calculate_outer_alpha(
 // If z is from i.i.d. Gaussian, then
 // L^T \alpha = z
 // L^T \alpha = z where \alpha \sim N(0, Q^{-1})
-//' Linergchol
-//' @export
+
+//' @param stdnorm a vector draw from a standard normal to do gibbs sampling.
+//' @rdname ccp_linreg
 // [[Rcpp::export]]
 List GibbsLinRegChol(const Eigen::MappedSparseMatrix<double> X,
                      const Eigen::MappedSparseMatrix<double> omega,
-                     const Eigen::MappedSparseMatrix<double> precision,
+                     const Eigen::MappedSparseMatrix<double> prior_precision,
                      const Eigen::Map<Eigen::VectorXd> y,
                      const Eigen::Map<Eigen::VectorXd> stdnorm){
   Eigen::SparseMatrix<double> adj_X = X.adjoint();
-  Eigen::SimplicialLLT<Eigen::SparseMatrix<double> > Ch(adj_X * omega * X + precision);
+  Eigen::SimplicialLLT<Eigen::SparseMatrix<double> > Ch(adj_X * omega * X + prior_precision);
   Eigen::VectorXd mean_eb = Ch.solve(adj_X * y);
   //Extract L to get the transformation of the std.normal
   //Into the correct form of N(0, Q^{-1}) and add the mean.
@@ -141,7 +151,6 @@ List GibbsLinRegChol(const Eigen::MappedSparseMatrix<double> X,
                       Rcpp::Named("L") = invperm_L);
 }
 
-//' @export
 // [[Rcpp::export]]
 List cyclical_descent_LinReg(
     const Eigen::MappedSparseMatrix<double> X, //Sparse Input
@@ -199,7 +208,6 @@ List cyclical_descent_LinReg(
 
 
 
-//' @export
 // [[Rcpp::export]]
 List calculate_expected_outer_alpha(
     const Eigen::MappedSparseMatrix<double> L, // L^T L = Var(alpha)

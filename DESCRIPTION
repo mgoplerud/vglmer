@@ -1,12 +1,14 @@
 Package: vglmer
 Type: Package
 Title: Variational Inference for Hierarchical Non-Linear Models
-Version: 1.0
-Date: 2020-03-27
+Version: 0.1.0
 Author: Max Goplerud
 Maintainer: Max Goplerud <goplerud@g.harvard.edu>
 Encoding: UTF-8
-Description: Variational Inference for Hierarchical Non-Linear Models.
-Imports: Rcpp (>= 1.0.1), RcppEigen (>= 0.3.3.4.0), lme4, CholWishart, purrr, stringr, mvtnorm
+License: XX
+Description: Minimal package to replicate Max Goplerud's dissertation. Please see mgoplerud.com for a current version as many features are disabled in this package. Features outside of what is used in the associated replication code may be buggy!
+Imports: Rcpp (>= 1.0.1), RcppEigen (>= 0.3.3.4.0), lme4, CholWishart, purrr, stringr, mvtnorm, Matrix, dplyr, stats, graphics, methods, rlang
 LinkingTo: Rcpp, RcppEigen
 RoxygenNote: 6.1.0
+
+
