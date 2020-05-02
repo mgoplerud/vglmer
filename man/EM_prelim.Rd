@@ -6,6 +6,19 @@
 \usage{
 EM_prelim(X, Z, s, pg_b, iter, ridge = 2)
 }
+\arguments{
+\item{X}{Design matrix}
+
+\item{Z}{RE design matrix}
+
+\item{s}{(y_i - n_i)/2 for polya-gamma input}
+
+\item{pg_b}{n_i as vector input}
+
+\item{iter}{iterations}
+
+\item{ridge}{variance of ridge prior}
+}
 \description{
 Use ridge penalty to prevent separation. Not be called by user!
 }

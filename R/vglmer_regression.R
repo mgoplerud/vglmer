@@ -37,7 +37,7 @@ format_glmer <- function(object){
                       name = paste0(rep(colnames(i), nrow(i)), ' @ ', rep(rownames(i), each = ncol(i))), stringsAsFactors = F)
     return(obj)
   }), .id = '.re')
-  output$name <- with(output, paste(.re, ' @ ', name))
+  output$name <- with(output, paste0(.re, ' @ ', name))
   output_fe <- data.frame(mean = fixef(object), var = diag(vcov(object)))
   output_fe$name <- rownames(output_fe)
   
@@ -88,6 +88,7 @@ format_stan <- function(object, useSigma = FALSE){
 }
 
 #' @import Matrix
+#' @importFrom methods as
 make_mapping_alpha <- function(sigma, px.R = FALSE){
   if (!px.R){
     lapply(sigma, FUN=function(i){
@@ -190,6 +191,12 @@ multi_digamma <- function(a, p){
 #' 
 #' Use ridge penalty to prevent separation. Not be called by user!
 #' 
+#' @param X Design matrix
+#' @param Z RE design matrix
+#' @param s (y_i - n_i)/2 for polya-gamma input
+#' @param pg_b n_i as vector input
+#' @param iter iterations
+#' @param ridge variance of ridge prior
 EM_prelim <- function(X, Z, s, pg_b, iter, ridge = 2){
   
   jointXZ <- cbind(X, Z)
@@ -347,9 +354,11 @@ calculate_ELBO <- function(factorization_method,
 #' @param return_data Return the design (X,Z) for debugging afterwards.
 #' 
 #' @import CholWishart purrr stringr
-#' @importFrom dplyr select group_by summarize
+#' @importFrom dplyr select group_by group_by_at summarize
 #' @importFrom lme4 mkReTrms findbars subbars
 #' @importFrom stats model.response model.matrix model.frame rnorm rWishart qlogis
+#' @importFrom graphics plot
+#' @importFrom rlang .data
 #' @useDynLib vglmer
 #' @export
 vglmer_logit <- function(formula, data, iterations, prior_variance, factorization_method = 'weak', 
@@ -583,6 +592,7 @@ vglmer_logit <- function(formula, data, iterations, prior_variance, factorizatio
     accepted_times <- NA
     
     if (parameter_expansion == 'translation'){
+      stop('parameter_expansion_translation not allowed yet.')
       accepted_times <- 0
       zeromat_beta <- drop0(Diagonal(x = rep(0, ncol(X))))
       
@@ -1106,7 +1116,8 @@ vglmer_logit <- function(formula, data, iterations, prior_variance, factorizatio
         update_ELBO$it <- it
         store_ELBO <- bind_rows(store_ELBO, update_ELBO)
       }else{
-        store_ELBO <- bind_rows(store_ELBO, final.ELBO %>% mutate(it = it))
+        final.ELBO$it <- it
+        store_ELBO <- bind_rows(store_ELBO, final.ELBO)
       }
       
       ##Change diagnostics
@@ -1155,8 +1166,10 @@ vglmer_logit <- function(formula, data, iterations, prior_variance, factorizatio
     }
     
     if (debug_ELBO){
-      d.ELBO <- store_ELBO %>% mutate(diff = ELBO - dplyr::lag(ELBO))
-      sum.ELBO <- d.ELBO %>% group_by(step) %>% summarize(negative = mean(diff < 0, na.rm=T))  
+      d.ELBO <- with(store_ELBO, ELBO - dplyr::lag(ELBO))
+      sum.ELBO <- store_ELBO
+      sum.ELBO$diff <- d.ELBO
+      sum.ELBO <- sum.ELBO %>% group_by_at(.vars = 'step') %>% summarize(negative = mean(.data$diff < 0, na.rm=T))  
     }else{
       d.ELBO <- NULL
     }
@@ -1191,7 +1204,7 @@ vglmer_logit <- function(formula, data, iterations, prior_variance, factorizatio
     output$alpha$var <- variance_by_alpha_jg$variance_jg
     output$alpha$decomp_var <- vi_alpha_decomp
     
-    output$MIVI_parameters <- list(
+    output$MAVB_parameters <- list(
       M_mu_to_beta = M_mu_to_beta,
       M_prime = M_prime,
       M_prime_one = M_prime_one,
@@ -1230,7 +1243,7 @@ vglmer_predict <- function(model, newdata,
   
   orig_X_names <- rownames(model$beta$mean)
   if (!identical(colnames(X), orig_X_names)){
-    print(all.equal(colnames(X), origi_X_names))
+    print(all.equal(colnames(X), orig_X_names))
     stop('Misaligned Fixed Effects')
   }
   
@@ -1405,12 +1418,12 @@ MAVB <- function(model, samples, var_px = Inf){
   #   stop('Must provide model from vglmer')
   # }
   
-  M_prime <- model$MIVI_parameters$M_prime
-  M_prime_one <- model$MIVI_parameters$M_prime_one
-  M_mu_to_beta <- model$MIVI_parameters$M_mu_to_beta
-  d_j <- model$MIVI_parameters$d_j
-  g_j <- model$MIVI_parameters$g_j
-  outer_alpha_RE_positions <- model$MIVI_parameters$outer_alpha_RE_positions
+  M_prime <- model$MAVB_parameters$M_prime
+  M_prime_one <- model$MAVB_parameters$M_prime_one
+  M_mu_to_beta <- model$MAVB_parameters$M_mu_to_beta
+  d_j <- model$MAVB_parameters$d_j
+  g_j <- model$MAVB_parameters$g_j
+  outer_alpha_RE_positions <- model$MAVB_parameters$outer_alpha_RE_positions
   factorization_method <- model$factorization_method
   
   if (model$factorization_method == 'weak'){
@@ -1425,13 +1438,12 @@ MAVB <- function(model, samples, var_px = Inf){
     p.X <- nrow(model$beta$mean)
   }
   
-  MIVI_sims <- matrix(NA, nrow = samples, ncol = p.XZ)
-  regen_store <- MIVI_diff <- matrix(NA, nrow = samples, ncol = sum(d_j))
+  MAVB_sims <- matrix(NA, nrow = samples, ncol = p.XZ)
+  regen_store <- MAVB_diff <- matrix(NA, nrow = samples, ncol = sum(d_j))
   
-  n_MIVI <- samples
-  
-  
-  for (it in 1:n_MIVI){
+  n_MAVB <- samples
+
+  for (it in 1:n_MAVB){
     if (it %% 1000 == 0){cat('.')}
     #Sim from VARIATIONAL approximation to posterior.
     if (factorization_method == 'weak'){
@@ -1466,13 +1478,13 @@ MAVB <- function(model, samples, var_px = Inf){
     regen_px <- rmvnorm(1, mean_redux, var_redux)
     regen_px <- t(regen_px)
     regen_store[it,] <- regen_px  
-    MIVI_diff[it,] <- regen_px - sim_px
+    MAVB_diff[it,] <- regen_px - sim_px
     final_atilde <- sim_atilde - M_prime_one %*% regen_px
     final_btilde <- sim_btilde + t(M_mu_to_beta) %*% regen_px
     
-    MIVI_sims[it,] <- c(as.vector(final_btilde), as.vector(final_atilde))
+    MAVB_sims[it,] <- c(as.vector(final_btilde), as.vector(final_atilde))
   }
-  return(MIVI_sims)
+  return(MAVB_sims)
 }
 
 #' Linear Predictor Following MAVB
@@ -1483,8 +1495,7 @@ MAVB <- function(model, samples, var_px = Inf){
 #' @inheritParams vglmer_predict
 #' @export
 MAVB_linpred <- function(model, newdata, samples, var_px = Inf, summary = TRUE){
-  pxSamples <- MAVB(model = model, samples = samples, parameter_expansion = 'mean', summary = FALSE, 
-                    var_px = var_px)
+  pxSamples <- MAVB(model = model, samples = samples, var_px = var_px)
   lp <- vglmer_predict(model, newdata = newdata, samples = pxSamples, summary = summary)
   return(lp)
 }
@@ -1492,38 +1503,40 @@ MAVB_linpred <- function(model, newdata, samples, var_px = Inf, summary = TRUE){
 
 #' @import lme4
 get_RE_groups <- function(formula, data){
-  bars <- findbars(formula)
-  names(bars) <- lme4:::barnames(bars)
-  fr <- model.frame(subbars(formula), data = data)
-  blist <- lapply(bars, simple_blist, fr, drop.unused.levels = F, reorder.vars = FALSE)
-  blist <- lapply(blist, FUN=function(i){i[c('ff', 'mm')]})
-  
-  ff <- lapply(blist, FUN=function(i){i$ff})
-  ff <- lapply(ff, FUN=function(i){match(i, levels(i))})
-  mm <- lapply(blist, FUN=function(i){i$mm})
-  return(list(factor = ff, design = mm))
+  stop('Figure out workaround for lme4:::')
+  # bars <- findbars(formula)
+  # names(bars) <- lme4:::barnames(bars)
+  # fr <- model.frame(subbars(formula), data = data)
+  # blist <- lapply(bars, simple_blist, fr, drop.unused.levels = F, reorder.vars = FALSE)
+  # blist <- lapply(blist, FUN=function(i){i[c('ff', 'mm')]})
+  # 
+  # ff <- lapply(blist, FUN=function(i){i$ff})
+  # ff <- lapply(ff, FUN=function(i){match(i, levels(i))})
+  # mm <- lapply(blist, FUN=function(i){i$mm})
+  # return(list(factor = ff, design = mm))
 }
 
 #' @import lme4
 simple_blist <- function(x, frloc, drop.unused.levels = TRUE, reorder.vars = FALSE){
-  frloc <- factorize(x, frloc)
-  if (is.null(ff <- tryCatch(eval(substitute(lme4:::makeFac(fac), 
-                                             list(fac = x[[3]])), frloc), error = function(e) NULL))) 
-    stop("couldn't evaluate grouping factor ", deparse(x[[3]]), 
-         " within model frame:", " try adding grouping factor to data ", 
-         "frame explicitly if possible", call. = FALSE)
-  if (all(is.na(ff))) 
-    stop("Invalid grouping factor specification, ", deparse(x[[3]]), 
-         call. = FALSE)
-  if (drop.unused.levels) 
-    ff <- factor(ff, exclude = NA)
-  nl <- length(levels(ff))
-  mm <- model.matrix(eval(substitute(~foo, list(foo = x[[2]]))), 
-                     frloc)
-  if (reorder.vars) {
-    mm <- mm[colSort(colnames(mm)), ]
-  }
-  list(ff = ff, nl = nl, mm = mm, cnms = colnames(mm))
+  stop('figure out workaround for lme4:::')
+  # frloc <- factorize(x, frloc)
+  # if (is.null(ff <- tryCatch(eval(substitute(lme4:::makeFac(fac), 
+  #                                            list(fac = x[[3]])), frloc), error = function(e) NULL))) 
+  #   stop("couldn't evaluate grouping factor ", deparse(x[[3]]), 
+  #        " within model frame:", " try adding grouping factor to data ", 
+  #        "frame explicitly if possible", call. = FALSE)
+  # if (all(is.na(ff))) 
+  #   stop("Invalid grouping factor specification, ", deparse(x[[3]]), 
+  #        call. = FALSE)
+  # if (drop.unused.levels) 
+  #   ff <- factor(ff, exclude = NA)
+  # nl <- length(levels(ff))
+  # mm <- model.matrix(eval(substitute(~foo, list(foo = x[[2]]))), 
+  #                    frloc)
+  # if (reorder.vars) {
+  #   mm <- mm[colSort(colnames(mm)), ]
+  # }
+  # list(ff = ff, nl = nl, mm = mm, cnms = colnames(mm))
 }
 
 
@@ -1531,7 +1544,7 @@ simple_blist <- function(x, frloc, drop.unused.levels = TRUE, reorder.vars = FAL
 #' 
 #' Base R implementation for variance. Analogue of rowMeans.
 #' @name var_mat
-#' 
+#' @param matrix Matrix of numeric inputs.
 rowVar <- function(matrix){apply(matrix, MARGIN = 1, var)}
 
 #' @importFrom stats var
@@ -1539,7 +1552,12 @@ rowVar <- function(matrix){apply(matrix, MARGIN = 1, var)}
 colVar <- function(matrix){apply(matrix, MARGIN = 2, var)}
 
 
+#' @param data Data to get predictions on.
+#' @rdname hmc_samples
 custom_HMC_linpred <- function(HMC, data){
+  if (!requireNamespace('rstanarm', quietly = TRUE)){
+    stop('rstanarm must be installed to analyze HMC objects.')
+  }
   hmc_samples <- as.matrix(HMC)
   hmc_samples <- hmc_samples[, !grepl(colnames(hmc_samples), pattern='^Sigma')]
   
@@ -1555,17 +1573,24 @@ custom_HMC_linpred <- function(HMC, data){
   })
   colnames(hmc_samples) <- fmt_stan_names
   
-  hmc.XZ <- posterior_linpred(HMC, data = data, XZ = TRUE)
+  hmc.XZ <- rstanarm::posterior_linpred(HMC, data = data, XZ = TRUE)
   
   hmc.linpred <- hmc.XZ %*% t(hmc_samples)
   
   return(hmc.linpred)
 }
 
-#' Get HMC samples but ordered to match vector
+#' Get HMC samples but ordered to match vector of names provided
 #' @export
+#' @name hmc_samples
+#' @param HMC Object from rstanarm
+#' @param ordering vector of names to order the posterior samples.
 #' @importFrom mvtnorm rmvnorm
 custom_HMC_samples <- function(HMC, ordering){
+  if (!requireNamespace('rstanarm', quietly = TRUE)){
+    stop('rstanarm must be installed to analyze HMC objects.')
+  }
+  
   hmc_samples <- as.matrix(HMC)
   hmc_samples <- hmc_samples[, !grepl(colnames(hmc_samples), pattern='^Sigma')]
   
@@ -1585,6 +1610,13 @@ custom_HMC_samples <- function(HMC, ordering){
 }
 
 #' Get samples from GLMER
+#' 
+#' Order samples from glmer to match names from vglmer.
+#' 
+#' @param glmer object fitted using glmer
+#' @param samples number of samples to draw
+#' @param ordering order of output
+#' 
 #' @export
 #' @importFrom stats rnorm
 custom_glmer_samples <- function(glmer, samples, ordering){

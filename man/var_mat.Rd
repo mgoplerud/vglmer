@@ -10,6 +10,9 @@ rowVar(matrix)
 
 colVar(matrix)
 }
+\arguments{
+\item{matrix}{Matrix of numeric inputs.}
+}
 \description{
 Base R implementation for variance. Analogue of rowMeans.
 }

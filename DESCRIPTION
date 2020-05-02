@@ -8,7 +8,6 @@ Encoding: UTF-8
 License: XX
 Description: Minimal package to replicate Max Goplerud's dissertation. Please see mgoplerud.com for a current version as many features are disabled in this package. Features outside of what is used in the associated replication code may be buggy!
 Imports: Rcpp (>= 1.0.1), RcppEigen (>= 0.3.3.4.0), lme4, CholWishart, purrr, stringr, mvtnorm, Matrix, dplyr, stats, graphics, methods, rlang
+Suggests: rstanarm
 LinkingTo: Rcpp, RcppEigen
 RoxygenNote: 6.1.0
-
-

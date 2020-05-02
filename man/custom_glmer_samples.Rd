@@ -6,6 +6,13 @@
 \usage{
 custom_glmer_samples(glmer, samples, ordering)
 }
+\arguments{
+\item{glmer}{object fitted using glmer}
+
+\item{samples}{number of samples to draw}
+
+\item{ordering}{order of output}
+}
 \description{
-Get samples from GLMER
+Order samples from glmer to match names from vglmer.
 }
