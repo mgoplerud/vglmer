@@ -8,8 +8,9 @@ vglmer_logit(formula, data, iterations, prior_variance,
   factorization_method = "weak", tolerance_elbo = 1e-04,
   tolerance_parameters = 1e-04, prevent_degeneracy = FALSE,
   force_whole = TRUE, parameter_expansion = "mean", random_seed = 1,
-  debug_param = FALSE, return_data = FALSE, linpred_method = "joint",
-  debug_ELBO = FALSE, print_prog = NULL, quiet = T, init = "EM")
+  outcome = "logit", debug_param = FALSE, return_data = FALSE,
+  linpred_method = "joint", debug_ELBO = FALSE, print_prog = NULL,
+  quiet = T, init = "EM")
 }
 \arguments{
 \item{formula}{Standard glmer-style formula for random effects.}

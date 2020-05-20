@@ -365,6 +365,7 @@ vglmer_logit <- function(formula, data, iterations, prior_variance, factorizatio
      tolerance_elbo = 1e-4, tolerance_parameters = 1e-4,
      prevent_degeneracy = FALSE, force_whole = TRUE,
      parameter_expansion = 'mean', random_seed = 1,
+     outcome = 'logit',
      debug_param = FALSE, return_data = FALSE, linpred_method = 'joint',
      debug_ELBO = FALSE, print_prog = NULL, quiet = T, init = 'EM'){
   
@@ -372,7 +373,7 @@ vglmer_logit <- function(formula, data, iterations, prior_variance, factorizatio
     stop('factorization_method must be in weak, strong, or partial.')
   }
   if (is.null(print_prog)){
-    print_prog <- floor(iterations / 20)
+    print_prog <- max(c(1, floor(iterations / 20)))
   }
   #Extract outcome y
   y <- model.response(model.frame(nobars(formula), data = data))
@@ -397,7 +398,7 @@ vglmer_logit <- function(formula, data, iterations, prior_variance, factorizatio
     rownames(y) <- NULL
     
   }else{
-    if (!all(y %in% c(0,1))){
+    if (!all(y %in% c(0,1)) & outcome == 'logit'){
       stop('Only {0,1} outcomes permitted for numeric y.')
     }
     trials <- rep(1, length(y))
@@ -479,10 +480,18 @@ vglmer_logit <- function(formula, data, iterations, prior_variance, factorizatio
   #Prepare Initial Values
   ###
 
-    
-    s <- y - trials/2
-    vi_pg_b <- trials
-    choose_term <- sum(lchoose(n = round(trials), k = round(y)))
+    if (outcome == 'logit'){
+      s <- y - trials/2
+      vi_pg_b <- trials
+      vi_r <- 1
+      choose_term <- sum(lchoose(n = round(trials), k = round(y)))
+    }else{
+      #Initialize
+      vi_r <- 1/MASS::glm.nb(y ~ 1)$theta
+      s <- (y - vi_r)/2
+      vi_pg_b <- y + vi_r
+      choose_term <- 0
+    }
 
     #Initalize variational parameters.
     #Note that we keep a sparse matrix or lowertri such that
@@ -529,7 +538,7 @@ vglmer_logit <- function(formula, data, iterations, prior_variance, factorizatio
     vi_sigma_alpha_nu <- vi_sigma_alpha_nu + prior_sigma_alpha_nu
         
     if (init == 'EM'){
-      
+      if (outcome == 'negbin'){stop('EM init not yet enabled for NB.')}
       EM_init <- EM_prelim(X = X, Z = Z, s = s, pg_b = vi_pg_b, iter = 15, ridge = 4)
 
       vi_beta_mean <- matrix(EM_init$beta)
@@ -548,9 +557,14 @@ vglmer_logit <- function(formula, data, iterations, prior_variance, factorizatio
         rWishart(n = 1, df = g, Sigma = diag(d))[,,1]
       })
     }else if (init == 'zero'){
+      
       vi_beta_mean <- rep(0, ncol(X))
       
-      vi_beta_mean[1] <- qlogis(sum(y)/sum(trials))
+      if (outcome == 'logit'){
+        vi_beta_mean[1] <- qlogis(sum(y)/sum(trials))
+      }else if (outcome == 'negbin'){
+        vi_beta_mean[1] <- log(mean(y))
+      }else{stop('Set up init')}
       
       vi_alpha_mean <- rep(0, ncol(Z))
       
@@ -587,6 +601,7 @@ vglmer_logit <- function(formula, data, iterations, prior_variance, factorizatio
       lagged_alpha_decomp <- vi_alpha_decomp
       lagged_beta_decomp <- vi_beta_decomp
     }
+    lagged_vi_r <- -Inf
     
     lagged_ELBO <- -Inf
     accepted_times <- NA
@@ -628,13 +643,14 @@ vglmer_logit <- function(formula, data, iterations, prior_variance, factorizatio
       ##Polya-Gamma Updates
       ###
       #Get the x_i^T Var(beta) x_i terms.
+      log_vi_r <- log(vi_r)
       if (factorization_method == 'weak'){
         joint_quad <- rowSums( (joint.XZ %*% t(vi_joint_decomp))^2 )
-        vi_pg_c <- sqrt(as.vector(X %*% vi_beta_mean + Z %*% vi_alpha_mean)^2 + joint_quad)
+        vi_pg_c <- sqrt(as.vector(X %*% vi_beta_mean + Z %*% vi_alpha_mean - log_vi_r)^2 + joint_quad)
       }else{
         beta_quad <- rowSums( (X %*% t(vi_beta_decomp))^2 )
         alpha_quad <- rowSums( (Z %*% t(vi_alpha_decomp))^2 )
-        vi_pg_c <- sqrt(as.vector(X %*% vi_beta_mean + Z %*% vi_alpha_mean)^2 + beta_quad + alpha_quad)
+        vi_pg_c <- sqrt(as.vector(X %*% vi_beta_mean + Z %*% vi_alpha_mean - log_vi_r)^2 + beta_quad + alpha_quad)
       }
       vi_pg_mean <- vi_pg_b/(2 * vi_pg_c) * tanh(vi_pg_c / 2)
 
@@ -678,7 +694,9 @@ vglmer_logit <- function(formula, data, iterations, prior_variance, factorizatio
       
       if (factorization_method == 'weak'){
         ##Update <beta, alpha> jointly
-        chol.update.joint <- LinRegChol(X = joint.XZ, omega = diag_vi_pg_mean, prior_precision =  bdiag(zero_mat, Tinv), y = s)
+        chol.update.joint <- LinRegChol(X = joint.XZ, omega = diag_vi_pg_mean, 
+                                        prior_precision =  bdiag(zero_mat, Tinv), 
+                                        y = s + vi_pg_mean * log(vi_r))
         Pmatrix <- sparseMatrix(i = 1:ncol(joint.XZ), j = 1 + chol.update.joint$Pindex, x = 1)
         
         
@@ -727,7 +745,8 @@ vglmer_logit <- function(formula, data, iterations, prior_variance, factorizatio
           
         }else if (linpred_method == 'joint'){
           joint.XZ <- cbind(X,Z)  
-          chol.update.joint <- LinRegChol(X = joint.XZ, omega = diag_vi_pg_mean, prior_precision =  bdiag(zero_mat, Tinv), y = s)
+          chol.update.joint <- LinRegChol(X = joint.XZ, omega = diag_vi_pg_mean, prior_precision =  bdiag(zero_mat, Tinv),  
+                                          y= s + vi_pg_mean * log(vi_r))
           vi_beta_mean <- Matrix(chol.update.joint$mean[1:p.X], dimnames = list(colnames(X), NULL))
           vi_alpha_mean <- Matrix(chol.update.joint$mean[-1:-p.X], dimnames = list(fmt_names_Z, NULL))
           
@@ -735,7 +754,7 @@ vglmer_logit <- function(formula, data, iterations, prior_variance, factorizatio
           log_det_beta_var <- 2 * sum(log(diag(vi_beta_decomp)))
           
           chol.update.alpha <- LinRegChol(X = Z, omega = diag_vi_pg_mean, prior_precision =  Tinv, 
-                                          y = s)
+                                          y =  s + vi_pg_mean * log(vi_r))
           Pmatrix <- sparseMatrix(i = 1:p.Z, j = 1 + chol.update.alpha$Pindex, x = 1)
           
           vi_alpha_decomp <- solve(chol.update.alpha$origL) %*% t(Pmatrix)
@@ -769,7 +788,7 @@ vglmer_logit <- function(formula, data, iterations, prior_variance, factorizatio
         if (linpred_method == 'joint'){
           
           joint.XZ <- cbind(X,Z)  
-          chol.update.joint <- LinRegChol(X = joint.XZ, omega = diag_vi_pg_mean, prior_precision =  bdiag(zero_mat, bdiag(Tinv)), y = s)
+          chol.update.joint <- LinRegChol(X = joint.XZ, omega = diag_vi_pg_mean, prior_precision =  bdiag(zero_mat, bdiag(Tinv)),  y = s + vi_pg_mean * log(vi_r))
           vi_beta_mean <- Matrix(chol.update.joint$mean[1:p.X], dimnames = list(colnames(X), NULL))
           vi_alpha_mean <- Matrix(chol.update.joint$mean[-1:-p.X], dimnames = list(fmt_names_Z, NULL))
           
@@ -856,7 +875,7 @@ vglmer_logit <- function(formula, data, iterations, prior_variance, factorizatio
             Z_negj <- Z[,-index_j, drop= F]
             
             chol.j <- LinRegChol(X = Z_j, omega = diag_vi_pg_mean, prior_precision =  Tinv[[j]], 
-                                 y = as.vector(s - diag_vi_pg_mean %*% (X %*% vi_beta_mean + Z_negj %*% vi_alpha_mean[-index_j])))
+                                 y = as.vector(s + vi_pg_mean * log(vi_r) - diag_vi_pg_mean %*% (X %*% vi_beta_mean + Z_negj %*% vi_alpha_mean[-index_j])))
             vi_alpha_mean[index_j] <- chol.j$mean 
             
             Pmatrix <- sparseMatrix(i = 1:ncol(Z_j), j = 1 + chol.j$Pindex, x = 1)
@@ -869,7 +888,7 @@ vglmer_logit <- function(formula, data, iterations, prior_variance, factorizatio
           log_det_alpha_var <- sum(running_log_det_alpha_var)
           
           chol.update.beta <- LinRegChol(X = as(X, 'sparseMatrix'), omega = diag_vi_pg_mean, prior_precision =  zero_mat, 
-                                         y = as.vector(s - diag_vi_pg_mean %*% Z %*% vi_alpha_mean))
+                                         y = as.vector(s + vi_pg_mean * log(vi_r) - diag_vi_pg_mean %*% Z %*% vi_alpha_mean))
           Pmatrix <- sparseMatrix(i = 1:p.X, j = 1 + chol.update.beta$Pindex, x = 1)
           
           vi_beta_decomp <- solve(chol.update.beta$origL) %*% t(Pmatrix)
@@ -922,6 +941,19 @@ vglmer_logit <- function(formula, data, iterations, prior_variance, factorizatio
       # 
       # comp <- mapply(vi_sigma_outer_alpha, old_vi_sigma_outer_alpha, FUN=function(i,j){all.equal(as.vector(i), as.vector(j))})
       # if (any(!sapply(comp, isTRUE))){print(comp); stop()}
+      
+      #Update the auxilary parameters
+      if (outcome == 'negbin'){
+      
+        vi_r <- update_r(vi_r = vi_r, y = y, X = X, Z = Z, factorization_method = factorization_method,
+                 vi_beta_mean = vi_beta_mean, vi_beta_decomp = vi_beta_decomp,
+                 vi_alpha_mean = vi_alpha_mean, vi_alpha_decomp = vi_alpha_decomp,
+                 vi_joint_decomp = vi_joint_decomp)
+        
+        s <- (y - vi_r)/2
+        vi_pg_b <- y + vi_r
+        
+      }
       
       ###PARAMETER EXPANSIONS!
       if (debug_ELBO){
@@ -1081,6 +1113,7 @@ vglmer_logit <- function(formula, data, iterations, prior_variance, factorizatio
       }else if (parameter_expansion == 'none'){
         accept.PX <- TRUE
       }else{stop('Invalid PX method.')}
+      
       #Adjust the terms in the ELBO calculation that are different.
 
       if (accept.PX){
@@ -1136,10 +1169,12 @@ vglmer_logit <- function(formula, data, iterations, prior_variance, factorizatio
         change_beta_var <- max(abs(vi_beta_decomp - lagged_beta_decomp))
       }
       
+      change_vi_r <- vi_r - lagged_vi_r
+      
       if (debug_param){
         store_beta[it,] <- as.vector(vi_beta_mean)
       }
-      change_all <- data.frame(change_alpha_mean, change_beta_mean, t(change_sigma_mean), change_alpha_var, change_beta_var, change_joint_var)
+      change_all <- data.frame(change_alpha_mean, change_beta_mean, t(change_sigma_mean), change_alpha_var, change_beta_var, change_joint_var, change_vi_r)
       if ( (max(change_all) < tolerance_parameters) | (change_elbo$ELBO > 0 & change_elbo$ELBO < tolerance_elbo) ){
         if (!quiet){
           message(paste0('Converged after ', it, ' iterations with ELBO change of ', round(change_elbo[1], 1 + abs(floor(log(tolerance_elbo)/log(10))))))
@@ -1159,6 +1194,7 @@ vglmer_logit <- function(formula, data, iterations, prior_variance, factorizatio
       lagged_alpha_decomp <- vi_alpha_decomp
       lagged_beta_decomp <- vi_beta_decomp
       lagged_sigma_alpha <- vi_sigma_alpha
+      lagged_vi_r <- vi_r
       lagged_ELBO <- final.ELBO
     }
     if (it == iterations){
@@ -1199,6 +1235,10 @@ vglmer_logit <- function(formula, data, iterations, prior_variance, factorizatio
     output$beta$var <- t(vi_beta_decomp) %*% vi_beta_decomp
     output$beta$decomp_var <- vi_beta_decomp
     
+    if (outcome == 'negbin'){
+      output$r <- list(mean = vi_r, variance = NA)
+    }
+
     output$internal.parameters <- list(names_of_RE = names_of_RE, d_j = d_j, g_j = g_j)
     
     output$alpha$var <- variance_by_alpha_jg$variance_jg
@@ -1629,6 +1669,58 @@ custom_glmer_samples <- function(glmer, samples, ordering){
   glmer_samples <- glmer_samples[, match(ordering, colnames(glmer_samples))]
   return(glmer_samples)  
 }
+
+
+update_r <- function(vi_r, y, X, Z, factorization_method,
+    vi_beta_mean, vi_alpha_mean, 
+    vi_joint_decomp, vi_beta_decomp, vi_alpha_decomp){
+  
+  #Get intermediate quantities
+  ex_XBZA <- (X %*% vi_beta_mean + Z %*% vi_alpha_mean)
+  #quadratic var, i.e. Var(x_i^T beta + z_i^T alpha)
+  if (factorization_method == 'weak'){
+    if (is.null(vi_joint_decomp)){stop('Need to provide joint decomposition for ELBO weak')}
+    var_XBZA <- rowSums( (cbind(X,Z) %*% t(vi_joint_decomp))^2 )
+  }else{
+    beta_quad <- rowSums( (X %*% t(vi_beta_decomp))^2 )
+    alpha_quad <- rowSums( (Z %*% t(vi_alpha_decomp))^2 )
+    var_XBZA <- beta_quad + alpha_quad
+  }
+  
+  # opt.r <- optimize(f = function(lr,y,psi,zVz){
+  #   Q.adjust.r(r = exp(lr), y = y, psi = psi, zVz = zVz)},
+  #   lower = log(sqrt(.Machine$double.eps)), upper = 10,
+  #   y = y, psi = ex_XBZA, zVz = var_XBZA,
+  #   maximum = T)
+  
+  opt_ln_r <- optim(par = log(vi_r), fn = Q.adjust.r,
+                    y = y, psi = ex_XBZA, zVz = var_XBZA,
+                    control = list(fnscale = - 1), method = 'L-BFGS-B')
+  if (opt_ln_r$value < Q.adjust.r(log(vi_r), y = y, psi = ex_XBZA, zVz = var_XBZA)){
+    warning('Optim for r decreased objective.')
+  }else{
+    vi_r <- exp(opt_ln_r$par)
+  }
+  # vi_r <- exp(opt.r$maximum)
+  
+  return(vi_r)
+}
+
+# Q.adjust.r <- function(r, y, psi, zVz){
+#   t1 <- -(y+r) * log(2) + (y-r)/2 * (psi  - log(r)) - (r + y) * log(cosh(1/2 * sqrt(zVz + (psi - log(r))^2)))
+#   t2 <- lgamma(y + r) - lgamma(r) - lgamma(y+1)
+#   return(sum(t1 + t2))
+# }
+
+Q.adjust.r <- function(ln_r, y, psi, zVz){
+  t1 <- -(y+exp(ln_r)) * log(2) + (y-exp(ln_r))/2 * (psi  - ln_r) +
+    -(exp(ln_r) + y) * log(cosh(1/2 * sqrt(zVz + (psi - ln_r)^2)))
+  t2 <- lgamma(y + exp(ln_r)) - lgamma(exp(ln_r)) - lgamma(y+1)
+  return(sum(t1 + t2))
+}
+
+
+
 
 
 
