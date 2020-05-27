@@ -11,3 +11,4 @@ misc_files/
 Goplerud_MAVB*
 ^.*RDS$
 ^\.travis\.yml$
+^codecov\.yml$
