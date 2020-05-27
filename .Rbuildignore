@@ -1,0 +1,13 @@
+^.*\.Rproj$
+^\.Rproj\.user$
+full_models/
+old_versions/
+pres_figures/
+remote_models/
+replicate_GG/
+figures/
+old_figures/
+misc_files/
+Goplerud_MAVB*
+^.*RDS$
+^\.travis\.yml$
