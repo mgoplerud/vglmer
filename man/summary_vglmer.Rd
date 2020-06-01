@@ -7,7 +7,7 @@
 \alias{vcov.vglmer}
 \title{Summarize output from vglmer}
 \usage{
-fixef.vglmer(object, ...)
+\method{fixef}{vglmer}(object, ...)
 
 \method{coef}{vglmer}(object, ...)
 
