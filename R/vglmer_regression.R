@@ -71,25 +71,6 @@ prepare_T <- function(mapping, levels_per_RE, variables_per_RE, running_per_RE, 
   return(RE_T)
 }
 
-loop_outer_alpha <- function(vi_alpha_mean, vi_alpha_decomp, outer_alpha_RE_positions){
-  #Must be such that t(vi_alpha_decomp) %*% vi_alpha_decomp = VAR
-  store_oa <- as.list(rep(NA, length(outer_alpha_RE_positions)))
-  store_alpha_outer <- as.list(rep(NA, length(outer_alpha_RE_positions)))
-  counter_j <- 1
-  for (j in outer_alpha_RE_positions){
-    #cat('.')
-    summed_oa <- summed_alpha_outer <- array(0, dim = rep(length(j[[1]]), 2))
-    for (g in j){
-      summed_oa <- summed_oa + crossprod(vi_alpha_decomp[,g])      
-      summed_alpha_outer <- summed_alpha_outer + tcrossprod(vi_alpha_mean[g])
-    }
-    store_oa[[counter_j]] <- summed_oa
-    store_alpha_outer[[counter_j]] <- summed_alpha_outer
-    counter_j <- counter_j + 1
-  }
-  return(list(outer_alpha = store_oa, alpha_mu_outer = store_alpha_outer))
-}
-
 multi_lgamma <- function(a, p){
   
   return(lmvgamma(x = a, p = p))
@@ -240,7 +221,7 @@ calculate_ELBO <- function(factorization_method,
 #' Variational Inference for Non-Linear Hierarchical Models
 #' 
 #' Estimate a hierarchical model (logistic) using mean-field variational
-#' inference. Accepts identical syntax to glmer. Options are described below.
+#' inference. Accepts standard syntax to glmer: y ~ X + (1 + Z | g). Options are described below.
 #' 
 #' @param formula Standard glmer-style formula for random effects.
 #' @param data data.frame containing the outcome and variables.
@@ -330,7 +311,7 @@ vglmer <- function(formula, data, iterations, family, prior_variance, factorizat
       rownames(y) <- NULL
       
     }else{
-      if (!all(y %in% c(0,1)) & outcome == 'logit'){
+      if (!all(y %in% c(0,1)) & family == 'logit'){
         stop('Only {0,1} outcomes permitted for numeric y.')
       }
       trials <- rep(1, length(y))
@@ -432,7 +413,7 @@ vglmer <- function(formula, data, iterations, family, prior_variance, factorizat
   #Prepare Initial Values
   ###
 
-    if (outcome == 'logit'){
+    if (family == 'logit'){
       s <- y - trials/2
       vi_pg_b <- trials
       vi_r <- 1
@@ -490,7 +471,7 @@ vglmer <- function(formula, data, iterations, family, prior_variance, factorizat
     vi_sigma_alpha_nu <- vi_sigma_alpha_nu + prior_sigma_alpha_nu
         
     if (init == 'EM'){
-      if (outcome == 'negbin'){stop('EM init not yet enabled for NB.')}
+      if (family == 'negbin'){stop('EM init not yet enabled for NB.')}
       EM_init <- EM_prelim(X = X, Z = Z, s = s, pg_b = vi_pg_b, iter = 15, ridge = 4)
 
       vi_beta_mean <- matrix(EM_init$beta)
@@ -512,9 +493,9 @@ vglmer <- function(formula, data, iterations, family, prior_variance, factorizat
       
       vi_beta_mean <- rep(0, ncol(X))
       
-      if (outcome == 'logit'){
+      if (family == 'logit'){
         vi_beta_mean[1] <- qlogis(sum(y)/sum(trials))
-      }else if (outcome == 'negbin'){
+      }else if (family == 'negbin'){
         vi_beta_mean[1] <- log(mean(y))
       }else{stop('Set up init')}
       
@@ -729,7 +710,7 @@ vglmer <- function(formula, data, iterations, family, prior_variance, factorizat
         # fmt_names_Z <<- fmt_names_Z
         # Tinv <<- Tinv
         # cyclical_pos <<- cyclical_pos
-        # outcome_s <<- s
+        # family_s <<- s
         # diag_vi_pg_mean <<- diag_vi_pg_mean
         # running_log_det_alpha_var <<- running_log_det_alpha_var
         # number_of_RE <<- number_of_RE
@@ -882,20 +863,10 @@ vglmer <- function(formula, data, iterations, family, prior_variance, factorizat
       variance_by_alpha_jg <- calculate_expected_outer_alpha(L = vi_alpha_decomp, alpha_mu = as.vector(vi_alpha_mean), re_position_list = outer_alpha_RE_positions)
       vi_sigma_outer_alpha <- variance_by_alpha_jg$outer_alpha
       vi_sigma_alpha <- mapply(vi_sigma_outer_alpha, prior_sigma_alpha_phi, SIMPLIFY = FALSE, FUN=function(i,j){i+j})
-      # 
-      # # #Slow non-optimized function:
-      # old_expectations_alpha_outer <- loop_outer_alpha(vi_alpha_mean, vi_alpha_decomp, outer_alpha_RE_positions)
-      # old_vi_sigma_outer_alpha <- mapply(old_expectations_alpha_outer[[1]], old_expectations_alpha_outer[[2]], SIMPLIFY = FALSE, FUN=function(a,b){a+b})
-      # old_vi_sigma_alpha <- mapply(old_vi_sigma_outer_alpha, prior_sigma_alpha_phi, SIMPLIFY = FALSE, FUN=function(i,j){i+j})
-      # 
-      # vi_sigma_alpha <- old_vi_sigma_alpha
-      # vi_sigma_outer_alpha <- old_vi_sigma_outer_alpha
-      # 
-      # comp <- mapply(vi_sigma_outer_alpha, old_vi_sigma_outer_alpha, FUN=function(i,j){all.equal(as.vector(i), as.vector(j))})
-      # if (any(!sapply(comp, isTRUE))){print(comp); stop()}
+
       
       #Update the auxilary parameters
-      if (outcome == 'negbin'){
+      if (family == 'negbin'){
       
         vi_r <- update_r(vi_r = vi_r, y = y, X = X, Z = Z, factorization_method = factorization_method,
                  vi_beta_mean = vi_beta_mean, vi_beta_decomp = vi_beta_decomp,
@@ -1187,7 +1158,7 @@ vglmer <- function(formula, data, iterations, family, prior_variance, factorizat
     output$beta$var <- t(vi_beta_decomp) %*% vi_beta_decomp
     output$beta$decomp_var <- vi_beta_decomp
     
-    if (outcome == 'negbin'){
+    if (family == 'negbin'){
       output$r <- list(mean = vi_r, variance = NA)
     }
 

@@ -6,3 +6,10 @@ src/*.o
 src/*.so
 src/*.dll
 Goplerud_MAVB*
+full_models/*
+misc_files/*
+old_figures/*
+old_versions/*
+pres_figures/*
+remote_models/*
+replicate_GG/*
