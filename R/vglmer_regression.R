@@ -1,4 +1,3 @@
-
 extract_group_memberships <- function(x, fr, drop.unused.levels){
   frloc <- factorize(x, frloc)
   if (is.null(ff <- tryCatch(eval(substitute(makeFac(fac), 
@@ -14,77 +13,6 @@ extract_group_memberships <- function(x, fr, drop.unused.levels){
     ff <- factor(ff, exclude = NA)
   }
   return(ff)
-}
-
-#' Format Existing Objects
-#' 
-#' Takes a regression output from glmer, stan, or vglmer and extracts the fixed
-#' and random effects.
-#'
-#' @name format_obj
-#' 
-#' @param object Object from glmer, vglmer, or stan to the respective "format_"
-#'   function
-#' @importFrom dplyr bind_rows mutate
-#' @importFrom lme4 fixef ranef
-#' @importFrom stats vcov
-#' @importFrom rlang .data
-#' @export
-format_glmer <- function(object){
-  output <- bind_rows(lapply(ranef(object), FUN=function(i){
-    obj <- data.frame(var = as.vector(apply(attributes(i)$postVar, MARGIN = 3, FUN=function(i){diag(i)})),
-                      mean = as.vector(t(as.matrix(i))),
-                      name = paste0(rep(colnames(i), nrow(i)), ' @ ', rep(rownames(i), each = ncol(i))), stringsAsFactors = F)
-    return(obj)
-  }), .id = '.re')
-  output$name <- with(output, paste0(.re, ' @ ', name))
-  output_fe <- data.frame(mean = fixef(object), var = diag(vcov(object)))
-  output_fe$name <- rownames(output_fe)
-  
-  output <- bind_rows(output, output_fe)
-  output <- output[, (names(output) != '.re')]
-  
-  rownames(output) <- NULL
-  
-  return(output)
-}
-
-#' Format vglmer
-#' @rdname format_obj
-#' @export
-format_vglmer <- function(object){
-  beta.output <- data.frame(name = rownames(object$beta$mean), mean = as.vector(object$beta$mean), var = diag(object$beta$var), stringsAsFactors = F)
-  alpha.output <- data.frame(name = rownames(object$alpha$mean), mean = as.vector(object$alpha$mean), var = as.vector(object$alpha$dia.var), stringsAsFactors = F)
-  output <- bind_rows(beta.output, alpha.output)
-  return(output)
-}
-
-#' Format Stan
-#' @param useSigma Return variance component parameters from STAN? Default "FALSE".
-#' @rdname format_obj
-#' @importFrom stringr str_split
-#' @importFrom stats var
-#' @export
-format_stan <- function(object, useSigma = FALSE){
-  post_stan <- as.matrix(object)
-  if (!useSigma){
-    post_stan <- post_stan[,!grepl(colnames(post_stan), pattern='^Sigma')]
-  }
-  parse_stan_names <- str_split(colnames(post_stan), pattern='^b\\[| |\\]')
-
-  fmt_stan_names <- sapply(parse_stan_names, FUN=function(i){
-    if (length(i) == 1){
-      return(i)
-    }else{
-      i_one <- unlist(str_split(i[3], pattern=':'))
-      return(paste(i_one[1], i[2], i_one[2], sep=' @ '))
-    }
-  })
-  colnames(post_stan) <- fmt_stan_names
-  output <- data.frame(var = apply(post_stan, MARGIN = 2, var), mean = colMeans(post_stan))
-  output$name <- rownames(output)
-  rownames(output) <- NULL
-  return(output)
 }
 
 #' @import Matrix
@@ -361,11 +289,10 @@ calculate_ELBO <- function(factorization_method,
 #' @importFrom rlang .data
 #' @useDynLib vglmer
 #' @export
-vglmer_logit <- function(formula, data, iterations, prior_variance, factorization_method = 'weak', 
+vglmer <- function(formula, data, iterations, family, prior_variance, factorization_method = 'weak', 
      tolerance_elbo = 1e-4, tolerance_parameters = 1e-4,
      prevent_degeneracy = FALSE, force_whole = TRUE,
      parameter_expansion = 'mean', random_seed = 1,
-     outcome = 'logit',
      debug_param = FALSE, return_data = FALSE, linpred_method = 'joint',
      debug_ELBO = FALSE, print_prog = NULL, quiet = T, init = 'EM'){
   
@@ -375,13 +302,49 @@ vglmer_logit <- function(formula, data, iterations, prior_variance, factorizatio
   if (is.null(print_prog)){
     print_prog <- max(c(1, floor(iterations / 20)))
   }
+  if (!(family %in% c('logit', 'negbin'))){
+    stop('family must be "logit" or "negbin".')
+  }
   #Extract outcome y
   y <- model.response(model.frame(nobars(formula), data = data))
   names(y) <- NULL
-  if (!(class(y) %in% c('numeric', 'integer'))){
-    if (min(y) < 0){
-      stop('Negative Numbers not Permitted in outcome')
+  
+  if (family == 'logit'){
+    if (!(class(y) %in% c('numeric', 'integer'))){
+      if (min(y) < 0){
+        stop('Negative Numbers not Permitted in outcome')
+      }
+      is.wholenumber <- function(x, tol = .Machine$double.eps^0.5)  abs(x - round(x)) < tol
+      if (any(is.wholenumber(y) == FALSE)){
+        if (force_whole){
+          stop('If force_whole = TRUE, must provide whole numbers')
+        }else{
+          warning('Non-integer numbers in y')
+        }
+      }
+      #Total trials (Success + Failure)
+      trials <- rowSums(y)
+      rownames(trials) <- NULL
+      #Successes
+      y <- y[,1]
+      rownames(y) <- NULL
+      
+    }else{
+      if (!all(y %in% c(0,1)) & outcome == 'logit'){
+        stop('Only {0,1} outcomes permitted for numeric y.')
+      }
+      trials <- rep(1, length(y))
     }
+  }else{
+    
+    if (!(class(y) %in% c('numeric', 'integer'))){
+      stop("Must provide vector of numbers with negbin.")
+    }
+    
+    if (min(y) < 0){
+      stop('Negative numbers not Permitted in outcome')
+    }
+    
     is.wholenumber <- function(x, tol = .Machine$double.eps^0.5)  abs(x - round(x)) < tol
     if (any(is.wholenumber(y) == FALSE)){
       if (force_whole){
@@ -390,18 +353,7 @@ vglmer_logit <- function(formula, data, iterations, prior_variance, factorizatio
         warning('Non-integer numbers in y')
       }
     }
-    #Total trials (Success + Failure)
-    trials <- rowSums(y)
-    rownames(trials) <- NULL
-    #Successes
-    y <- y[,1]
-    rownames(y) <- NULL
     
-  }else{
-    if (!all(y %in% c(0,1)) & outcome == 'logit'){
-      stop('Only {0,1} outcomes permitted for numeric y.')
-    }
-    trials <- rep(1, length(y))
   }
   N <- length(y)
   
