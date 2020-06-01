@@ -20,53 +20,6 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
-// chol_calculate_outer_alpha
-List chol_calculate_outer_alpha(const Eigen::MappedSparseMatrix<double> cholL, const Rcpp::NumericVector P, const Eigen::Map<Eigen::VectorXd> alpha_mu, const Rcpp::List& re_mu_list, const Rcpp::List& re_group_list, const Rcpp::List& re_position_list);
-RcppExport SEXP _vglmer_chol_calculate_outer_alpha(SEXP cholLSEXP, SEXP PSEXP, SEXP alpha_muSEXP, SEXP re_mu_listSEXP, SEXP re_group_listSEXP, SEXP re_position_listSEXP) {
-BEGIN_RCPP
-    Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< const Eigen::MappedSparseMatrix<double> >::type cholL(cholLSEXP);
-    Rcpp::traits::input_parameter< const Rcpp::NumericVector >::type P(PSEXP);
-    Rcpp::traits::input_parameter< const Eigen::Map<Eigen::VectorXd> >::type alpha_mu(alpha_muSEXP);
-    Rcpp::traits::input_parameter< const Rcpp::List& >::type re_mu_list(re_mu_listSEXP);
-    Rcpp::traits::input_parameter< const Rcpp::List& >::type re_group_list(re_group_listSEXP);
-    Rcpp::traits::input_parameter< const Rcpp::List& >::type re_position_list(re_position_listSEXP);
-    rcpp_result_gen = Rcpp::wrap(chol_calculate_outer_alpha(cholL, P, alpha_mu, re_mu_list, re_group_list, re_position_list));
-    return rcpp_result_gen;
-END_RCPP
-}
-// GibbsLinRegChol
-List GibbsLinRegChol(const Eigen::MappedSparseMatrix<double> X, const Eigen::MappedSparseMatrix<double> omega, const Eigen::MappedSparseMatrix<double> prior_precision, const Eigen::Map<Eigen::VectorXd> y, const Eigen::Map<Eigen::VectorXd> stdnorm);
-RcppExport SEXP _vglmer_GibbsLinRegChol(SEXP XSEXP, SEXP omegaSEXP, SEXP prior_precisionSEXP, SEXP ySEXP, SEXP stdnormSEXP) {
-BEGIN_RCPP
-    Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< const Eigen::MappedSparseMatrix<double> >::type X(XSEXP);
-    Rcpp::traits::input_parameter< const Eigen::MappedSparseMatrix<double> >::type omega(omegaSEXP);
-    Rcpp::traits::input_parameter< const Eigen::MappedSparseMatrix<double> >::type prior_precision(prior_precisionSEXP);
-    Rcpp::traits::input_parameter< const Eigen::Map<Eigen::VectorXd> >::type y(ySEXP);
-    Rcpp::traits::input_parameter< const Eigen::Map<Eigen::VectorXd> >::type stdnorm(stdnormSEXP);
-    rcpp_result_gen = Rcpp::wrap(GibbsLinRegChol(X, omega, prior_precision, y, stdnorm));
-    return rcpp_result_gen;
-END_RCPP
-}
-// cyclical_descent_LinReg
-List cyclical_descent_LinReg(const Eigen::MappedSparseMatrix<double> X, const Eigen::Map<Eigen::VectorXd> y, const Eigen::Map<Eigen::VectorXd> old_eb, const Rcpp::List& cyclical_list, const Rcpp::List& precision_list, const double sigmasq);
-RcppExport SEXP _vglmer_cyclical_descent_LinReg(SEXP XSEXP, SEXP ySEXP, SEXP old_ebSEXP, SEXP cyclical_listSEXP, SEXP precision_listSEXP, SEXP sigmasqSEXP) {
-BEGIN_RCPP
-    Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< const Eigen::MappedSparseMatrix<double> >::type X(XSEXP);
-    Rcpp::traits::input_parameter< const Eigen::Map<Eigen::VectorXd> >::type y(ySEXP);
-    Rcpp::traits::input_parameter< const Eigen::Map<Eigen::VectorXd> >::type old_eb(old_ebSEXP);
-    Rcpp::traits::input_parameter< const Rcpp::List& >::type cyclical_list(cyclical_listSEXP);
-    Rcpp::traits::input_parameter< const Rcpp::List& >::type precision_list(precision_listSEXP);
-    Rcpp::traits::input_parameter< const double >::type sigmasq(sigmasqSEXP);
-    rcpp_result_gen = Rcpp::wrap(cyclical_descent_LinReg(X, y, old_eb, cyclical_list, precision_list, sigmasq));
-    return rcpp_result_gen;
-END_RCPP
-}
 // calculate_expected_outer_alpha
 List calculate_expected_outer_alpha(const Eigen::MappedSparseMatrix<double> L, const Eigen::Map<Eigen::VectorXd> alpha_mu, const Rcpp::List& re_position_list);
 RcppExport SEXP _vglmer_calculate_expected_outer_alpha(SEXP LSEXP, SEXP alpha_muSEXP, SEXP re_position_listSEXP) {
@@ -116,9 +69,6 @@ END_RCPP
 
 static const R_CallMethodDef CallEntries[] = {
     {"_vglmer_LinRegChol", (DL_FUNC) &_vglmer_LinRegChol, 4},
-    {"_vglmer_chol_calculate_outer_alpha", (DL_FUNC) &_vglmer_chol_calculate_outer_alpha, 6},
-    {"_vglmer_GibbsLinRegChol", (DL_FUNC) &_vglmer_GibbsLinRegChol, 5},
-    {"_vglmer_cyclical_descent_LinReg", (DL_FUNC) &_vglmer_cyclical_descent_LinReg, 6},
     {"_vglmer_calculate_expected_outer_alpha", (DL_FUNC) &_vglmer_calculate_expected_outer_alpha, 3},
     {"_vglmer_vecR_ridge_general", (DL_FUNC) &_vglmer_vecR_ridge_general, 7},
     {"_vglmer_vecR_design", (DL_FUNC) &_vglmer_vecR_design, 6},

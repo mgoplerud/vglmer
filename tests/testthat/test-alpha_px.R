@@ -1,6 +1,6 @@
-context('PX Methods')
+context('C++ Verification')
 
-test_that('Calculate E[alpha alpha^T]', {
+test_that('Calculate E[alpha alpha^T] comparing cpp and base R', {
   
   loop_outer_alpha <- function(vi_alpha_mean, vi_alpha_decomp, outer_alpha_RE_positions){
     #Must be such that t(vi_alpha_decomp) %*% vi_alpha_decomp = VAR
@@ -55,15 +55,3 @@ test_that('Calculate E[alpha alpha^T]', {
   
 })
 
-
-
-# # #Slow non-optimized function:
-# old_expectations_alpha_outer <- loop_outer_alpha(vi_alpha_mean, vi_alpha_decomp, outer_alpha_RE_positions)
-# old_vi_sigma_outer_alpha <- mapply(old_expectations_alpha_outer[[1]], old_expectations_alpha_outer[[2]], SIMPLIFY = FALSE, FUN=function(a,b){a+b})
-# old_vi_sigma_alpha <- mapply(old_vi_sigma_outer_alpha, prior_sigma_alpha_phi, SIMPLIFY = FALSE, FUN=function(i,j){i+j})
-# 
-# vi_sigma_alpha <- old_vi_sigma_alpha
-# vi_sigma_outer_alpha <- old_vi_sigma_outer_alpha
-# 
-# comp <- mapply(vi_sigma_outer_alpha, old_vi_sigma_outer_alpha, FUN=function(i,j){all.equal(as.vector(i), as.vector(j))})
-# if (any(!sapply(comp, isTRUE))){print(comp); stop()}

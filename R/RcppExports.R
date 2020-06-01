@@ -16,20 +16,6 @@ LinRegChol <- function(X, omega, prior_precision, y) {
     .Call('_vglmer_LinRegChol', PACKAGE = 'vglmer', X, omega, prior_precision, y)
 }
 
-chol_calculate_outer_alpha <- function(cholL, P, alpha_mu, re_mu_list, re_group_list, re_position_list) {
-    .Call('_vglmer_chol_calculate_outer_alpha', PACKAGE = 'vglmer', cholL, P, alpha_mu, re_mu_list, re_group_list, re_position_list)
-}
-
-#' @param stdnorm a vector draw from a standard normal to do gibbs sampling.
-#' @rdname ccp_linreg
-GibbsLinRegChol <- function(X, omega, prior_precision, y, stdnorm) {
-    .Call('_vglmer_GibbsLinRegChol', PACKAGE = 'vglmer', X, omega, prior_precision, y, stdnorm)
-}
-
-cyclical_descent_LinReg <- function(X, y, old_eb, cyclical_list, precision_list, sigmasq) {
-    .Call('_vglmer_cyclical_descent_LinReg', PACKAGE = 'vglmer', X, y, old_eb, cyclical_list, precision_list, sigmasq)
-}
-
 calculate_expected_outer_alpha <- function(L, alpha_mu, re_position_list) {
     .Call('_vglmer_calculate_expected_outer_alpha', PACKAGE = 'vglmer', L, alpha_mu, re_position_list)
 }
