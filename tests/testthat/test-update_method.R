@@ -27,7 +27,7 @@ test_that('Joint vs Cyclical Update', {
     fmt_vglmer_cyclic <- format_vglmer(ex_vglmer_cyclic)
     fmt_vglmer_joint <- format_vglmer(ex_vglmer_joint)
     
-    expect_equal(fmt_vglmer_cyclic, fmt_vglmer_joint, tolerance = 1e-5)
+    expect_equivalent(fmt_vglmer_cyclic, fmt_vglmer_joint, tolerance = 1e-5)
 
     if (v == 'strong'){
       ex_vglmer_normal <- vglmer(formula = y ~ x + (1 | g), data = NULL, iterations = 5000, linpred_method = 'solve_normal',
@@ -35,7 +35,7 @@ test_that('Joint vs Cyclical Update', {
          family = 'logit', prior_variance = 'mean_exists', init = 'zero', factorization_method = v)
       
       fmt_vglmer_normal <- format_vglmer(ex_vglmer_normal)
-      expect_equal(fmt_vglmer_normal, fmt_vglmer_joint, tolerance = 1e-5)
+      expect_equivalent(fmt_vglmer_normal, fmt_vglmer_joint, tolerance = 1e-5)
     }
     
   }

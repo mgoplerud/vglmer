@@ -156,6 +156,7 @@ calculate_ELBO <- function(ELBO_type, factorization_method,
   ####
   ##PREPARE INTERMEDIATE QUANTITES
   ###
+    N <- nrow(X)
     #linear predictor: E[XB + ZA - log(r)]
     ex_XBZA <- (X %*% vi_beta_mean + Z %*% vi_alpha_mean) - log(vi_r_mean)
     #quadratic var, i.e. Var(x_i^T beta + z_i^T alpha)
@@ -1204,6 +1205,8 @@ vglmer <- function(formula, data, iterations, family, prior_variance, factorizat
                    ELBO = final.ELBO, debug_ELBO = d.ELBO,
                    ELBO_trajectory = store_ELBO,
                    parameter.change = change_all,
+                   internal_parameters = list(it_used = it, it_max = iterations),
+                   parameter_expansion = parameter_expansion,
                    sigma = list(cov = vi_sigma_alpha, df = vi_sigma_alpha_nu),
                    alpha = list(mean = vi_alpha_mean)
     )

@@ -27,20 +27,38 @@ vcov.vglmer <- function(object, ...){
 }
 
 # Print status of vglmer fit
+#' @param x Model fit using vglmer
+#' @param ... Not used.
 #' @export
 print.vglmer <- function(x, ...){
-  cat('Formula:\n\n')
+  if (length(list(...)) > 0){'print.vglmer does not use ...'}
+  it_used <- x$internal_parameters$it_used
+  it_max <- x$internal_parameters$it_max
+  final_param_change <- round(max(x$parameter.change), 6)
+  final_ELBO_change <- round(tail(diff(x$ELBO_trajectory$ELBO), 1), 8)
+  converged <- it_max != it_used
+  p.X <- nrow(x$beta$mean)
+  p.Z <- nrow(x$alpha$mean)
+  J <- length(x$sigma$cov)
+  
+  cat(paste0('Formula: J = ', J,', |Z| = ', p.Z, ', |X| = ', p.X,'\n\n'))
   cat(paste(format(x$formula), collapse = '\n'))
   cat('\n\n')
 
+
+  if (converged){
+    cat(paste0('Model converged after ', it_used, ' iterations.'))
+  }else{
+    cat(paste0('Model *failed* to converge after ', it_max, ' iterations.'))
+  } 
+  cat('\n\n')
   cat(paste0('ELBO: ', round(x$ELBO[1],2), '\n\n'))
   cat(paste0('Factorization Method: ', x$factorization_method, '\n'))
   cat(paste0('Parameter Expansion: ', x$parameter_expansion, '\n\n'))
-  cat(paste0('Largest Parameter Change at Convergence: ', format(round(max(x$parameter.change), 6), nsmall = 2), '\n'))
-  cat(paste0('ELBO Change at Convergence: ', '', '\n'))
+  cat(paste0('Largest Parameter Change at Convergence: ', format(final_param_change, nsmall = 2), '\n'))
+  cat(paste0('ELBO Change at Convergence: ', format(final_ELBO_change, nsmall = 2), '\n'))
   
-  warning('Set up maxit, did it convergence, ELBO change, and and PX')
-  invisible()
+  invisible(list(paramater = final_param_change, ELBO = final_ELBO_change))
   
 }
 
