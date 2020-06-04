@@ -51,16 +51,17 @@ test_that('Compare against glmer.nb', {
   
   for (v in c("weak", 'partial', 'strong')){
     
-    example_vglmer <- vglmer(formula = y ~ x + (1 | g), data = data, iterations = 5000, 
+    example_vglmer <- vglmer(formula = y ~ x + (1 | g), data = data, iterations = 500,
                              print_prog = 1000, tolerance_elbo = 1e-8, tolerance_parameters = 1e-5,
-                             family = 'negbin', prior_variance = 'mean_exists', init = 'zero', factorization_method = v)
+                             family = 'negbin', prior_variance = 'mean_exists', init = 'random', factorization_method = v)
+    #Test whether it monotonically increases    
+    expect_gt(min(diff(example_vglmer$ELBO_trajectory$ELBO)), 0)
     
     fmt_vglmer <- format_vglmer(example_vglmer)
     comp_methods <- merge(fmt_glmer, fmt_vglmer, by = c('name'))
-    
     cor_mean <- with(comp_methods, cor(mean.x, mean.y))
+    #Test whether it is close to the truth.
     expect_gt(cor_mean, expected = 0.99)
-    
   }
   
 })
@@ -79,4 +80,9 @@ test_that('EM_prelim matches glm', {
   est_init <- c(est_init$beta, est_init$alpha)
   expect_equal(as.vector(coef(est_glm)), est_init, tolerance = 1e-4)  
 })
+
+
+
+
+
 

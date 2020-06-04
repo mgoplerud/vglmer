@@ -110,13 +110,16 @@ EM_prelim <- function(X, Z, s, pg_b, iter, ridge = 2){
   
   jointXZ <- cbind(X, Z)
   N <- nrow(X)
-  EM_beta <- rep(1/ncol(jointXZ), ncol(jointXZ))
+  
+  EM_beta <- rep(0, ncol(jointXZ))
+
   EM_variance <- sparseMatrix(i = 1:ncol(jointXZ), j = 1:ncol(jointXZ), x = 1/ridge)
   
   for (it in 1:iter){
     
     EM_pg_c <- jointXZ %*% EM_beta
     EM_pg_mean <- pg_b/(2 * EM_pg_c) * tanh(EM_pg_c / 2)
+    EM_pg_mean[which(abs(EM_pg_c) < 1e-10)] <- pg_b/4
     EM_pg_diag <- sparseMatrix(i=1:N, j=1:N, x = EM_pg_mean)
     
     EM_beta <- LinRegChol(X = jointXZ, omega = EM_pg_diag, y = s, prior_precision =  EM_variance)$mean
@@ -132,11 +135,11 @@ make_log_invwishart_constant <- function(nu, Phi){
   return(output)
 }
 
-calculate_ELBO <- function(factorization_method,
+calculate_ELBO <- function(ELBO_type, factorization_method,
    #Fixed constants or priors
    d_j, g_j, prior_sigma_alpha_phi, prior_sigma_alpha_nu, iw_prior_constant, choose_term,
    #Data
-   X, Z, s, 
+   X, Z, s, y,
    #PolyaGamma Parameters
    vi_pg_b, vi_pg_mean, vi_pg_c,
    #Sigma Parameters
@@ -146,12 +149,15 @@ calculate_ELBO <- function(factorization_method,
    vi_alpha_mean, vi_alpha_decomp,
    log_det_beta_var, log_det_alpha_var, 
    log_det_joint_var = NULL,
-   vi_joint_decomp = NULL){
+   vi_joint_decomp = NULL,
+   #r Parameters
+   vi_r_mean = NULL
+  ){
   ####
   ##PREPARE INTERMEDIATE QUANTITES
   ###
-    #linear predictor: E[XB + ZA]
-    ex_XBZA <- (X %*% vi_beta_mean + Z %*% vi_alpha_mean)
+    #linear predictor: E[XB + ZA - log(r)]
+    ex_XBZA <- (X %*% vi_beta_mean + Z %*% vi_alpha_mean) - log(vi_r_mean)
     #quadratic var, i.e. Var(x_i^T beta + z_i^T alpha)
     if (factorization_method == 'weak'){
       if (is.null(vi_joint_decomp) | is.null(log_det_joint_var)){stop('Need to provide joint decomposition for ELBO weak')}
@@ -176,46 +182,81 @@ calculate_ELBO <- function(factorization_method,
     inv_sigma_alpha <- lapply(moments_sigma_alpha, FUN=function(i){i$sigma.inv})
   ##GET the terms for the expectation
   ##of the log-complete data given the variational distribution.
+  if (ELBO_type == 'augmented'){
+    #Get the terms for the p(y, w | alpha, beta, Sigma) EXCLUDING the intractable PG.
+    logcomplete_1 <- -sum(vi_pg_b) * log(2) +
+      as.vector(t(s) %*% ex_XBZA - 1/2 * t(ex_XBZA) %*% Diagonal(x = vi_pg_mean) %*% ex_XBZA) +
+      -1/2 * sum(var_XBZA * vi_pg_mean)
+    #Get the terms for p(alpha | Sigma)
     
-  #Get the terms for the p(y, w | alpha, beta, Sigma) EXCLUDING the intractable PG.
-  logcomplete_1 <- -sum(vi_pg_b) * log(2) +
-    as.vector(t(s) %*% ex_XBZA - 1/2 * t(ex_XBZA) %*% Diagonal(x = vi_pg_mean) %*% ex_XBZA) +
-    -1/2 * sum(var_XBZA * vi_pg_mean)
-  #Get the terms for p(alpha | Sigma)
-  
-  logcomplete_2 <- sum(-d_j * g_j / 2 * log(2 * pi) - g_j/2 * ln_det_sigma_alpha) +
-    -1/2 * sum(mapply(inv_sigma_alpha, vi_sigma_outer_alpha, FUN=function(a,b){sum(diag(a %*% b))}))
-  
-  #Get the terms for the final priors!
-  logcomplete_3 <- 0 + #flat prior on beta
-    sum(
-      iw_prior_constant +
-      -(prior_sigma_alpha_nu + d_j + 1)/2 * ln_det_sigma_alpha +
-      -1/2 * mapply(prior_sigma_alpha_phi, inv_sigma_alpha, FUN=function(a,b){sum(diag(a %*% b))})
-    )
-  logcomplete <- logcomplete_1 + logcomplete_2 + logcomplete_3
-  ##GET THE ENTROPY
-   #Entropy for p(beta,alpha)
-  if (factorization_method == 'weak'){
-    entropy_1 <-  ncol(vi_joint_decomp)/2 * log(2 * pi * exp(1)) + 
-      1/2 * log_det_joint_var 
-  }else{
-    entropy_1 <- ncol(vi_beta_decomp)/2 * log(2 * pi * exp(1)) + 1/2 * log_det_beta_var +
-      ncol(vi_alpha_decomp)/2 * log(2 * pi * exp(1)) + 1/2 * log_det_alpha_var
-  }
-  #Entropy for Polya-Gamma EXCLUDING intractable term that cancels
-  entropy_2 <- sum(vi_pg_b * vi_pg_c / 4 * tanh(vi_pg_c/2) - vi_pg_b * log(cosh(vi_pg_c/2)))
-  #Entropy Wisharts
-  entropy_3 <- -mapply(vi_sigma_alpha_nu, vi_sigma_alpha, FUN=function(nu,Phi){make_log_invwishart_constant(nu = nu, Phi = Phi)}) +
-    (vi_sigma_alpha_nu + d_j + 1)/2 * ln_det_sigma_alpha +
-    1/2 * mapply(vi_sigma_alpha, inv_sigma_alpha, FUN=function(a,b){sum(diag(a %*% b))})
-  entropy_3 <- sum(entropy_3)
-  
-  logcomplete <- logcomplete + choose_term
+    logcomplete_2 <- sum(-d_j * g_j / 2 * log(2 * pi) - g_j/2 * ln_det_sigma_alpha) +
+      -1/2 * sum(mapply(inv_sigma_alpha, vi_sigma_outer_alpha, FUN=function(a,b){sum(diag(a %*% b))}))
+    
+    #Get the terms for the final priors!
+    logcomplete_3 <- 0 + #flat prior on beta
+      sum(
+        iw_prior_constant +
+          -(prior_sigma_alpha_nu + d_j + 1)/2 * ln_det_sigma_alpha +
+          -1/2 * mapply(prior_sigma_alpha_phi, inv_sigma_alpha, FUN=function(a,b){sum(diag(a %*% b))})
+      )
+    ##GET THE ENTROPY
+    #Entropy for p(beta,alpha)
+    if (factorization_method == 'weak'){
+      entropy_1 <-  ncol(vi_joint_decomp)/2 * log(2 * pi * exp(1)) + 
+        1/2 * log_det_joint_var 
+    }else{
+      entropy_1 <- ncol(vi_beta_decomp)/2 * log(2 * pi * exp(1)) + 1/2 * log_det_beta_var +
+        ncol(vi_alpha_decomp)/2 * log(2 * pi * exp(1)) + 1/2 * log_det_alpha_var
+    }
+    #Entropy for Polya-Gamma EXCLUDING intractable term that cancels
+    entropy_2 <- sum(vi_pg_b * vi_pg_c / 4 * tanh(vi_pg_c/2) - vi_pg_b * log(cosh(vi_pg_c/2)))
+    #Entropy Wisharts
+    entropy_3 <- -mapply(vi_sigma_alpha_nu, vi_sigma_alpha, FUN=function(nu,Phi){make_log_invwishart_constant(nu = nu, Phi = Phi)}) +
+      (vi_sigma_alpha_nu + d_j + 1)/2 * ln_det_sigma_alpha +
+      1/2 * mapply(vi_sigma_alpha, inv_sigma_alpha, FUN=function(a,b){sum(diag(a %*% b))})
+    entropy_3 <- sum(entropy_3)
+    
+    logcomplete <- logcomplete_1 + logcomplete_2 + logcomplete_3
+    logcomplete <- logcomplete + choose_term
+    
+  }else if (ELBO_type == 'profiled'){
+    logcomplete_1a <- sum(lgamma(y + vi_r_mean)) - N * lgamma(vi_r_mean) - (vi_r_mean) * N * log(2) +
+      as.vector(t((y - vi_r_mean)/2) %*% ex_XBZA)
+    logcomplete_1b <- sum(-(y + vi_r_mean) * log(cosh(1/2 * sqrt(ex_XBZA^2 + var_XBZA))))
+    
+    logcomplete_1 <- logcomplete_1a + logcomplete_1b + choose_term
+    
+    logcomplete_2 <- sum(-d_j * g_j / 2 * log(2 * pi) - g_j/2 * ln_det_sigma_alpha) +
+      -1/2 * sum(mapply(inv_sigma_alpha, vi_sigma_outer_alpha, FUN=function(a,b){sum(diag(a %*% b))}))
+    logcomplete_3 <- 0 + #flat prior on beta
+      sum(
+        iw_prior_constant +
+          -(prior_sigma_alpha_nu + d_j + 1)/2 * ln_det_sigma_alpha +
+          -1/2 * mapply(prior_sigma_alpha_phi, inv_sigma_alpha, FUN=function(a,b){sum(diag(a %*% b))})
+      )
+    
+    if (factorization_method == 'weak'){
+      entropy_1 <-  ncol(vi_joint_decomp)/2 * log(2 * pi * exp(1)) + 
+        1/2 * log_det_joint_var 
+    }else{
+      entropy_1 <- ncol(vi_beta_decomp)/2 * log(2 * pi * exp(1)) + 1/2 * log_det_beta_var +
+        ncol(vi_alpha_decomp)/2 * log(2 * pi * exp(1)) + 1/2 * log_det_alpha_var
+    }
+    entropy_2 <- 0
+    #Entropy Wisharts
+    entropy_3 <- -mapply(vi_sigma_alpha_nu, vi_sigma_alpha, FUN=function(nu,Phi){make_log_invwishart_constant(nu = nu, Phi = Phi)}) +
+      (vi_sigma_alpha_nu + d_j + 1)/2 * ln_det_sigma_alpha +
+      1/2 * mapply(vi_sigma_alpha, inv_sigma_alpha, FUN=function(a,b){sum(diag(a %*% b))})
+    entropy_3 <- sum(entropy_3)
+    
+    logcomplete <- logcomplete_1 + logcomplete_2 + logcomplete_3
+  }else{stop('ELBO must be profiled or augmented')}
   
   entropy <- entropy_1 + entropy_2 + entropy_3
   ELBO <- entropy + logcomplete
-  return(data.frame(ELBO, logcomplete, entropy, logcomplete_1, logcomplete_2, logcomplete_3, entropy_1, entropy_2, entropy_3))
+  
+  return(data.frame(ELBO, logcomplete, entropy, logcomplete_1, 
+                    logcomplete_2, logcomplete_3, entropy_1, entropy_2, entropy_3))
 }
 
 #' Variational Inference for Non-Linear Hierarchical Models
@@ -336,6 +377,13 @@ vglmer <- function(formula, data, iterations, family, prior_variance, factorizat
     }
     
   }
+  
+  if (family == 'logit'){
+    ELBO_type <- 'augmented'
+  }else if (family == 'negbin'){
+    ELBO_type <- 'profiled'
+  }else{stop('Check ELBO_type')}
+  
   N <- length(y)
   
   #Extract X (FE design matrix)
@@ -416,14 +464,15 @@ vglmer <- function(formula, data, iterations, family, prior_variance, factorizat
     if (family == 'logit'){
       s <- y - trials/2
       vi_pg_b <- trials
-      vi_r <- 1
+      vi_r_mean <- 1
       choose_term <- sum(lchoose(n = round(trials), k = round(y)))
     }else{
       #Initialize
-      vi_r <- 1/MASS::glm.nb(y ~ 1)$theta
-      s <- (y - vi_r)/2
-      vi_pg_b <- y + vi_r
-      choose_term <- 0
+      vi_r_mean <- 1/100
+      # vi_r_mean <- 1/MASS::glm.nb(y ~ 1)$theta
+      s <- (y - vi_r_mean)/2
+      vi_pg_b <- y + vi_r_mean
+      choose_term <- -sum(lgamma(y + 1)) - sum(y) * log(2)
     }
 
     #Initalize variational parameters.
@@ -513,6 +562,7 @@ vglmer <- function(formula, data, iterations, family, prior_variance, factorizat
     if (factorization_method == 'weak'){
       vi_joint_decomp <- bdiag(vi_beta_decomp, vi_alpha_decomp)
       joint.XZ <- cbind(X, Z)
+      log_det_beta_var <- log_det_alpha_var <- NULL
     }else{
       vi_joint_decomp = NULL
       log_det_joint_var <- NULL
@@ -534,7 +584,7 @@ vglmer <- function(formula, data, iterations, family, prior_variance, factorizat
       lagged_alpha_decomp <- vi_alpha_decomp
       lagged_beta_decomp <- vi_beta_decomp
     }
-    lagged_vi_r <- -Inf
+    lagged_vi_r_mean <- -Inf
     
     lagged_ELBO <- -Inf
     accepted_times <- NA
@@ -576,7 +626,7 @@ vglmer <- function(formula, data, iterations, family, prior_variance, factorizat
       ##Polya-Gamma Updates
       ###
       #Get the x_i^T Var(beta) x_i terms.
-      log_vi_r <- log(vi_r)
+      log_vi_r <- log(vi_r_mean)
       if (factorization_method == 'weak'){
         joint_quad <- rowSums( (joint.XZ %*% t(vi_joint_decomp))^2 )
         vi_pg_c <- sqrt(as.vector(X %*% vi_beta_mean + Z %*% vi_alpha_mean - log_vi_r)^2 + joint_quad)
@@ -590,12 +640,12 @@ vglmer <- function(formula, data, iterations, family, prior_variance, factorizat
       diag_vi_pg_mean <- sparseMatrix(i = 1:N, j = 1:N, x = vi_pg_mean)
       
       if (debug_ELBO & it != 1){
-        debug_ELBO.1 <- calculate_ELBO(
+        debug_ELBO.1 <- calculate_ELBO(ELBO_type = ELBO_type,
           factorization_method = factorization_method,
           d_j = d_j, g_j = g_j, prior_sigma_alpha_phi = prior_sigma_alpha_phi, 
           prior_sigma_alpha_nu = prior_sigma_alpha_nu,
           iw_prior_constant = iw_prior_constant,
-          X = X, Z = Z, s = s,
+          X = X, Z = Z, s = s, y = y,
           vi_pg_b = vi_pg_b, vi_pg_mean = vi_pg_mean, vi_pg_c = vi_pg_c,
           vi_sigma_alpha = vi_sigma_alpha, vi_sigma_alpha_nu = vi_sigma_alpha_nu, 
           vi_sigma_outer_alpha = vi_sigma_outer_alpha,
@@ -603,7 +653,7 @@ vglmer <- function(formula, data, iterations, family, prior_variance, factorizat
           log_det_beta_var = log_det_beta_var, log_det_alpha_var = log_det_alpha_var,
           vi_beta_decomp = vi_beta_decomp, vi_alpha_decomp = vi_alpha_decomp, 
           vi_joint_decomp = vi_joint_decomp, choose_term = choose_term,
-          log_det_joint_var = log_det_joint_var
+          log_det_joint_var = log_det_joint_var, vi_r_mean = vi_r_mean
         )
       }
 
@@ -629,7 +679,7 @@ vglmer <- function(formula, data, iterations, family, prior_variance, factorizat
         ##Update <beta, alpha> jointly
         chol.update.joint <- LinRegChol(X = joint.XZ, omega = diag_vi_pg_mean, 
                                         prior_precision =  bdiag(zero_mat, Tinv), 
-                                        y = s + vi_pg_mean * log(vi_r))
+                                        y = s + vi_pg_mean * log(vi_r_mean))
         Pmatrix <- sparseMatrix(i = 1:ncol(joint.XZ), j = 1 + chol.update.joint$Pindex, x = 1)
         
         
@@ -679,7 +729,7 @@ vglmer <- function(formula, data, iterations, family, prior_variance, factorizat
         }else if (linpred_method == 'joint'){
           joint.XZ <- cbind(X,Z)  
           chol.update.joint <- LinRegChol(X = joint.XZ, omega = diag_vi_pg_mean, prior_precision =  bdiag(zero_mat, Tinv),  
-                                          y= s + vi_pg_mean * log(vi_r))
+                                          y= s + vi_pg_mean * log(vi_r_mean))
           vi_beta_mean <- Matrix(chol.update.joint$mean[1:p.X], dimnames = list(colnames(X), NULL))
           vi_alpha_mean <- Matrix(chol.update.joint$mean[-1:-p.X], dimnames = list(fmt_names_Z, NULL))
           
@@ -687,7 +737,7 @@ vglmer <- function(formula, data, iterations, family, prior_variance, factorizat
           log_det_beta_var <- 2 * sum(log(diag(vi_beta_decomp)))
           
           chol.update.alpha <- LinRegChol(X = Z, omega = diag_vi_pg_mean, prior_precision =  Tinv, 
-                                          y =  s + vi_pg_mean * log(vi_r))
+                                          y =  s + vi_pg_mean * log(vi_r_mean))
           Pmatrix <- sparseMatrix(i = 1:p.Z, j = 1 + chol.update.alpha$Pindex, x = 1)
           
           vi_alpha_decomp <- solve(chol.update.alpha$origL) %*% t(Pmatrix)
@@ -721,7 +771,7 @@ vglmer <- function(formula, data, iterations, family, prior_variance, factorizat
         if (linpred_method == 'joint'){
           
           joint.XZ <- cbind(X,Z)  
-          chol.update.joint <- LinRegChol(X = joint.XZ, omega = diag_vi_pg_mean, prior_precision =  bdiag(zero_mat, bdiag(Tinv)),  y = s + vi_pg_mean * log(vi_r))
+          chol.update.joint <- LinRegChol(X = joint.XZ, omega = diag_vi_pg_mean, prior_precision =  bdiag(zero_mat, bdiag(Tinv)),  y = s + vi_pg_mean * log(vi_r_mean))
           vi_beta_mean <- Matrix(chol.update.joint$mean[1:p.X], dimnames = list(colnames(X), NULL))
           vi_alpha_mean <- Matrix(chol.update.joint$mean[-1:-p.X], dimnames = list(fmt_names_Z, NULL))
           
@@ -808,7 +858,7 @@ vglmer <- function(formula, data, iterations, family, prior_variance, factorizat
             Z_negj <- Z[,-index_j, drop= F]
             
             chol.j <- LinRegChol(X = Z_j, omega = diag_vi_pg_mean, prior_precision =  Tinv[[j]], 
-                                 y = as.vector(s + vi_pg_mean * log(vi_r) - diag_vi_pg_mean %*% (X %*% vi_beta_mean + Z_negj %*% vi_alpha_mean[-index_j])))
+                                 y = as.vector(s + vi_pg_mean * log(vi_r_mean) - diag_vi_pg_mean %*% (X %*% vi_beta_mean + Z_negj %*% vi_alpha_mean[-index_j])))
             vi_alpha_mean[index_j] <- chol.j$mean 
             
             Pmatrix <- sparseMatrix(i = 1:ncol(Z_j), j = 1 + chol.j$Pindex, x = 1)
@@ -821,7 +871,7 @@ vglmer <- function(formula, data, iterations, family, prior_variance, factorizat
           log_det_alpha_var <- sum(running_log_det_alpha_var)
           
           chol.update.beta <- LinRegChol(X = as(X, 'sparseMatrix'), omega = diag_vi_pg_mean, prior_precision =  zero_mat, 
-                                         y = as.vector(s + vi_pg_mean * log(vi_r) - diag_vi_pg_mean %*% Z %*% vi_alpha_mean))
+                                         y = as.vector(s + vi_pg_mean * log(vi_r_mean) - diag_vi_pg_mean %*% Z %*% vi_alpha_mean))
           Pmatrix <- sparseMatrix(i = 1:p.X, j = 1 + chol.update.beta$Pindex, x = 1)
           
           vi_beta_decomp <- solve(chol.update.beta$origL) %*% t(Pmatrix)
@@ -840,12 +890,12 @@ vglmer <- function(formula, data, iterations, family, prior_variance, factorizat
         variance_by_alpha_jg <- calculate_expected_outer_alpha(L = vi_alpha_decomp, alpha_mu = as.vector(vi_alpha_mean), re_position_list = outer_alpha_RE_positions)
         vi_sigma_outer_alpha <- variance_by_alpha_jg$outer_alpha
 
-        debug_ELBO.2 <- calculate_ELBO(
+        debug_ELBO.2 <- calculate_ELBO(ELBO_type = ELBO_type,
           factorization_method = factorization_method,
           d_j = d_j, g_j = g_j, prior_sigma_alpha_phi = prior_sigma_alpha_phi, 
           prior_sigma_alpha_nu = prior_sigma_alpha_nu,
           iw_prior_constant = iw_prior_constant,
-          X = X, Z = Z, s = s,
+          X = X, Z = Z, s = s, y = y,
           vi_pg_b = vi_pg_b, vi_pg_mean = vi_pg_mean, vi_pg_c = vi_pg_c,
           vi_sigma_alpha = vi_sigma_alpha, vi_sigma_alpha_nu = vi_sigma_alpha_nu, 
           vi_sigma_outer_alpha = vi_sigma_outer_alpha,
@@ -853,7 +903,7 @@ vglmer <- function(formula, data, iterations, family, prior_variance, factorizat
           log_det_beta_var = log_det_beta_var, log_det_alpha_var = log_det_alpha_var,
           vi_beta_decomp = vi_beta_decomp, vi_alpha_decomp = vi_alpha_decomp, 
           vi_joint_decomp = vi_joint_decomp, choose_term = choose_term,
-          log_det_joint_var = log_det_joint_var
+          log_det_joint_var = log_det_joint_var, vi_r_mean = vi_r_mean
         )
       }
       ###
@@ -868,24 +918,24 @@ vglmer <- function(formula, data, iterations, family, prior_variance, factorizat
       #Update the auxilary parameters
       if (family == 'negbin'){
       
-        vi_r <- update_r(vi_r = vi_r, y = y, X = X, Z = Z, factorization_method = factorization_method,
+        vi_r_mean <- update_r(vi_r = vi_r_mean, y = y, X = X, Z = Z, factorization_method = factorization_method,
                  vi_beta_mean = vi_beta_mean, vi_beta_decomp = vi_beta_decomp,
                  vi_alpha_mean = vi_alpha_mean, vi_alpha_decomp = vi_alpha_decomp,
                  vi_joint_decomp = vi_joint_decomp)
-        
-        s <- (y - vi_r)/2
-        vi_pg_b <- y + vi_r
+        log_vi_r <- log(vi_r_mean)
+        s <- (y - vi_r_mean)/2
+        vi_pg_b <- y + vi_r_mean
         
       }
       
       ###PARAMETER EXPANSIONS!
       if (debug_ELBO){
-        debug_ELBO.3 <- calculate_ELBO(
+        debug_ELBO.3 <- calculate_ELBO(ELBO_type = ELBO_type,
           factorization_method = factorization_method,
           d_j = d_j, g_j = g_j, prior_sigma_alpha_phi = prior_sigma_alpha_phi, 
           prior_sigma_alpha_nu = prior_sigma_alpha_nu,
           iw_prior_constant = iw_prior_constant,
-          X = X, Z = Z, s = s,
+          X = X, Z = Z, s = s, y = y,
           vi_pg_b = vi_pg_b, vi_pg_mean = vi_pg_mean, vi_pg_c = vi_pg_c,
           vi_sigma_alpha = vi_sigma_alpha, vi_sigma_alpha_nu = vi_sigma_alpha_nu, 
           vi_sigma_outer_alpha = vi_sigma_outer_alpha,
@@ -893,7 +943,7 @@ vglmer <- function(formula, data, iterations, family, prior_variance, factorizat
           log_det_beta_var = log_det_beta_var, log_det_alpha_var = log_det_alpha_var,
           vi_beta_decomp = vi_beta_decomp, vi_alpha_decomp = vi_alpha_decomp, 
           vi_joint_decomp = vi_joint_decomp,
-          log_det_joint_var = log_det_joint_var, choose_term = choose_term
+          log_det_joint_var = log_det_joint_var, vi_r_mean = vi_r_mean, choose_term = choose_term
         )
       }
       
@@ -914,12 +964,12 @@ vglmer <- function(formula, data, iterations, family, prior_variance, factorizat
         accept.PX <- TRUE
       }else if (parameter_expansion == 'translation'){
         
-        prior.ELBO <- calculate_ELBO(
+        prior.ELBO <- calculate_ELBO(ELBO_type = ELBO_type,
           factorization_method = factorization_method,
           d_j = d_j, g_j = g_j, prior_sigma_alpha_phi = prior_sigma_alpha_phi, 
           prior_sigma_alpha_nu = prior_sigma_alpha_nu,
           iw_prior_constant = iw_prior_constant,
-          X = X, Z = Z, s = s,
+          X = X, Z = Z, s = s, y = y,
           vi_pg_b = vi_pg_b, vi_pg_mean = vi_pg_mean, vi_pg_c = vi_pg_c,
           vi_sigma_alpha = vi_sigma_alpha, vi_sigma_alpha_nu = vi_sigma_alpha_nu, 
           vi_sigma_outer_alpha = vi_sigma_outer_alpha,
@@ -927,7 +977,7 @@ vglmer <- function(formula, data, iterations, family, prior_variance, factorizat
           log_det_beta_var = log_det_beta_var, log_det_alpha_var = log_det_alpha_var,
           vi_beta_decomp = vi_beta_decomp, vi_alpha_decomp = vi_alpha_decomp, 
           vi_joint_decomp = vi_joint_decomp, choose_term = choose_term,
-          log_det_joint_var = log_det_joint_var
+          log_det_joint_var = log_det_joint_var, vi_r_mean = vi_r_mean
         )
         
         if (factorization_method == 'weak'){
@@ -997,12 +1047,12 @@ vglmer <- function(formula, data, iterations, family, prior_variance, factorizat
         prop_variance_by_alpha_jg <- calculate_expected_outer_alpha(L = prop_vi_alpha_decomp, alpha_mu = as.vector(prop_vi_alpha_mean), re_position_list = outer_alpha_RE_positions)
         prop_vi_sigma_outer_alpha <- prop_variance_by_alpha_jg$outer_alpha
         
-        prop.ELBO <- calculate_ELBO(
+        prop.ELBO <- calculate_ELBO(ELBO_type = ELBO_type,
           factorization_method = factorization_method,
           d_j = d_j, g_j = g_j, prior_sigma_alpha_phi = prior_sigma_alpha_phi, 
           prior_sigma_alpha_nu = prior_sigma_alpha_nu,
           iw_prior_constant = iw_prior_constant,
-          X = X, Z = Z, s = s,
+          X = X, Z = Z, s = s, y = y,
           vi_pg_b = vi_pg_b, vi_pg_mean = vi_pg_mean, vi_pg_c = vi_pg_c,
           vi_sigma_alpha = prop_vi_sigma_alpha, vi_sigma_alpha_nu = vi_sigma_alpha_nu, 
           vi_sigma_outer_alpha = prop_vi_sigma_outer_alpha, 
@@ -1039,13 +1089,28 @@ vglmer <- function(formula, data, iterations, family, prior_variance, factorizat
       
       #Adjust the terms in the ELBO calculation that are different.
 
+      # ELBO_type <<- ELBO_type;
+      #                factorization_method <<- factorization_method;
+      #                d_j <<- d_j; g_j <<- g_j; prior_sigma_alpha_phi <<- prior_sigma_alpha_phi; 
+      #                prior_sigma_alpha_nu <<- prior_sigma_alpha_nu;
+      #                iw_prior_constant <<- iw_prior_constant;
+      #                X <<- X; Z <<- Z; s <<- s; y <<- y;
+      #                vi_pg_b <<- vi_pg_b; vi_pg_mean <<- vi_pg_mean; vi_pg_c <<- vi_pg_c;
+      #                vi_sigma_alpha <<- vi_sigma_alpha; vi_sigma_alpha_nu <<- vi_sigma_alpha_nu; 
+      #                vi_sigma_outer_alpha <<- vi_sigma_outer_alpha;
+      #                vi_beta_mean <<- vi_beta_mean; vi_alpha_mean <<- vi_alpha_mean;
+      #                log_det_beta_var <<- log_det_beta_var; log_det_alpha_var <<- log_det_alpha_var;
+      #                vi_beta_decomp <<- vi_beta_decomp; vi_alpha_decomp <<- vi_alpha_decomp; 
+      #                vi_joint_decomp <<- vi_joint_decomp; choose_term <<- choose_term;
+      #                log_det_joint_var <<- log_det_joint_var; vi_r_mean <<- vi_r_mean
+      
       if (accept.PX){
-        final.ELBO <- calculate_ELBO(
+        final.ELBO <- calculate_ELBO(ELBO_type = ELBO_type,
           factorization_method = factorization_method,
           d_j = d_j, g_j = g_j, prior_sigma_alpha_phi = prior_sigma_alpha_phi, 
           prior_sigma_alpha_nu = prior_sigma_alpha_nu,
           iw_prior_constant = iw_prior_constant,
-          X = X, Z = Z, s = s,
+          X = X, Z = Z, s = s, y = y,
           vi_pg_b = vi_pg_b, vi_pg_mean = vi_pg_mean, vi_pg_c = vi_pg_c,
           vi_sigma_alpha = vi_sigma_alpha, vi_sigma_alpha_nu = vi_sigma_alpha_nu, 
           vi_sigma_outer_alpha = vi_sigma_outer_alpha,
@@ -1053,7 +1118,7 @@ vglmer <- function(formula, data, iterations, family, prior_variance, factorizat
           log_det_beta_var = log_det_beta_var, log_det_alpha_var = log_det_alpha_var,
           vi_beta_decomp = vi_beta_decomp, vi_alpha_decomp = vi_alpha_decomp, 
           vi_joint_decomp = vi_joint_decomp, choose_term = choose_term,
-          log_det_joint_var = log_det_joint_var
+          log_det_joint_var = log_det_joint_var, vi_r_mean = vi_r_mean
         )
       }else{
         if (accept.PX){
@@ -1092,12 +1157,12 @@ vglmer <- function(formula, data, iterations, family, prior_variance, factorizat
         change_beta_var <- max(abs(vi_beta_decomp - lagged_beta_decomp))
       }
       
-      change_vi_r <- vi_r - lagged_vi_r
+      change_vi_r_mean <- vi_r_mean - lagged_vi_r_mean
       
       if (debug_param){
         store_beta[it,] <- as.vector(vi_beta_mean)
       }
-      change_all <- data.frame(change_alpha_mean, change_beta_mean, t(change_sigma_mean), change_alpha_var, change_beta_var, change_joint_var, change_vi_r)
+      change_all <- data.frame(change_alpha_mean, change_beta_mean, t(change_sigma_mean), change_alpha_var, change_beta_var, change_joint_var, change_vi_r_mean)
       if ( (max(change_all) < tolerance_parameters) | (change_elbo$ELBO > 0 & change_elbo$ELBO < tolerance_elbo) ){
         if (!quiet){
           message(paste0('Converged after ', it, ' iterations with ELBO change of ', round(change_elbo[1], 1 + abs(floor(log(tolerance_elbo)/log(10))))))
@@ -1117,7 +1182,7 @@ vglmer <- function(formula, data, iterations, family, prior_variance, factorizat
       lagged_alpha_decomp <- vi_alpha_decomp
       lagged_beta_decomp <- vi_beta_decomp
       lagged_sigma_alpha <- vi_sigma_alpha
-      lagged_vi_r <- vi_r
+      lagged_vi_r_mean <- vi_r_mean
       lagged_ELBO <- final.ELBO
     }
     if (it == iterations){
@@ -1159,7 +1224,7 @@ vglmer <- function(formula, data, iterations, family, prior_variance, factorizat
     output$beta$decomp_var <- vi_beta_decomp
     
     if (family == 'negbin'){
-      output$r <- list(mean = vi_r, variance = NA)
+      output$r <- list(mean = vi_r_mean, variance = NA)
     }
 
     output$internal.parameters <- list(names_of_RE = names_of_RE, d_j = d_j, g_j = g_j)
@@ -1594,7 +1659,7 @@ custom_glmer_samples <- function(glmer, samples, ordering){
 }
 
 
-update_r <- function(vi_r, y, X, Z, factorization_method,
+update_r <- function(vi_r_mean, y, X, Z, factorization_method,
     vi_beta_mean, vi_alpha_mean, 
     vi_joint_decomp, vi_beta_decomp, vi_alpha_decomp){
   
@@ -1615,18 +1680,21 @@ update_r <- function(vi_r, y, X, Z, factorization_method,
   #   lower = log(sqrt(.Machine$double.eps)), upper = 10,
   #   y = y, psi = ex_XBZA, zVz = var_XBZA,
   #   maximum = T)
-  
-  opt_ln_r <- optim(par = log(vi_r), fn = Q.adjust.r,
-                    y = y, psi = ex_XBZA, zVz = var_XBZA,
-                    control = list(fnscale = - 1), method = 'L-BFGS-B')
-  if (opt_ln_r$value < Q.adjust.r(log(vi_r), y = y, psi = ex_XBZA, zVz = var_XBZA)){
-    warning('Optim for r decreased objective.')
-  }else{
-    vi_r <- exp(opt_ln_r$par)
-  }
   # vi_r <- exp(opt.r$maximum)
   
-  return(vi_r)
+  # print(Q.adjust.r(log(vi_r), y = y, psi = ex_XBZA, zVz = var_XBZA))
+  # return(vi_r)
+  opt_ln_r <- optim(par = log(vi_r_mean), fn = Q.adjust.r,
+                    y = y, psi = ex_XBZA, zVz = var_XBZA,
+                    control = list(fnscale = - 1), method = 'L-BFGS')
+  
+  if (opt_ln_r$value < Q.adjust.r(log(vi_r_mean), y = y, psi = ex_XBZA, zVz = var_XBZA)){
+    warning('Optim for r decreased objective.')
+  }else{
+    vi_r_mean <- exp(opt_ln_r$par)
+  }
+  
+  return(vi_r_mean)
 }
 
 # Q.adjust.r <- function(r, y, psi, zVz){
