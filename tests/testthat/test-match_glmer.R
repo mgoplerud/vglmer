@@ -26,10 +26,6 @@ test_that('Compare against glmer', {
     
     cor_mean <- with(comp_methods, cor(mean.x, mean.y))
     expect_gt(cor_mean, expected = 0.99)
-    
-
-    
-    
   }
   
   

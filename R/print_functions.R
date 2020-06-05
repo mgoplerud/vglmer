@@ -15,6 +15,39 @@
 fixef.vglmer <- function(object, ...){
   return(as.vector(object$beta$mean))
 }
+
+#' @rdname summary_vglmer
+ranef.vglmer <- function(object, ...){
+  
+  d_j <- object$internal_parameters$d_j
+  g_j <- object$internal_parameters$g_j
+  J <- length(d_j)
+  
+  vi_alpha_mean <- as.vector(object$alpha$mean)
+  vi_alpha_var <- as.vector(object$alpha$dia.var)
+
+  re_pos <- rep(1:J, d_j * g_j)
+  
+  vi_id <- gsub(rownames(object$alpha$mean), pattern='^.* @ .* @ ', replacement = '')
+  vi_id <- split(vi_id, re_pos)
+  vi_alpha_mean <- split(vi_alpha_mean, re_pos)
+  vi_alpha_var <- split(vi_alpha_var, re_pos)
+
+  vi_parsed <- mapply(d_j, g_j, vi_alpha_mean, vi_alpha_var, vi_id, object$internal_parameters$names_of_RE, SIMPLIFY = F, 
+     FUN=function(d,g, mean_j, var_j, id_j, name_j){
+        mat_id <- matrix(id_j, byrow = TRUE, nrow = g, ncol = d)
+        mat_mean <- matrix(mean_j, byrow = TRUE, nrow = g, ncol = d)
+        mat_var <- matrix(var_j, byrow = TRUE, nrow = g, ncol = d)
+        colnames(mat_mean) <- colnames(mat_var) <- name_j
+        id <- mat_id[,1]
+        mat_mean <- data.frame(id, mat_mean, check.names = FALSE, stringsAsFactors = F)
+        mat_var <- data.frame(id, mat_var, check.names = FALSE, stringsAsFactors = F)
+        attributes(mat_mean)$'variance' <- mat_var
+        return(mat_mean)
+  })
+  return(vi_parsed)
+}
+
 #' @rdname summary_vglmer
 #' @export
 coef.vglmer <- function(object, ...){

@@ -50,7 +50,7 @@ test_that('Prediction Matches for New Levels in newdata', {
   
   example_vglmer <- vglmer(formula = y ~ x + (1 | g), data = NULL, iterations = 2,
                            print_prog = 1000, tolerance_elbo = 1e-8, tolerance_parameters = 1e-5,
-                           family = 'logit', prior_variance = 'mean_exists', init = 'zero', factorization_method = 'strong')
+                           family = 'logit', prior_variance = 'mean_exists', init = 'zero', factorization_method = 'weak')
   #No old level in new level
   new_data <- data.frame(x = rep(0,5), g = 11)  
   expect_error(predict(example_vglmer, newdata = new_data)) #Error on default
@@ -95,4 +95,7 @@ test_that('Prediction Matches for Missing in new.data', {
   
 })
 
+test_that('Prediction Matches for Simulation', {
+  
+})
 

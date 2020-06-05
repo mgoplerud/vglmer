@@ -1205,7 +1205,6 @@ vglmer <- function(formula, data, iterations, family, prior_variance, factorizat
                    ELBO = final.ELBO, debug_ELBO = d.ELBO,
                    ELBO_trajectory = store_ELBO,
                    parameter.change = change_all,
-                   internal_parameters = list(it_used = it, it_max = iterations),
                    parameter_expansion = parameter_expansion,
                    sigma = list(cov = vi_sigma_alpha, df = vi_sigma_alpha_nu),
                    alpha = list(mean = vi_alpha_mean)
@@ -1230,8 +1229,9 @@ vglmer <- function(formula, data, iterations, family, prior_variance, factorizat
       output$r <- list(mean = vi_r_mean, variance = NA)
     }
 
-    output$internal.parameters <- list(names_of_RE = names_of_RE, d_j = d_j, g_j = g_j)
-    
+    output$internal_parameters <- list(it_used = it, it_max = iterations,
+                                       names_of_RE = names_of_RE, d_j = d_j, g_j = g_j)
+
     output$alpha$var <- variance_by_alpha_jg$variance_jg
     output$alpha$decomp_var <- vi_alpha_decomp
     
