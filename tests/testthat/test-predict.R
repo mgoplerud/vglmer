@@ -40,7 +40,7 @@ test_that('Prediction Matches Manual and (nearly) glmer', {
 
 test_that('Prediction Matches for New Levels in newdata', {
   
-  N <- 1000
+  N <- 50
   G <- 10
   x <- rnorm(N)
   g <- sample(1:G, N, replace = T) 
@@ -48,7 +48,7 @@ test_that('Prediction Matches for New Levels in newdata', {
   
   y <- rbinom(n = N, size = 1, prob = plogis(-1 + x + alpha[g]))
   
-  example_vglmer <- vglmer(formula = y ~ x + (1 | g), data = NULL, iterations = 5000, 
+  example_vglmer <- vglmer(formula = y ~ x + (1 | g), data = NULL, iterations = 2,
                            print_prog = 1000, tolerance_elbo = 1e-8, tolerance_parameters = 1e-5,
                            family = 'logit', prior_variance = 'mean_exists', init = 'zero', factorization_method = 'strong')
   #No old level in new level
@@ -67,5 +67,32 @@ test_that('Prediction Matches for New Levels in newdata', {
 
 })
 
+test_that('Prediction Matches for Missing in new.data', {
+  
+  N <- 50
+  G <- 10
+  x <- rnorm(N)
+  g <- sample(1:G, N, replace = T) 
+  alpha <- rnorm(G)
+  
+  y <- rbinom(n = N, size = 1, prob = plogis(-1 + x + alpha[g]))
+  
+  example_vglmer <- vglmer(formula = y ~ x + (1 | g), data = NULL, iterations = 2, 
+                           print_prog = 1000, tolerance_elbo = 1e-8, tolerance_parameters = 1e-5,
+                           family = 'logit', prior_variance = 'mean_exists', init = 'zero', factorization_method = 'strong')
+  
+  mixed_data <- data.frame(x = rnorm(20), g = rep(1:10,2))
+  rownames(mixed_data) <- letters[1:20]
+  
+  mixed_data$x[8] <- NA
+  mixed_data$g[7] <- NA
+  mixed_data$x[2] <- mixed_data$g[2] <- NA
+  
+  man_beta <- as.vector(cbind(1, mixed_data$x) %*% example_vglmer$beta$mean)
+  man_alpha <- example_vglmer$alpha$mean[match(paste0('g @ (Intercept) @ ', mixed_data$g), rownames(example_vglmer$alpha$mean))]
+  expect_equivalent(man_beta + man_alpha, 
+                    predict(example_vglmer, newdata = mixed_data))
+  
+})
 
 

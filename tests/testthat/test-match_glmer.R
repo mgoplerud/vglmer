@@ -19,6 +19,8 @@ test_that('Compare against glmer', {
                              print_prog = 1000, tolerance_elbo = 1e-8, tolerance_parameters = 1e-5,
                              family = 'logit', prior_variance = 'mean_exists', init = 'zero', factorization_method = v)
     
+    expect_gte(min(diff(example_vglmer$ELBO_trajectory$ELBO)), 0)
+    
     fmt_vglmer <- format_vglmer(example_vglmer)
     comp_methods <- merge(fmt_glmer, fmt_vglmer, by = c('name'))
     
@@ -55,7 +57,7 @@ test_that('Compare against glmer.nb', {
                              print_prog = 1000, tolerance_elbo = 1e-8, tolerance_parameters = 1e-5,
                              family = 'negbin', prior_variance = 'mean_exists', init = 'random', factorization_method = v)
     #Test whether it monotonically increases    
-    expect_gt(min(diff(example_vglmer$ELBO_trajectory$ELBO)), 0)
+    expect_gte(min(diff(example_vglmer$ELBO_trajectory$ELBO)), 0)
     
     fmt_vglmer <- format_vglmer(example_vglmer)
     comp_methods <- merge(fmt_glmer, fmt_vglmer, by = c('name'))
