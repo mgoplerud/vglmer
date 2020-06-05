@@ -8,7 +8,7 @@
 #' synonym for \code{coef}.
 #' 
 #' @name summary_vglmer
-#' @param object Model fitted from vglmer
+#' @param object Model fit using vglmer
 
 #' @rdname summary_vglmer
 #' @export
@@ -26,7 +26,7 @@ vcov.vglmer <- function(object, ...){
   return(as.matrix(object$beta$var))
 }
 
-# Print status of vglmer fit
+#' @rdname summary_vglmer 
 #' @param x Model fit using vglmer
 #' @param ... Not used.
 #' @export

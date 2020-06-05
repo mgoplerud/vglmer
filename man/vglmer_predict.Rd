@@ -2,14 +2,14 @@
 % Please edit documentation in R/vglmer_regression.R
 \name{vglmer_predict}
 \alias{vglmer_predict}
+\alias{predict.vglmer}
 \title{Predict after vglmer}
 \usage{
-vglmer_predict(model, newdata, samples = 0, samples_only = FALSE,
-  summary = TRUE, allow_missing_levels = FALSE)
+\method{predict}{vglmer}(object, newdata, samples = 0,
+  samples_only = FALSE, summary = TRUE, allow_missing_levels = FALSE,
+  ...)
 }
 \arguments{
-\item{model}{Object from vglmer.}
-
 \item{newdata}{Data to get predictions on.}
 
 \item{samples}{How many samples to draw? 0, default, gets the expected value.
@@ -26,6 +26,8 @@ but will be depreciated in updated version.
 
 \item{allow_missing_levels}{Allow prediction for random effects not in model.
 As is standard, give an estimate of "0" for that effect.}
+
+\item{model}{Object from vglmer.}
 }
 \description{
 Get linear predictor for new observations after using vglmer.

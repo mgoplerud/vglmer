@@ -3,12 +3,9 @@
 \name{ccp_linreg}
 \alias{ccp_linreg}
 \alias{LinRegChol}
-\alias{GibbsLinRegChol}
 \title{Linear Regression by Cholesky}
 \usage{
 LinRegChol(X, omega, prior_precision, y)
-
-GibbsLinRegChol(X, omega, prior_precision, y, stdnorm)
 }
 \arguments{
 \item{X}{Design Matrix}
@@ -18,8 +15,6 @@ GibbsLinRegChol(X, omega, prior_precision, y, stdnorm)
 \item{prior_precision}{Prior Precision for Regression}
 
 \item{y}{Outcome}
-
-\item{stdnorm}{a vector draw from a standard normal to do gibbs sampling.}
 }
 \description{
 Do linear regression of form (X^T O X + P)^{-1} X^T y where O is omega, P is

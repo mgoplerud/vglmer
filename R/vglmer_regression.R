@@ -1250,7 +1250,8 @@ vglmer <- function(formula, data, iterations, family, prior_variance, factorizat
 #' 
 #' Get linear predictor for new observations after using vglmer.
 #' 
-#' @param model Object from vglmer.
+#' @name vglmer_predict
+#' @param object Object from vglmer.
 #' @param newdata Data to get predictions on.
 #' @param samples How many samples to draw? 0, default, gets the expected value.
 #'   Two methods: 
@@ -1261,25 +1262,27 @@ vglmer <- function(formula, data, iterations, family, prior_variance, factorizat
 #'   }
 #' @param samples_only Return only samples *not* linear predictor.
 #' @param summary Return summary of linear predictor, not full posterior.
-#' @param allow_missing_levels Allow prediction for random effects not in model.
+#' @param allow_missing_levels Allow prediction for random effects not in object.
 #'   As is standard, give an estimate of "0" for that effect.
 #' @export
-vglmer_predict <- function(model, newdata, 
+predict.vglmer <- function(object, newdata, 
                            samples = 0, samples_only = FALSE, 
-                           summary = TRUE, allow_missing_levels = FALSE){
-  
-  fmla <- model$formula
+                           summary = TRUE, allow_missing_levels = FALSE, ...){
+  if (length(list(...)) > 0){
+    stop('... not used for predict.vglmer')
+  }
+  fmla <- object$formula
   #Extract X (FE design matrix)
-  X <- model.matrix(nobars(fmla), data = newdata)
+  X <- model.matrix(delete.response(terms(nobars(fmla))), data = newdata)
   
-  orig_X_names <- rownames(model$beta$mean)
+  orig_X_names <- rownames(object$beta$mean)
   if (!identical(colnames(X), orig_X_names)){
     print(all.equal(colnames(X), orig_X_names))
     stop('Misaligned Fixed Effects')
   }
   
   #Extract the Z (Random Effect) design matrix.
-  mk_Z <- mkReTrms(findbars(fmla), model.frame(subbars(fmla), data = newdata), reorder.terms = FALSE, reorder.vars = FALSE)
+  mk_Z <- mkReTrms(findbars(fmla), model.frame(delete.response(terms(subbars(fmla))), data = newdata), reorder.terms = FALSE, reorder.vars = FALSE)
   Z <- t(mk_Z$Zt)
   
   #RE names and names of variables included for each.
@@ -1312,7 +1315,7 @@ vglmer_predict <- function(model, newdata,
   #####
   ###Confirm Alignment of the Z
   #####
-  orig_Z_names <- rownames(model$alpha$mean)
+  orig_Z_names <- rownames(object$alpha$mean)
   
   not_in_original_Z <- setdiff(fmt_names_Z, orig_Z_names)
   not_in_new_Z <- setdiff(orig_Z_names, fmt_names_Z)
@@ -1339,7 +1342,7 @@ vglmer_predict <- function(model, newdata,
   ####
   
   XZ <- cbind(X, Z)
-  factorization_method <- model$factorization_method
+  factorization_method <- object$factorization_method
   if (is.matrix(samples)){
     if (ncol(samples) != ncol(XZ)){
       stop('Samples must be {m, ncol(Z) + ncol(X)}')
@@ -1355,13 +1358,13 @@ vglmer_predict <- function(model, newdata,
     }
     if (factorization_method %in% c('strong', 'partial')){
       
-      vi_alpha_mean <- model$alpha$mean
-      vi_alpha_decomp <- model$alpha$decomp_var
+      vi_alpha_mean <- object$alpha$mean
+      vi_alpha_decomp <- object$alpha$decomp_var
       
       p.Z <- nrow(vi_alpha_mean)
       
-      vi_beta_mean <- model$beta$mean
-      vi_beta_decomp <- model$beta$decomp_var
+      vi_beta_mean <- object$beta$mean
+      vi_beta_decomp <- object$beta$decomp_var
       
       p.X <- nrow(vi_beta_mean)
       
@@ -1380,14 +1383,14 @@ vglmer_predict <- function(model, newdata,
       
     }else if (factorization_method == 'weak'){
       
-      vi_alpha_mean <- model$alpha$mean
+      vi_alpha_mean <- object$alpha$mean
       p.Z <- nrow(vi_alpha_mean)
       
-      vi_beta_mean <- model$beta$mean
+      vi_beta_mean <- object$beta$mean
       p.X <- nrow(vi_beta_mean)
       
       if (!only.lp){
-        vi_joint_decomp <- model$joint
+        vi_joint_decomp <- object$joint
         sim_init_joint <- matrix(rnorm(samples * (p.X + p.Z)), ncol = samples)
         sim_init_joint <- t(vi_joint_decomp) %*% sim_init_joint
         
@@ -1527,7 +1530,7 @@ MAVB <- function(model, samples, var_px = Inf){
 #' @export
 MAVB_linpred <- function(model, newdata, samples, var_px = Inf, summary = TRUE){
   pxSamples <- MAVB(model = model, samples = samples, var_px = var_px)
-  lp <- vglmer_predict(model, newdata = newdata, samples = pxSamples, summary = summary)
+  lp <- predict.vglmer(model, newdata = newdata, samples = pxSamples, summary = summary)
   return(lp)
 }
 

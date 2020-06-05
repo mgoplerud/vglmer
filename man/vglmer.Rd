@@ -66,5 +66,5 @@ costless and should always be used!}
 }
 \description{
 Estimate a hierarchical model (logistic) using mean-field variational
-inference. Accepts identical syntax to glmer. Options are described below.
+inference. Accepts standard syntax to glmer: y ~ X + (1 + Z | g). Options are described below.
 }

@@ -5,6 +5,7 @@
 \alias{fixef.vglmer}
 \alias{coef.vglmer}
 \alias{vcov.vglmer}
+\alias{print.vglmer}
 \title{Summarize output from vglmer}
 \usage{
 \method{fixef}{vglmer}(object, ...)
@@ -12,9 +13,15 @@
 \method{coef}{vglmer}(object, ...)
 
 \method{vcov}{vglmer}(object, ...)
+
+print.vglmer(x, ...)
 }
 \arguments{
-\item{object}{Model fitted from vglmer}
+\item{object}{Model fit using vglmer}
+
+\item{...}{Not used.}
+
+\item{x}{Model fit using vglmer}
 }
 \description{
 Allows the use of standard methods from lm or lmer to sumarize the posterior
