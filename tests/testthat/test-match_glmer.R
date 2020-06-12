@@ -15,9 +15,9 @@ test_that('Compare against glmer', {
   
   for (v in c("weak", 'partial', 'strong')){
     
-    example_vglmer <- vglmer(formula = y ~ x + (1 | g), data = NULL, iterations = 5000, 
-                             print_prog = 1000, tolerance_elbo = 1e-8, tolerance_parameters = 1e-5,
-                             family = 'logit', prior_variance = 'mean_exists', init = 'zero', factorization_method = v)
+    example_vglmer <- vglmer(formula = y ~ x + (1 | g), data = NULL, 
+                             control = vglmer_control(factorization_method = v, init = 'zero'),
+                             family = 'binomial')
     
     expect_gte(min(diff(example_vglmer$ELBO_trajectory$ELBO)), 0)
     
@@ -49,9 +49,9 @@ test_that('Compare against glmer.nb', {
   
   for (v in c("weak", 'partial', 'strong')){
     
-    example_vglmer <- vglmer(formula = y ~ x + (1 | g), data = data, iterations = 500,
-                             print_prog = 1000, tolerance_elbo = 1e-8, tolerance_parameters = 1e-5,
-                             family = 'negbin', prior_variance = 'mean_exists', init = 'random', factorization_method = v)
+    example_vglmer <- vglmer(formula = y ~ x + (1 | g), data = data, 
+     family = 'negbin',
+     control = vglmer_control(factorization_method = v, init = 'random'))    
     #Test whether it monotonically increases    
     expect_gte(min(diff(example_vglmer$ELBO_trajectory$ELBO)), 0)
     
@@ -78,9 +78,5 @@ test_that('EM_prelim matches glm', {
   est_init <- c(est_init$beta, est_init$alpha)
   expect_equal(as.vector(coef(est_glm)), est_init, tolerance = 1e-4)  
 })
-
-
-
-
 
 

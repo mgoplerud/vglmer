@@ -12,12 +12,11 @@ test_that('Prediction Matches Manual and (nearly) glmer', {
   
   y <- rbinom(n = N, size = 1, prob = plogis(-1 + x + alpha[g] + alpha2[g]))
   
-  est_glmer <- suppressWarnings(lme4::glmer(y ~ x + (1 + x | g) + (1 | g2), family = binomial))
+  est_glmer <- suppressMessages(suppressWarnings(lme4::glmer(y ~ x + (1 + x | g) + (1 | g2), family = binomial)))
   
-  example_vglmer <- vglmer(formula = y ~ x + (1 + x | g) + (1 | g2), data = NULL, iterations = 5000, 
-     print_prog = 1000, tolerance_elbo = 1e-8, tolerance_parameters = 1e-5,
-     family = 'logit', prior_variance = 'mean_exists', init = 'zero', factorization_method = 'strong')
-  
+  example_vglmer <- vglmer(formula = y ~ x + (1 + x | g) + (1 | g2), data = NULL, family = 'binomial',
+                           control = vglmer_control(factorization_method = 'strong'))
+
   glmer_predict <- predict(est_glmer)
   def_predict <- predict(example_vglmer, newdata = data.frame(y =y, x = x, g = g))
   
@@ -48,9 +47,9 @@ test_that('Prediction Matches for New Levels in newdata', {
   
   y <- rbinom(n = N, size = 1, prob = plogis(-1 + x + alpha[g]))
   
-  example_vglmer <- vglmer(formula = y ~ x + (1 | g), data = NULL, iterations = 2,
-                           print_prog = 1000, tolerance_elbo = 1e-8, tolerance_parameters = 1e-5,
-                           family = 'logit', prior_variance = 'mean_exists', init = 'zero', factorization_method = 'weak')
+  example_vglmer <- vglmer(formula = y ~ x + (1 | g), data = NULL, 
+                           control = vglmer_control(iterations = 2, print_prog = 10, init = 'zero'),
+                           family = 'binomial')
   #No old level in new level
   new_data <- data.frame(x = rep(0,5), g = 11)  
   expect_error(predict(example_vglmer, newdata = new_data)) #Error on default
@@ -77,9 +76,8 @@ test_that('Prediction Matches for Missing in new.data', {
   
   y <- rbinom(n = N, size = 1, prob = plogis(-1 + x + alpha[g]))
   
-  example_vglmer <- vglmer(formula = y ~ x + (1 | g), data = NULL, iterations = 2, 
-                           print_prog = 1000, tolerance_elbo = 1e-8, tolerance_parameters = 1e-5,
-                           family = 'logit', prior_variance = 'mean_exists', init = 'zero', factorization_method = 'strong')
+  example_vglmer <- vglmer(formula = y ~ x + (1 | g), data = NULL, 
+     control = vglmer_control(iterations = 2), family = 'binomial')
   
   mixed_data <- data.frame(x = rnorm(20), g = rep(1:10,2))
   rownames(mixed_data) <- letters[1:20]

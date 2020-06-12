@@ -51,7 +51,9 @@ ranef.vglmer <- function(object, ...){
 #' @rdname summary_vglmer
 #' @export
 coef.vglmer <- function(object, ...){
-  return(as.vector(object$beta$mean))
+  out <- as.vector(object$beta$mean)
+  names(out) <- rownames(object$beta$mean)
+  return(out)
 }
 #' @rdname summary_vglmer
 #' @export
@@ -86,26 +88,29 @@ print.vglmer <- function(x, ...){
   } 
   cat('\n\n')
   cat(paste0('ELBO: ', round(x$ELBO[1],2), '\n\n'))
-  cat(paste0('Factorization Method: ', x$factorization_method, '\n'))
-  cat(paste0('Parameter Expansion: ', x$parameter_expansion, '\n\n'))
-  cat(paste0('Largest Parameter Change at Convergence: ', format(final_param_change, nsmall = 2), '\n'))
-  cat(paste0('ELBO Change at Convergence: ', format(final_ELBO_change, nsmall = 2), '\n'))
+  cat(paste0('Factorization Method: ', x$control$factorization_method, '\n'))
+  cat(paste0('Parameter Expansion: ', x$control$parameter_expansion, '\n\n'))
+  cat(paste0('Largest Parameter Change at Convergence: ', formatC(final_param_change, format = "e", digits = 2), '\n'))
+  cat(paste0('ELBO Change at Convergence: ', formatC(final_ELBO_change, format = "e", digits = 2), '\n'))
+  
   
   invisible(list(paramater = final_param_change, ELBO = final_ELBO_change))
   
 }
 
+#' @rdname summary_vglmer
+#' @param display_re Print summary of random effects. Default is TRUE
 #' @importFrom lmtest coeftest
 #' @export
 summary.vglmer <- function(object, display_re = TRUE, ...){
   sum_obj <- coeftest(x = object)
   
   sum_sigma <- mapply(object$sigma$cov, object$sigma$df, SIMPLIFY = FALSE, FUN=function(a,b){fmt_IW_mean(a,b)})
-  sum_sigma <- mapply(sum_sigma, object$internal.parameters$names_of_RE, SIMPLIFY = FALSE, FUN=function(i,j){
+  sum_sigma <- mapply(sum_sigma, object$internal_parameters$names_of_RE, SIMPLIFY = FALSE, FUN=function(i,j){
     rownames(i) <- colnames(i) <- j
     return(i)
   })
-  re_names <- names(object$internal.parameters$names_of_RE)
+  re_names <- names(object$internal_parameters$names_of_RE)
   cat(paste0('Output from vglmer using ', object$factorization_method, ' factorization.\n'))
   cat('\nSummary of Fixed Effects\n')
   print(sum_obj)
@@ -116,11 +121,33 @@ summary.vglmer <- function(object, display_re = TRUE, ...){
       cat('\n')
       cat(re_names[v])
       cat('\n')
-      print(sum_sigma[[v]])
+      print(sum_sigma[[v]], quote = FALSE)
     }
+    cat('\n')
+  }
+  if (object$family == 'negbin'){
+    r_output <- object$r
+    #fmt_r <- function(x){formatC(x, format = 'e', digits = 2)}
+    fmt_r <- function(x){round(x, digits = 2)}
+    r_ci <- exp(r_output$mu + sqrt(2 * r_output$sigma) * erfinv(c(0.05, 0.95)))
+    r_ci <- paste0('[', paste(fmt_r(r_ci), collapse = ', '),']')
+    r_mean <- fmt_r(exp(r_output$mu + r_output$sigma/2))
+
+    cat('Summary of Auxiliary Parameters:\n')
+    cat('Dispersion Parameter r:\n')
+    if (object$r$method == 'VI'){
+      cat(paste0('Mean (90% Interval): ', r_mean, ' ', r_ci))
+    }else{
+      cat(paste0('Mean: ', r_mean))
+      
+    }
+    cat('\n')
+    cat('\n')
   }
   invisible()
 }
+
+erfinv <- function(x){qnorm((1 + x)/2)/sqrt(2)}
 
 # Internal function to tidy-up
 # inverse Wishart to extract mean
@@ -129,6 +156,6 @@ fmt_IW_mean <- function(Phi, nu, digits = 2){
   if (nu - nrow(Phi) - 1 < 0){
     return(matrix(NA, nrow = nrow(Phi), ncol = ncol(Phi)))
   }else{
-    return(round(mean, digits))
+    return(formatC(mean, format = "e", digits = 2))
   }
 }

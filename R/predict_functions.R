@@ -16,6 +16,7 @@
 #' @param summary Return summary of linear predictor, not full posterior.
 #' @param allow_missing_levels Allow prediction for random effects not in object.
 #'   As is standard, give an estimate of "0" for that effect.
+#' @param ... Not used; included to maintain compatability
 #' @export
 predict.vglmer <- function(object, newdata, 
                            samples = 0, samples_only = FALSE, 
@@ -103,7 +104,7 @@ predict.vglmer <- function(object, newdata,
   XZ <- cbind(X[match(obs_in_both, rownames(X)),],
               Z[match(obs_in_both, rownames(Z)),])
   
-  factorization_method <- object$factorization_method
+  factorization_method <- object$control$factorization_method
   if (is.matrix(samples)){
     if (ncol(samples) != ncol(XZ)){
       stop('Samples must be {m, ncol(Z) + ncol(X)}')

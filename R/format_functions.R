@@ -44,21 +44,23 @@ format_vglmer <- function(object){
 #' Format Stan
 #' @param useSigma Return variance component parameters from STAN? Default "FALSE".
 #' @rdname format_obj
-#' @importFrom stringr str_split
 #' @importFrom stats var
 #' @export
 format_stan <- function(object, useSigma = FALSE){
+  if (!requireNamespace('stringr', quietly = T)){
+    stop('stringr required for format_stan')
+  }
   post_stan <- as.matrix(object)
   if (!useSigma){
     post_stan <- post_stan[,!grepl(colnames(post_stan), pattern='^Sigma')]
   }
-  parse_stan_names <- str_split(colnames(post_stan), pattern='^b\\[| |\\]')
+  parse_stan_names <- stringr::str_split(colnames(post_stan), pattern='^b\\[| |\\]')
   
   fmt_stan_names <- sapply(parse_stan_names, FUN=function(i){
     if (length(i) == 1){
       return(i)
     }else{
-      i_one <- unlist(str_split(i[3], pattern=':'))
+      i_one <- unlist(stringr::str_split(i[3], pattern=':'))
       return(paste(i_one[1], i[2], i_one[2], sep=' @ '))
     }
   })

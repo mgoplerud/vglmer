@@ -33,6 +33,18 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// cpp_zVz
+Eigen::VectorXd cpp_zVz(const Eigen::MappedSparseMatrix<double> Z, const Eigen::MappedSparseMatrix<double> V);
+RcppExport SEXP _vglmer_cpp_zVz(SEXP ZSEXP, SEXP VSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const Eigen::MappedSparseMatrix<double> >::type Z(ZSEXP);
+    Rcpp::traits::input_parameter< const Eigen::MappedSparseMatrix<double> >::type V(VSEXP);
+    rcpp_result_gen = Rcpp::wrap(cpp_zVz(Z, V));
+    return rcpp_result_gen;
+END_RCPP
+}
 // vecR_ridge_general
 Eigen::MatrixXd vecR_ridge_general(const Eigen::MappedSparseMatrix<double> L, const Rcpp::NumericVector pg_mean, const Eigen::Map<Eigen::MatrixXd> Z, const Eigen::Map<Eigen::MatrixXi> M, const Rcpp::NumericVector mapping_J, const Rcpp::NumericVector d, const Eigen::VectorXi start_z);
 RcppExport SEXP _vglmer_vecR_ridge_general(SEXP LSEXP, SEXP pg_meanSEXP, SEXP ZSEXP, SEXP MSEXP, SEXP mapping_JSEXP, SEXP dSEXP, SEXP start_zSEXP) {
@@ -70,6 +82,7 @@ END_RCPP
 static const R_CallMethodDef CallEntries[] = {
     {"_vglmer_LinRegChol", (DL_FUNC) &_vglmer_LinRegChol, 4},
     {"_vglmer_calculate_expected_outer_alpha", (DL_FUNC) &_vglmer_calculate_expected_outer_alpha, 3},
+    {"_vglmer_cpp_zVz", (DL_FUNC) &_vglmer_cpp_zVz, 2},
     {"_vglmer_vecR_ridge_general", (DL_FUNC) &_vglmer_vecR_ridge_general, 7},
     {"_vglmer_vecR_design", (DL_FUNC) &_vglmer_vecR_design, 6},
     {NULL, NULL, 0}

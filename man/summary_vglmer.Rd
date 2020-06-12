@@ -3,18 +3,24 @@
 \name{summary_vglmer}
 \alias{summary_vglmer}
 \alias{fixef.vglmer}
+\alias{ranef.vglmer}
 \alias{coef.vglmer}
 \alias{vcov.vglmer}
 \alias{print.vglmer}
+\alias{summary.vglmer}
 \title{Summarize output from vglmer}
 \usage{
 \method{fixef}{vglmer}(object, ...)
+
+\method{ranef}{vglmer}(object, ...)
 
 \method{coef}{vglmer}(object, ...)
 
 \method{vcov}{vglmer}(object, ...)
 
 print.vglmer(x, ...)
+
+summary.vglmer(object, display_re = TRUE, ...)
 }
 \arguments{
 \item{object}{Model fit using vglmer}
@@ -22,6 +28,8 @@ print.vglmer(x, ...)
 \item{...}{Not used.}
 
 \item{x}{Model fit using vglmer}
+
+\item{display_re}{Print summary of random effects. Default is TRUE}
 }
 \description{
 Allows the use of standard methods from lm or lmer to sumarize the posterior

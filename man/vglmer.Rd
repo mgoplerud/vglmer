@@ -4,67 +4,23 @@
 \alias{vglmer}
 \title{Variational Inference for Non-Linear Hierarchical Models}
 \usage{
-vglmer(formula, data, iterations, family, prior_variance,
-  factorization_method = "weak", tolerance_elbo = 1e-04,
-  tolerance_parameters = 1e-04, prevent_degeneracy = FALSE,
-  force_whole = TRUE, parameter_expansion = "mean", random_seed = 1,
-  debug_param = FALSE, return_data = FALSE, linpred_method = "joint",
-  debug_ELBO = FALSE, print_prog = NULL, quiet = T, init = "EM")
+vglmer(formula, data, family, control = vglmer_control())
 }
 \arguments{
 \item{formula}{Standard glmer-style formula for random effects.}
 
 \item{data}{data.frame containing the outcome and variables.}
 
-\item{iterations}{Number of iterations for the model.}
+\item{family}{Options are "binomial" or "negbin". If "binomial", outcome must
+be either {0,1} (binary) or cbind(success, failure) as per standard glm(er)
+syntax. Non-integer values are permitted for binomial if "force_whole" is
+set to FALSE in vglmer_control.}
 
-\item{prior_variance}{Options are jeffreys, mcmcglmm, mvD, mean_exists,
-limit, and uniform. They are defined as an Inverse Wishart with the
-following parameters where d is the dimensionality of the random effect. At
-present, all models use "mean_exists" for a well-defined proper prior. 
-\itemize{
-\item jeffreys: IW(0, 0)
-\item mcmcglmm: IW(0, I)
-\item mvD: IW(-d, I)
-\item mean_exists: IW(d + 1, I)
-\item limit: IW(d - 1, 0)
-\item uniform: IW(-[d+1], 0)
-}
-The model may fail to converge}
-
-\item{factorization_method}{The factorization method to use. Described in
-detail in the dissertation. strong, partial, and weak correspond to Schemes
-I, II, and III respectively. "weak" should have best performance but is
-slowest.}
-
-\item{tolerance_elbo}{Change in ELBO to stop algorithm.}
-
-\item{tolerance_parameters}{Change in value of any parameter to stop algorithm.}
-
-\item{prevent_degeneracy}{Ignored for the moment.}
-
-\item{force_whole}{Require whole numbers. Set to FALSE to allow "quasi-binomial".}
-
-\item{parameter_expansion}{At moment, accepts 'mean' or 'none'. 'mean' is
-costless and should always be used!}
-
-\item{random_seed}{Set seed for initialization.}
-
-\item{debug_param}{Debug parameter convergence.}
-
-\item{return_data}{Return the design (X,Z) for debugging afterwards.}
-
-\item{linpred_method}{Method for updating means of beta and alpha. "joint" is best.}
-
-\item{debug_ELBO}{Debug ELBO trajectory.}
-
-\item{print_prog}{Print after print_prog iterations to show progress.}
-
-\item{quiet}{Don't print noisy intermediate output.}
-
-\item{init}{Initialization method can be EM, zero, or random at moment.}
+\item{control}{Control additional arguments. Must be made using
+vglmer_control(); see for documentation for additional details.}
 }
 \description{
-Estimate a hierarchical model (logistic) using mean-field variational
-inference. Accepts standard syntax to glmer: y ~ X + (1 + Z | g). Options are described below.
+Estimate a hierarchical modelusing mean-field variational
+inference. Accepts standard syntax to glmer: y ~ X + (1 + Z | g). Options are
+described below.
 }
