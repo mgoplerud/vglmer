@@ -4,4 +4,4 @@ A package to estimate non-linear hierarchical models using the variational algor
 
 At present, it can be fit on logistic and negative binomial outcomes with an arbitrary number of random effects. Details on negative binomial inference can be found [here] and are more experimential at the moment.
 
-Syntax
+This model accepts "standard" glmer syntax of the form:
