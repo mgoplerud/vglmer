@@ -408,7 +408,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()){
         # joint_quad <- rowSums( (joint.XZ %*% t(vi_joint_decomp))^2 )
         # vi_joint_decomp <<- vi_joint_decomp
         # joint.XZ <<- joint.XZ
-        joint_quad <- cpp_zVz(Z = joint.XZ, V = as(vi_joint_decomp, 'dgCMatrix'))
+        joint_quad <- cpp_zVz(Z = joint.XZ, V = as(vi_joint_decomp, 'dgCMatrix')) + vi_r_sigma
         vi_pg_c <- sqrt(as.vector(X %*% vi_beta_mean + Z %*% vi_alpha_mean - vi_r_mu)^2 + joint_quad)
       }else{
         # vi_beta_decomp <<- vi_beta_decomp
@@ -419,7 +419,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()){
         # alpha_quad <- cpp_zVz(Z = Z, V = make_dgC(vi_alpha_decomp))
         beta_quad <- rowSums( (X %*% t(vi_beta_decomp))^2 )
         alpha_quad <- rowSums( (Z %*% t(vi_alpha_decomp))^2 )
-        vi_pg_c <- sqrt(as.vector(X %*% vi_beta_mean + Z %*% vi_alpha_mean - vi_r_mu)^2 + beta_quad + alpha_quad)
+        vi_pg_c <- sqrt(as.vector(X %*% vi_beta_mean + Z %*% vi_alpha_mean - vi_r_mu)^2 + beta_quad + alpha_quad + vi_r_sigma)
       }
       vi_pg_mean <- vi_pg_b/(2 * vi_pg_c) * tanh(vi_pg_c / 2)
       diag_vi_pg_mean <- sparseMatrix(i = 1:N, j = 1:N, x = vi_pg_mean)

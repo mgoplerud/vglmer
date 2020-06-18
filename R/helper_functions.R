@@ -308,11 +308,11 @@ update_r <- function(vi_r_mu, vi_r_sigma, y, X, Z, factorization_method,
     
     opt_vi_r <- optim(par = vi_r_mu, fn = VEM.PELBO.r, y = y, psi = ex_XBZA, zVz = var_XBZA,
                       control = list(fnscale = -1), method = 'L-BFGS', hessian = T)
-    
+
     prior_vi_r <- VEM.PELBO.r(ln_r = vi_r_mu, y = y,
                               psi = ex_XBZA, zVz = var_XBZA)
-    
-    
+
+
     if (opt_vi_r$value < prior_vi_r){
       warning('Optim for r decreased objective.')
       out_par <- c(vi_r_mu, vi_r_sigma)
@@ -321,9 +321,36 @@ update_r <- function(vi_r_mu, vi_r_sigma, y, X, Z, factorization_method,
       out_par <- c(opt_vi_r$par, vi_r_sigma)
     }
     
+    # ETERM.density <- function(ln_r, mu_r, sigma_r, y, psi, zVz){
+    #   sapply(ln_r, FUN=function(i){
+    #     VEM.PELBO.r(i, y, psi, zVz)}) * dnorm(ln_r, mean = mu_r, sd = sqrt(sigma_r))
+    # }
+    # 
+    # ETERM <- function(mu_r, sigma_r, y, psi, zVz){
+    #   int <- pracma::quadinf(f = ETERM.density, xa = -Inf, xb = Inf, 
+    #                  mu_r = mu_r, sigma_r = sigma_r, y = y, psi = psi, zVz = zVz)$Q
+    #   entropy <- mu_r + 1/2 * log(sigma_r)
+    #   return(c(int, entropy))
+    # }
+    # opt_ETERM <- function(par, y, psi, zVz){
+    #   sum(ETERM(mu_r = par[1], sigma_r = exp(par[2]), y = y, psi = psi, zVz))
+    # }
+    # 
+    # direct_opt <- optim(par = c(vi_r_mu, log(vi_r_sigma)), fn = opt_ETERM, y = y, 
+    #                     psi = ex_XBZA, zVz = var_XBZA,
+    #                     control = list(fnscale = -1), method = 'L-BFGS-B')
+    # prior_vi_r <- opt_ETERM(par = c(vi_r_mu, log(vi_r_sigma)), y = y,
+    #                       psi = ex_XBZA, zVz = var_XBZA)
+    # if (direct_opt$value < prior_vi_r){
+    #   warning('Optim for r decreased objective.')
+    #   out_par <- c(vi_r_mu, vi_r_sigma)
+    # }else{
+    #   out_par <- c(direct_opt$par[1], exp(direct_opt$par[2]))
+    # }
+    
     # opt_vi_r <- optim(par = c(vi_r_mu, log(vi_r_sigma)), fn = PELBO.r,
     #                   y = y, psi = ex_XBZA, zVz = var_XBZA, N = N,
-    #                   control = list(fnscale = - 1), method = 'L-BFGS')
+    #                   control = list(fnscale = -1, trace = 1), method = 'L-BFGS-B')
     # prior_vi_r <- PELBO.r(par = c(vi_r_mu, log(vi_r_sigma)), y = y,
     #                       psi = ex_XBZA, zVz = var_XBZA, N = N)
     # if (opt_vi_r$value < prior_vi_r){
@@ -366,7 +393,7 @@ approx.lgamma <- function(x, mean_r, var_r){
 PELBO.r <- function(par, y, psi, zVz, N){
   mu_r <- par[1]
   log_sigma_r <- par[2]
-  
+
   sigma_r <- exp(log_sigma_r)
   mean_r <- exp(mu_r + sigma_r/2)
   var_r <- ( exp(sigma_r) - 1 ) * mean_r^2
