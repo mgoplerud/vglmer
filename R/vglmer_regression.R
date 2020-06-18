@@ -212,7 +212,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()){
       s <- y - trials/2
       vi_pg_b <- trials
       vi_r_mu <- 0
-      vi_r_sigma <- NA
+      vi_r_sigma <- 0
       choose_term <- sum(lchoose(n = round(trials), k = round(y)))
     }else{
       #Initialize
@@ -227,7 +227,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()){
         vi_r_mean <- MASS::glm.nb(y ~ 1)$theta
         vi_r_mu <- log(vi_r_mean)
         vi_r_sigma <- 0
-      }else if (vi_r_method == 'VI'){
+      }else if (vi_r_method %in% c('Laplace')){
         init_r <- optim(par = 0, fn = VEM.PELBO.r, method = 'L-BFGS', hessian = T,
                         control = list(fnscale = -1), y = y, psi = rep(log(mean(y)), length(y)), zVz = 0)
         vi_r_mu <- init_r$par
@@ -235,7 +235,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()){
         
         vi_r_mean <- exp(vi_r_mu + vi_r_sigma/2)
       }else{
-        stop('vi_r_method must be VI or VEM')
+        stop('vi_r_method must be VEM, fixed, delta, or Laplace.')
       }
       s <- (y - vi_r_mean)/2
       vi_pg_b <- y + vi_r_mean
@@ -1146,7 +1146,7 @@ vglmer_control <- function(iterations = 1000,
     check_choice(factorization_method, c("weak", "strong", "partial")),
     check_choice(prior_variance, c('mean_exists', 'jeffreys', 'mcmcglmm', 'mvD', 'limit', 'uniform')),
     check_choice(linpred_method, c('joint', 'cyclical', 'solve_normal')),
-    check_choice(vi_r_method, c('VEM', 'fixed')),
+    check_choice(vi_r_method, c('VEM', 'fixed', 'Laplace')),
     check_double(vi_r_val, all.missing = TRUE),
     check_int(print_prog, null.ok = TRUE),
     check_choice(init, c('EM', 'random', 'zero')),

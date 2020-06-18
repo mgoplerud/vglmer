@@ -303,50 +303,7 @@ update_r <- function(vi_r_mu, vi_r_sigma, y, X, Z, factorization_method,
   y <<- y
   N <<- N
   
-  if (vi_r_method == 'VI'){
-    
-    
-    opt_vi_r <- optim(par = vi_r_mu, fn = VEM.PELBO.r, y = y, psi = ex_XBZA, zVz = var_XBZA,
-                      control = list(fnscale = -1), method = 'L-BFGS', hessian = T)
-
-    prior_vi_r <- VEM.PELBO.r(ln_r = vi_r_mu, y = y,
-                              psi = ex_XBZA, zVz = var_XBZA)
-
-
-    if (opt_vi_r$value < prior_vi_r){
-      warning('Optim for r decreased objective.')
-      out_par <- c(vi_r_mu, vi_r_sigma)
-    }else{
-      vi_r_sigma <- as.numeric(-1/opt_vi_r$hessian)
-      out_par <- c(opt_vi_r$par, vi_r_sigma)
-    }
-    
-    # ETERM.density <- function(ln_r, mu_r, sigma_r, y, psi, zVz){
-    #   sapply(ln_r, FUN=function(i){
-    #     VEM.PELBO.r(i, y, psi, zVz)}) * dnorm(ln_r, mean = mu_r, sd = sqrt(sigma_r))
-    # }
-    # 
-    # ETERM <- function(mu_r, sigma_r, y, psi, zVz){
-    #   int <- pracma::quadinf(f = ETERM.density, xa = -Inf, xb = Inf, 
-    #                  mu_r = mu_r, sigma_r = sigma_r, y = y, psi = psi, zVz = zVz)$Q
-    #   entropy <- mu_r + 1/2 * log(sigma_r)
-    #   return(c(int, entropy))
-    # }
-    # opt_ETERM <- function(par, y, psi, zVz){
-    #   sum(ETERM(mu_r = par[1], sigma_r = exp(par[2]), y = y, psi = psi, zVz))
-    # }
-    # 
-    # direct_opt <- optim(par = c(vi_r_mu, log(vi_r_sigma)), fn = opt_ETERM, y = y, 
-    #                     psi = ex_XBZA, zVz = var_XBZA,
-    #                     control = list(fnscale = -1), method = 'L-BFGS-B')
-    # prior_vi_r <- opt_ETERM(par = c(vi_r_mu, log(vi_r_sigma)), y = y,
-    #                       psi = ex_XBZA, zVz = var_XBZA)
-    # if (direct_opt$value < prior_vi_r){
-    #   warning('Optim for r decreased objective.')
-    #   out_par <- c(vi_r_mu, vi_r_sigma)
-    # }else{
-    #   out_par <- c(direct_opt$par[1], exp(direct_opt$par[2]))
-    # }
+  if (vi_r_method == 'delta'){
     
     # opt_vi_r <- optim(par = c(vi_r_mu, log(vi_r_sigma)), fn = PELBO.r,
     #                   y = y, psi = ex_XBZA, zVz = var_XBZA, N = N,
@@ -359,18 +316,26 @@ update_r <- function(vi_r_mu, vi_r_sigma, y, X, Z, factorization_method,
     # }else{
     #   out_par <- c(opt_vi_r$par[1], exp(opt_vi_r$par[2]))
     # }
-  }else if (vi_r_method == 'VEM'){
+  }else if (vi_r_method %in% c('VEM', 'Laplace')){
+    
     opt_vi_r <- optim(par = vi_r_mu, fn = VEM.PELBO.r,
                       y = y, psi = ex_XBZA, zVz = var_XBZA, 
-                      control = list(fnscale = - 1), method = 'L-BFGS')
+                      control = list(fnscale = - 1), method = 'L-BFGS', hessian = T)
+    
+    if (vi_r_method == 'Laplace'){
+      proposed_vi_r_sigma <- as.numeric(-1/opt_vi_r$hessian)
+    }else{
+      proposed_vi_r_sigma <- 0
+    }
+    
     prior_vi_r <- VEM.PELBO.r(ln_r = vi_r_mu, y = y, 
                               psi = ex_XBZA, zVz = var_XBZA)
     
     if (opt_vi_r$value < prior_vi_r){
       warning('Optim for r decreased objective.')
-      out_par <- c(vi_r_mu, 0)
+      out_par <- c(vi_r_mu, proposed_vi_r_sigma)
     }else{
-      out_par <- c(opt_vi_r$par, 0)
+      out_par <- c(opt_vi_r$par, proposed_vi_r_sigma)
     }
   }else{stop('vi_r method must be VI or VEM or fixed')}
   
