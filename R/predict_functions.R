@@ -17,6 +17,7 @@
 #' @param allow_missing_levels Allow prediction for random effects not in object.
 #'   As is standard, give an estimate of "0" for that effect.
 #' @param ... Not used; included to maintain compatability
+#' @importFrom stats delete.response terms
 #' @export
 predict.vglmer <- function(object, newdata, 
                            samples = 0, samples_only = FALSE, 

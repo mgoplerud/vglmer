@@ -5,10 +5,11 @@
 #' output. The format for ranef differs from lmer and is shown below. 
 #' 
 #' \code{coef} and \code{vcov} return the mean and variance of the fixed effects. \code{fixef} is a
-#' synonym for \code{coef}.
+#export' synonym for \code{coef}.
 #' 
 #' @name summary_vglmer
 #' @param object Model fit using vglmer
+#' 
 
 #' @rdname summary_vglmer
 #' @export
@@ -16,7 +17,14 @@ fixef.vglmer <- function(object, ...){
   return(as.vector(object$beta$mean))
 }
 
+# Load fixef, ranef from lme4
+#' @export
+lme4::fixef
+#' @export
+lme4::ranef
+
 #' @rdname summary_vglmer
+#' @export
 ranef.vglmer <- function(object, ...){
   
   d_j <- object$internal_parameters$d_j
@@ -64,6 +72,7 @@ vcov.vglmer <- function(object, ...){
 #' @rdname summary_vglmer 
 #' @param x Model fit using vglmer
 #' @param ... Not used.
+#' @method print vglmer
 #' @export
 print.vglmer <- function(x, ...){
   if (length(list(...)) > 0){'print.vglmer does not use ...'}
@@ -105,6 +114,7 @@ print.vglmer <- function(x, ...){
 #' @rdname summary_vglmer
 #' @param display_re Print summary of random effects. Default is TRUE
 #' @importFrom lmtest coeftest
+#' @method summary vglmer
 #' @export
 summary.vglmer <- function(object, display_re = TRUE, ...){
   sum_obj <- coeftest(x = object)
@@ -151,6 +161,7 @@ summary.vglmer <- function(object, display_re = TRUE, ...){
   invisible()
 }
 
+#' @importFrom stats qnorm
 erfinv <- function(x){qnorm((1 + x)/2)/sqrt(2)}
 
 # Internal function to tidy-up

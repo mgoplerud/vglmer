@@ -8,9 +8,7 @@
 #' @param object Object from glmer, vglmer, or stan to the respective "format_"
 #'   function
 #' @importFrom dplyr bind_rows mutate
-#' @importFrom lme4 fixef ranef
 #' @importFrom stats vcov
-#' @importFrom rlang .data
 #' @export
 format_glmer <- function(object){
   output <- bind_rows(lapply(ranef(object), FUN=function(i){
@@ -54,13 +52,13 @@ format_stan <- function(object, useSigma = FALSE){
   if (!useSigma){
     post_stan <- post_stan[,!grepl(colnames(post_stan), pattern='^Sigma')]
   }
-  parse_stan_names <- stringr::str_split(colnames(post_stan), pattern='^b\\[| |\\]')
+  parse_stan_names <- strsplit(x = colnames(post_stan), split = '^b\\[| |\\]', perl = T)
   
   fmt_stan_names <- sapply(parse_stan_names, FUN=function(i){
     if (length(i) == 1){
       return(i)
     }else{
-      i_one <- unlist(stringr::str_split(i[3], pattern=':'))
+      i_one <- unlist(strsplit(i[3], split=':'))
       return(paste(i_one[1], i[2], i_one[2], sep=' @ '))
     }
   })

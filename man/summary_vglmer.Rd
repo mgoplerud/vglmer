@@ -18,9 +18,9 @@
 
 \method{vcov}{vglmer}(object, ...)
 
-print.vglmer(x, ...)
+\method{print}{vglmer}(x, ...)
 
-summary.vglmer(object, display_re = TRUE, ...)
+\method{summary}{vglmer}(object, display_re = TRUE, ...)
 }
 \arguments{
 \item{object}{Model fit using vglmer}
@@ -37,5 +37,4 @@ output. The format for ranef differs from lmer and is shown below.
 }
 \details{
 \code{coef} and \code{vcov} return the mean and variance of the fixed effects. \code{fixef} is a
-synonym for \code{coef}.
 }

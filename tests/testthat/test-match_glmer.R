@@ -94,3 +94,30 @@ test_that('EM_prelim matches glm.nb', {
   expect_equal(as.vector(coef(quine.nb1)), est_init, tolerance = 1e-4)
 })
 
+test_that('Compare against glmer (binomial)', {
+  
+  N <- 1000
+  G <- 100
+  x <- rnorm(N)
+  g <- sample(1:G, N, replace = T) 
+  alpha <- rnorm(G)
+  
+  size <- rpois(N, 1) + 1
+  y <- rbinom(n = N, size = size, prob = plogis(-1 + x + alpha[g]))
+  
+  est_glmer <- suppressWarnings(lme4::glmer(cbind(y, size - y) ~ x + (1 | g), family = binomial))
+  fmt_glmer <- format_glmer(est_glmer)
+  
+  example_vglmer <- vglmer(formula = cbind(y, size - y) ~ x + (1 | g), data = NULL, 
+   family = 'binomial')
+    
+  expect_gte(min(diff(example_vglmer$ELBO_trajectory$ELBO)), 0)
+    
+  fmt_vglmer <- format_vglmer(example_vglmer)
+  comp_methods <- merge(fmt_glmer, fmt_vglmer, by = c('name'))
+  
+  cor_mean <- with(comp_methods, cor(mean.x, mean.y))
+  expect_gt(cor_mean, expected = 0.99)
+  
+})
+

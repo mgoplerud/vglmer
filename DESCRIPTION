@@ -2,12 +2,25 @@ Package: vglmer
 Type: Package
 Title: Variational Inference for Hierarchical Non-Linear Models
 Version: 0.1.0
-Author: Max Goplerud
-Maintainer: Max Goplerud <goplerud@g.harvard.edu>
+Author: Max Goplerud <mgoplerud@pitt.edu>
+Maintainer: Max Goplerud <mgoplerud@pitt.edu>
 Encoding: UTF-8
-License: XX
-Description: Minimal package to replicate Max Goplerud's dissertation. Please see mgoplerud.com for a current version as many features are disabled in this package. Features outside of what is used in the associated replication code may be buggy!
-Imports: Rcpp (>= 1.0.1), RcppEigen (>= 0.3.3.4.0), lme4, CholWishart, purrr, mvtnorm, Matrix, dplyr, stats, graphics, methods, rlang, lmtest, checkmate
+License: GPL (>= 2)
+Description: This package includes methods for estimating non-linear hierarchical models using mean-field variational Bayes. At present, it can estimate logistic and negative binomial models. It can accommodate models with an arbitrary number of random effects and requires no integration to solve. It also provides the ability to improve the quality of the approximation using marginal augmentation.
+Imports: 
+	Rcpp (>= 1.0.1), 
+	RcppEigen (>= 0.3.3.4.0), 
+	lme4, 
+	CholWishart,
+	mvtnorm, 
+	Matrix, 
+	dplyr, 
+	stats, 
+	graphics, 
+	methods, 
+	rlang,
+	lmtest, 
+	checkmate
 Suggests: 
 	MASS,
 	tictoc,

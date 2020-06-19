@@ -13,13 +13,41 @@
 #' @param control Control additional arguments. Must be made using
 #'   vglmer_control(); see for documentation for additional details.
 #'
-#' @importFrom purrr array_branch
+#' @examples
+#' 
+#' sim_data <- data.frame(x = rnorm(100), 
+#' y = rbinom(100, 1, 0.5), 
+#' g =sample(letters, 100, replace = TRUE))
+#' 
+#' # Run with defaults
+#' est_vglmer <- vglmer(y ~ x + (x|g), data = sim_data, family = "binomial")
+#' 
+#' # Simple prediction 
+#' predict(est_vglmer, newdata = sim_data)
+#' 
+#' # Summarize results
+#' summary(est_vglmer)
+#' 
+#' # Extract parameters
+#' coef(est_vglmer); vcov(est_vglmer)
+#' 
+#' # Comparability with lme4, 
+#' # although ranef is formatted differently.
+#' ranef(est_vglmer); fixef(est_vglmer)
+#' 
+#' #' # Run with stronger (i.e. less good) approximation
+#' \dontrun{
+#' vglmer(y ~ x + (x|g), data = sim_data, 
+#' control = vglmer_control(factorization_method = "strong"),
+#' family = "binomial")
+#' }
+#'
 #' @importFrom dplyr select group_by group_by_at summarize n lag
 #' @importFrom lme4 mkReTrms findbars subbars
 #' @importFrom stats model.response model.matrix model.frame rnorm rWishart
-#'   qlogis
-#' @importFrom graphics plot
+#'   qlogis optim
 #' @importFrom rlang .data
+#' @importFrom graphics plot
 #' @importFrom checkmate assert assert_formula assert_choice
 #'   check_data_frame
 #' @useDynLib vglmer
@@ -126,7 +154,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()){
     
     is.wholenumber <- function(x, tol = .Machine$double.eps^0.5)  abs(x - round(x)) < tol
     if (any(is.wholenumber(y) == FALSE)){
-      if (force_whole){
+      if (control$force_whole){
         stop('If force_whole = TRUE, must provide whole numbers')
       }else{
         warning('Non-integer numbers in y')
@@ -951,11 +979,13 @@ vglmer <- function(formula, data, family, control = vglmer_control()){
           log_det_joint_var = log_det_joint_var, vi_r_mu = vi_r_mu, vi_r_mean = vi_r_mean, vi_r_sigma = vi_r_sigma
         )
       }else{
-        if (accept.PX){
-          final.ELBO <- prop.ELBO
-        }else{
-          final.ELBO <- prior.ELBO
-        }
+        stop('PX should not fail in current version')
+        # Should be no case
+        # if (accept.PX){
+        #   final.ELBO <- prop.ELBO
+        # }else{
+        #   final.ELBO <- prior.ELBO
+        # }
       }
       
       if (do_timing){
@@ -1031,7 +1061,9 @@ vglmer <- function(formula, data, family, control = vglmer_control()){
       d.ELBO <- with(store_ELBO, ELBO - dplyr::lag(ELBO))
       sum.ELBO <- store_ELBO
       sum.ELBO$diff <- d.ELBO
-      sum.ELBO <- summarize(group_by_at(sum.ELBO, .vars = 'step'), negative = mean(.data$diff < 0, na.rm=T)) 
+      sum.ELBO
+      sum.ELBO <- summarize(group_by_at(sum.ELBO, .vars = 'step'), 
+                negative = mean(.data$diff < 0, na.rm=T)) 
     }else{
       d.ELBO <- NULL
     }
@@ -1055,9 +1087,11 @@ vglmer <- function(formula, data, family, control = vglmer_control()){
       tic.clear()
       tic.clearlog()
       
-      tic_summary <- summarize(.data = group_by_at(.vars = 'stage', tic_log), .groups = 'keep',
-                n = dplyr::n(), mean = mean(time), min = min(time), max = max(time),
-                total = sum(time))
+      tic_summary <- summarize(.data = group_by_at(.vars = 'stage', tic_log), 
+                .groups = 'keep',
+                n = dplyr::n(), mean = mean(.data$time), 
+                min = min(.data$time), max = max(.data$time),
+                total = sum(.data$time))
     }else{
       tic_summary <- NULL
     }
@@ -1188,7 +1222,7 @@ vglmer_control <- function(iterations = 1000,
 # Simple function to create named list 
 # https://stackoverflow.com/questions/16951080/can-lists-be-created-that-name-themselves-based-on-input-object-names
 # Identical to version used in lme4:::namedList, see also loo::nlist
-
+#' @importFrom stats setNames
 namedList <- function(...) {
   L <- list(...)
   snm <- sapply(substitute(list(...)),deparse)[-1]

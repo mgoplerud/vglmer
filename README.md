@@ -9,6 +9,8 @@ This model accepts "standard" glmer syntax of the form:
 
 ```
 vglmer(formula = y ~ x + (x | g), data = data, family = 'binomial')
+
+vglmer(formula = y ~ x + (x | g), data = data, family = 'negbin')
 ```
 
 Many standard methods from `lme4` work, e.g. `fixef`, `coef`, `vcov`, `ranef`, `predict`. Use `format_vglmer` to parse all parameters into a single data.frame. Estimation can be controlled via the numerous arguments to `control` using `vglmer_control`. At the moment, Schemes I, II, and III in Goplerud (2020) correspond to `strong`, `partial`, and `weak`. Unless the model is extremely large, the default (`weak`) should be used.

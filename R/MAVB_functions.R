@@ -9,7 +9,6 @@
 #' @param var_px Default (Inf); variance of working prior. Higher is more
 #'   diffuse and thus likely better.
 #' @import CholWishart
-#' @importFrom purrr array_branch
 #' @importFrom mvtnorm rmvnorm
 #' @export
 MAVB <- function(model, samples, var_px = Inf){
@@ -161,13 +160,13 @@ custom_HMC_linpred <- function(HMC, data){
   hmc_samples <- as.matrix(HMC)
   hmc_samples <- hmc_samples[, !grepl(colnames(hmc_samples), pattern='^Sigma')]
   
-  parse_stan_names <- str_split(colnames(hmc_samples), pattern='^b\\[| |\\]')
+  parse_stan_names <- strsplit(colnames(hmc_samples), split='^b\\[| |\\]')
   
   fmt_stan_names <- sapply(parse_stan_names, FUN=function(i){
     if (length(i) == 1){
       return(i)
     }else{
-      i_one <- unlist(str_split(i[3], pattern=':'))
+      i_one <- unlist(strsplit(i[3], split=':'))
       return(paste(i_one[1], i[2], i_one[2], sep=' @ '))
     }
   })
@@ -194,13 +193,13 @@ custom_HMC_samples <- function(HMC, ordering){
   hmc_samples <- as.matrix(HMC)
   hmc_samples <- hmc_samples[, !grepl(colnames(hmc_samples), pattern='^Sigma')]
   
-  parse_stan_names <- str_split(colnames(hmc_samples), pattern='^b\\[| |\\]')
+  parse_stan_names <- strsplit(colnames(hmc_samples), split='^b\\[| |\\]')
   
   fmt_stan_names <- sapply(parse_stan_names, FUN=function(i){
     if (length(i) == 1){
       return(i)
     }else{
-      i_one <- unlist(str_split(i[3], pattern=':'))
+      i_one <- unlist(strsplit(i[3], split=':'))
       return(paste(i_one[1], i[2], i_one[2], sep=' @ '))
     }
   })
