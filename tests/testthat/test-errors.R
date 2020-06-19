@@ -40,10 +40,3 @@ test_that('vglmer can run with objects in environment', {
   expect_equivalent(dta$Y[-c(38, 39,108, 190)], test_missing$data$y)
 
 })
-
-
-vglmer(Y ~ X + (1 | G), 
-       data = dta, 
-       control = vglmer_control(init = 'zero', return_data = T,
-                                iterations = 1, print_prog = 10),
-       family = 'binomial')
