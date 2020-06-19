@@ -1,28 +1,28 @@
-extract_group_memberships <- function(x, fr, drop.unused.levels){
-  frloc <- factorize(x, frloc)
-  if (is.null(ff <- tryCatch(eval(substitute(makeFac(fac), 
-                                             list(fac = x[[3]])), frloc), error = function(e) NULL))) 
-    stop("couldn't evaluate grouping factor ", deparse(x[[3]]), 
-         " within model frame:", " try adding grouping factor to data ", 
-         "frame explicitly if possible", call. = FALSE)
-  if (all(is.na(ff))){ 
-    stop("Invalid grouping factor specification, ", deparse(x[[3]]), 
-         call. = FALSE)
-  }
-  if (drop.unused.levels){
-    ff <- factor(ff, exclude = NA)
-  }
-  return(ff)
-}
-
-make_dgC <- function(x){
-  if (!inherits(x, 'ddiMatrix')){
-    x <- as(x, 'dgCMatrix')
-  }else{
-    x <- sparseMatrix(i = 1:nrow(x), j =1:nrow(x), x = diag(x))
-  }
-  return(x)
-}
+# extract_group_memberships <- function(x, fr, drop.unused.levels){
+#   frloc <- factorize(x, frloc)
+#   if (is.null(ff <- tryCatch(eval(substitute(makeFac(fac), 
+#                                              list(fac = x[[3]])), frloc), error = function(e) NULL))) 
+#     stop("couldn't evaluate grouping factor ", deparse(x[[3]]), 
+#          " within model frame:", " try adding grouping factor to data ", 
+#          "frame explicitly if possible", call. = FALSE)
+#   if (all(is.na(ff))){ 
+#     stop("Invalid grouping factor specification, ", deparse(x[[3]]), 
+#          call. = FALSE)
+#   }
+#   if (drop.unused.levels){
+#     ff <- factor(ff, exclude = NA)
+#   }
+#   return(ff)
+# }
+# 
+# make_dgC <- function(x){
+#   if (!inherits(x, 'ddiMatrix')){
+#     x <- as(x, 'dgCMatrix')
+#   }else{
+#     x <- sparseMatrix(i = 1:nrow(x), j =1:nrow(x), x = diag(x))
+#   }
+#   return(x)
+# }
 
 #' @import Matrix
 #' @importFrom methods as
@@ -81,27 +81,26 @@ prepare_T <- function(mapping, levels_per_RE, variables_per_RE, running_per_RE, 
 }
 
 multi_lgamma <- function(a, p){
-  
   return(lmvgamma(x = a, p = p))
-  if (length(p) != 1){stop('P must have length 1')}
-  #if (any(a + 1 < p)){stop('Undefined for a < p - 1')}
-  term.1 <- log(pi) * (p) * (p - 1) / 4
-  term.2 <- mapply(1:p, SIMPLIFY = FALSE, FUN=function(i){
-    matrix(lgamma(a + (1 - i) / 2))
-  })
-  term.2 <- as.vector(Reduce('+', term.2))
-  return(term.1 + term.2)
+  # if (length(p) != 1){stop('P must have length 1')}
+  # #if (any(a + 1 < p)){stop('Undefined for a < p - 1')}
+  # term.1 <- log(pi) * (p) * (p - 1) / 4
+  # term.2 <- mapply(1:p, SIMPLIFY = FALSE, FUN=function(i){
+  #   matrix(lgamma(a + (1 - i) / 2))
+  # })
+  # term.2 <- as.vector(Reduce('+', term.2))
+  # return(term.1 + term.2)
 }
 
 multi_digamma <- function(a, p){
   return(mvdigamma(x = a, p = p))
-  if (length(p) != 1){stop('P must have length 1')}
-  #if (any(a + 1 < p)){stop('Undefined for a < p - 1')}
-  term.1 <- mapply(1:p, SIMPLIFY = FALSE, FUN=function(i){
-    digamma(a + (1 - i) / 2)
-  })
-  term.1 <- as.vector(Reduce('+', term.1))
-  return(term.1)
+  # if (length(p) != 1){stop('P must have length 1')}
+  # #if (any(a + 1 < p)){stop('Undefined for a < p - 1')}
+  # term.1 <- mapply(1:p, SIMPLIFY = FALSE, FUN=function(i){
+  #   digamma(a + (1 - i) / 2)
+  # })
+  # term.1 <- as.vector(Reduce('+', term.1))
+  # return(term.1)
 }
 
 
@@ -145,22 +144,23 @@ make_log_invwishart_constant <- function(nu, Phi){
 }
 
 calculate_ELBO <- function(ELBO_type, factorization_method,
-                           #Fixed constants or priors
-                           d_j, g_j, prior_sigma_alpha_phi, prior_sigma_alpha_nu, iw_prior_constant, choose_term,
-                           #Data
-                           X, Z, s, y,
-                           #PolyaGamma Parameters
-                           vi_pg_b, vi_pg_mean, vi_pg_c,
-                           #Sigma Parameters
-                           vi_sigma_alpha, vi_sigma_alpha_nu, vi_sigma_outer_alpha,
-                           #Beta Parameters / Alpha Parameters
-                           vi_beta_mean, vi_beta_decomp,
-                           vi_alpha_mean, vi_alpha_decomp,
-                           log_det_beta_var, log_det_alpha_var, 
-                           log_det_joint_var = NULL,
-                           vi_joint_decomp = NULL,
-                           #r Parameters
-                           vi_r_mu = NULL, vi_r_mean = NULL, vi_r_sigma = NULL
+   #Fixed constants or priors
+   d_j, g_j, prior_sigma_alpha_phi, prior_sigma_alpha_nu, iw_prior_constant, choose_term,
+   #Data
+   X, Z, s, y,
+   #PolyaGamma Parameters
+   vi_pg_b, vi_pg_mean, vi_pg_c,
+   #Sigma Parameters
+   vi_sigma_alpha, vi_sigma_alpha_nu, vi_sigma_outer_alpha,
+   #Beta Parameters / Alpha Parameters
+   vi_beta_mean, vi_beta_decomp,
+   vi_alpha_mean, vi_alpha_decomp,
+   log_det_beta_var, log_det_alpha_var, 
+   log_det_joint_var = NULL,
+   vi_joint_decomp = NULL,
+   #r Parameters
+   vi_r_mu = NULL, vi_r_mean = NULL, 
+   vi_r_sigma = NULL
 ){
   ####
   ##PREPARE INTERMEDIATE QUANTITES
@@ -171,11 +171,11 @@ calculate_ELBO <- function(ELBO_type, factorization_method,
   #quadratic var, i.e. Var(x_i^T beta + z_i^T alpha)
   if (factorization_method == 'weak'){
     if (is.null(vi_joint_decomp) | is.null(log_det_joint_var)){stop('Need to provide joint decomposition for ELBO weak')}
-    var_XBZA <- rowSums( (cbind(X,Z) %*% t(vi_joint_decomp))^2 )
+    var_XBZA <- rowSums( (cbind(X,Z) %*% t(vi_joint_decomp))^2 ) + vi_r_sigma
   }else{
     beta_quad <- rowSums( (X %*% t(vi_beta_decomp))^2 )
     alpha_quad <- rowSums( (Z %*% t(vi_alpha_decomp))^2 )
-    var_XBZA <- beta_quad + alpha_quad
+    var_XBZA <- beta_quad + alpha_quad + vi_r_sigma
   }
   #Prepare vi_sigma_alpha
   moments_sigma_alpha <- mapply(vi_sigma_alpha, vi_sigma_alpha_nu, d_j, SIMPLIFY = FALSE, FUN=function(phi, nu, d){
@@ -232,12 +232,18 @@ calculate_ELBO <- function(ELBO_type, factorization_method,
   }else if (ELBO_type == 'profiled'){
     vi_r_var <- ( exp(vi_r_sigma) - 1 ) * vi_r_mean^2 
     
-    logcomplete_1a <- sum(approx.lgamma(y, mean_r = vi_r_mean, var_r = vi_r_var)) +
-      - N * approx.lgamma(x = 0, mean_r = vi_r_mean, var_r = vi_r_var) - (vi_r_mean) * N * log(2) +
-      as.vector(t((y - vi_r_mean)/2) %*% ex_XBZA)
-    logcomplete_1b <- sum(-(y + vi_r_mean) * log(cosh(1/2 * sqrt(ex_XBZA^2 + vi_r_sigma + var_XBZA))))
-    logcomplete_1c <- N/2 * vi_r_mean * vi_r_sigma
-    logcomplete_1 <- logcomplete_1a + logcomplete_1b + logcomplete_1c + choose_term
+    psi <- ex_XBZA + vi_r_mu
+    zVz <- var_XBZA - vi_r_sigma
+
+    logcomplete_1 <- VEM.PELBO.r(ln_r = vi_r_mu, y, psi, zVz) +
+      1/2 * VEM.PELBO.r_hessian(ln_r = vi_r_mu, y, psi, zVz) * vi_r_sigma
+    
+    # logcomplete_1a <- sum(lgamma(y + vi_r_hat)) +
+    #   - N * lgamma(vi_r_hat) - (vi_r_hat) * N * log(2) +
+    #   as.vector(t((y - exp(vi_r_hat))/2) %*% ex_XBZA)
+    # logcomplete_1b <- sum(-(y + vi_r_mean) * log(cosh(1/2 * sqrt(ex_XBZA^2 + vi_r_sigma + var_XBZA))))
+    # logcomplete_1c <- N/2 * vi_r_mean * vi_r_sigma
+    # logcomplete_1 <- logcomplete_1a + logcomplete_1b + logcomplete_1c + choose_term
     
     logcomplete_2 <- sum(-d_j * g_j / 2 * log(2 * pi) - g_j/2 * ln_det_sigma_alpha) +
       -1/2 * sum(mapply(inv_sigma_alpha, vi_sigma_outer_alpha, FUN=function(a,b){sum(diag(a %*% b))}))
@@ -247,7 +253,6 @@ calculate_ELBO <- function(ELBO_type, factorization_method,
           -(prior_sigma_alpha_nu + d_j + 1)/2 * ln_det_sigma_alpha +
           -1/2 * mapply(prior_sigma_alpha_phi, inv_sigma_alpha, FUN=function(a,b){sum(diag(a %*% b))})
       )
-    
     if (factorization_method == 'weak'){
       entropy_1 <-  ncol(vi_joint_decomp)/2 * log(2 * pi * exp(1)) + 
         1/2 * log_det_joint_var 
@@ -255,7 +260,12 @@ calculate_ELBO <- function(ELBO_type, factorization_method,
       entropy_1 <- ncol(vi_beta_decomp)/2 * log(2 * pi * exp(1)) + 1/2 * log_det_beta_var +
         ncol(vi_alpha_decomp)/2 * log(2 * pi * exp(1)) + 1/2 * log_det_alpha_var
     }
-    entropy_2 <- 0
+    #Entropy of q(ln r)
+    if (vi_r_sigma == 0){
+      entropy_2 <- 0
+    }else{
+      entropy_2 <- 1/2 * log(2 * pi * exp(1) * vi_r_sigma)
+    }
     #Entropy Wisharts
     entropy_3 <- -mapply(vi_sigma_alpha_nu, vi_sigma_alpha, FUN=function(nu,Phi){make_log_invwishart_constant(nu = nu, Phi = Phi)}) +
       (vi_sigma_alpha_nu + d_j + 1)/2 * ln_det_sigma_alpha +
@@ -305,25 +315,28 @@ update_r <- function(vi_r_mu, vi_r_sigma, y, X, Z, factorization_method,
   
   if (vi_r_method == 'delta'){
     
-    # opt_vi_r <- optim(par = c(vi_r_mu, log(vi_r_sigma)), fn = PELBO.r,
-    #                   y = y, psi = ex_XBZA, zVz = var_XBZA, N = N,
-    #                   control = list(fnscale = -1, trace = 1), method = 'L-BFGS-B')
-    # prior_vi_r <- PELBO.r(par = c(vi_r_mu, log(vi_r_sigma)), y = y,
-    #                       psi = ex_XBZA, zVz = var_XBZA, N = N)
-    # if (opt_vi_r$value < prior_vi_r){
-    #   warning('Optim for r decreased objective.')
-    #   out_par <- c(vi_r_mu, vi_r_sigma)
-    # }else{
-    #   out_par <- c(opt_vi_r$par[1], exp(opt_vi_r$par[2]))
-    # }
+    opt_vi_r <- optim(par = c(vi_r_mu, log(vi_r_sigma)), fn = VEM.delta_method,
+          y = y, psi = ex_XBZA, zVz = var_XBZA, 
+          control = list(fnscale = - 1), method = 'L-BFGS')
+    
+    prior_vi_r <- VEM.delta_method(par = c(vi_r_mu, log(vi_r_sigma)), y = y,
+                          psi = ex_XBZA, zVz = var_XBZA)
+    if (opt_vi_r$value < prior_vi_r){
+      warning('Optim for r decreased objective.')
+      out_par <- c(vi_r_mu, vi_r_sigma)
+    }else{
+      out_par <- c(opt_vi_r$par[1], exp(opt_vi_r$par[2]))
+    }
   }else if (vi_r_method %in% c('VEM', 'Laplace')){
     
-    opt_vi_r <- optim(par = vi_r_mu, fn = VEM.PELBO.r,
+    opt_vi_r <- optim(par = vi_r_mu, fn = VEM.PELBO.r, gr = VEM.PELBO.r_deriv,
                       y = y, psi = ex_XBZA, zVz = var_XBZA, 
-                      control = list(fnscale = - 1), method = 'L-BFGS', hessian = T)
+                      control = list(fnscale = - 1), method = 'L-BFGS')
     
     if (vi_r_method == 'Laplace'){
-      proposed_vi_r_sigma <- as.numeric(-1/opt_vi_r$hessian)
+      proposed_vi_r_sigma <- -1/VEM.PELBO.r_hessian(ln_r = opt_vi_r$par, 
+                                                    y = y, psi = ex_XBZA, zVz = var_XBZA)
+      # proposed_vi_r_sigma <- #as.numeric(-1/opt_vi_r$hessian)
     }else{
       proposed_vi_r_sigma <- 0
     }
@@ -333,7 +346,7 @@ update_r <- function(vi_r_mu, vi_r_sigma, y, X, Z, factorization_method,
     
     if (opt_vi_r$value < prior_vi_r){
       warning('Optim for r decreased objective.')
-      out_par <- c(vi_r_mu, proposed_vi_r_sigma)
+      out_par <- c(vi_r_mu, vi_r_sigma)
     }else{
       out_par <- c(opt_vi_r$par, proposed_vi_r_sigma)
     }
@@ -355,26 +368,62 @@ approx.lgamma <- function(x, mean_r, var_r){
   return(output)
 }
 
-PELBO.r <- function(par, y, psi, zVz, N){
-  mu_r <- par[1]
-  log_sigma_r <- par[2]
+VEM.delta_method <- function(par, ln_r, y, psi, zVz){
+  mu <- par[1]
+  sigma <- exp(par[2])
+  obj <- VEM.PELBO.r(ln_r = mu, y, psi, zVz) +
+    1/2 * VEM.PELBO.r_hessian(ln_r = mu, y, psi, zVz) * sigma +
+    1/2 * log(sigma)
+  return(obj)
+}
 
-  sigma_r <- exp(log_sigma_r)
-  mean_r <- exp(mu_r + sigma_r/2)
-  var_r <- ( exp(sigma_r) - 1 ) * mean_r^2
-  cov_r <- mean_r * sigma_r
-  entropy_r <- mu_r + 1/2 * log_sigma_r
+sech <- function(x){1/cosh(x)}
+
+VEM.PELBO.r_deriv <- function(ln_r, y, psi, zVz){
+  N <- length(y)
+  r <- exp(ln_r)
+  meat <- sqrt(zVz + (psi - ln_r)^2)
   
-  #Gamma Approximation Term
-  t1 <- sum( approx.lgamma(x = y, mean_r = mean_r, var_r = var_r) ) +
-    - N * approx.lgamma(x = 0, mean_r = mean_r, var = var_r) +
-    - N * log(2) * mean_r
-  #E[s^T (psi - ln r)] ....
-  t2 <- sum( (y - mean_r)/2 * (psi - mu_r) ) + N/2 * cov_r
-  
-  t3 <- sum(
-    -(y + mean_r) * log(cosh(1/2 * sqrt(zVz + (psi - mu_r)^2 + sigma_r)))
-  )
-  
-  return(t1 + t2 + t3 + entropy_r)
+  # -E^lnr PolyGamma[0, E^lnr] + E^lnr PolyGamma[0, E^lnr + y]
+  deriv_normcon <- - N * r * psigamma(r) + r * sum(psigamma(y + r))
+  # Mathematica Syntax for Derivative Ln[Cosh[1/2 * Sqrt[zVz + (psi - ln_r)^2]]]
+  # -E^lnr Log[Cosh[1/2 Sqrt[(lnr - psi)^2 + v]]] - ((lnr - psi) (E^lnr + y) Tanh[
+  #     1/2 Sqrt[(lnr - psi)^2 + v]])/(2 Sqrt[(lnr - psi)^2 + v])
+  deriv_lncosh <- - r * log(cosh(1/2 * meat)) - (ln_r - psi) * (y + r) * tanh(1/2 * meat)/(2 * meat)
+  deriv_lncosh <- sum(deriv_lncosh)
+  # Mathematic Synax for 
+  # 1/2 (-y + E^lnr (1 + lnr - psi - Log[4]))
+  deriv_prelim <- 1/2 * (-y + r * (1 + ln_r - psi - log(4)))
+  deriv_prelim <- sum(deriv_prelim)
+  return(deriv_normcon + deriv_lncosh + deriv_prelim)
+}
+
+VEM.PELBO.r_hessian <- function(ln_r, y, psi, zVz){
+  N <- length(y)
+  r <- exp(ln_r)
+  meat <- sqrt(zVz + (psi - ln_r)^2)
+ 
+  # -E^lnr PolyGamma[0, E^lnr] + E^lnr PolyGamma[0, E^lnr + y] - 
+  #   E^(2 lnr) PolyGamma[1, E^lnr] + E^(2 lnr) PolyGamma[1, E^lnr + y]
+  deriv_normcon <- - N * r * psigamma(r) + r * sum(psigamma(y + r)) +
+    - N * r^2 * psigamma(r, deriv = 1) + r^2 * sum(psigamma(r + y, deriv = 1))
+  # Mathematica Code
+  # E^r Log[Cosh[1/2 Sqrt[(psi - r)^2 + z]]] + (
+  # E^r (psi - r) Tanh[1/2 Sqrt[(psi - r)^2 + z]])/Sqrt[(psi - r)^2 + 
+  # z] + (-E^r - y) (((psi - r)^2 Sech[1/2 Sqrt[(psi - r)^2 + z]]^2)/(
+  #   4 ((psi - r)^2 + z)) - ((psi - r)^2 Tanh[
+  #     1/2 Sqrt[(psi - r)^2 + z]])/(2 ((psi - r)^2 + z)^(3/2)) + 
+  #     Tanh[1/2 Sqrt[(psi - r)^2 + z]]/(2 Sqrt[(psi - r)^2 + z]))
+  deriv_lncosh <- -r * log(cosh(1/2 * meat)) + r * (psi - ln_r) * tanh(1/2 * meat)/meat +
+    -(y + r) * ((psi - ln_r)^2 * sech(1/2 * meat)^2 / (4 * meat^2) - (psi - ln_r)^2 * tanh(1/2 * meat)/(2 * meat^3) +
+                  tanh(1/2 * meat)/(2 * meat))
+  deriv_lncosh <- sum(deriv_lncosh)
+  # deriv_lncosh <- -(psi - ln_r)^2 * (r + y)/(2 * meat^2 * (1 + cosh(meat))) +
+  # -r * log(cosh(1/2 * meat))  +
+  # (zVz * (y + r) + r * 2 * (ln_r - psi) * meat^2) * tanh(1/2 * meat) / (2 * meat^3) 
+  # Mathematica  
+  # E^lnr - 1/2 E^lnr (-lnr + psi) - E^lnr Log[2]
+   deriv_prelim <- N * r - 1/2 * r * sum(psi - ln_r) - N * r * log(2)
+   
+  return(deriv_normcon + deriv_lncosh + deriv_prelim)
 }
