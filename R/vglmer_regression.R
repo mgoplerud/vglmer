@@ -1,6 +1,6 @@
 #' Variational Inference for Non-Linear Hierarchical Models
 #' 
-#' Estimate a hierarchical modelusing mean-field variational
+#' Estimate a hierarchical model using mean-field variational
 #' inference. Accepts standard syntax to glmer: y ~ X + (1 + Z | g). Options are
 #' described below.
 #' 
@@ -32,6 +32,16 @@ vglmer <- function(formula, data, family, control = vglmer_control()){
     warning(paste0('data is not a data.frame? Behavior may be unexpected: ', checkdf))
   }
   assert_formula(formula)
+  # Delete the missing data 
+  # (i.e. sub out the random effects, do model.frame)
+  #
+  nobs_init <- nrow(data)
+  data <- model.frame(subbars(formula), data)
+  nobs_complete <- nrow(data)
+  missing_obs <- nobs_init - nobs_complete
+  if (length(missing_obs) == 0){
+    missing_obs <- '??'
+  }
   assert_choice(family, c('negbin', 'binomial'))
   if (!inherits(control, 'vglmer_control')){
     stop('control must be object from vglmer_control().')
@@ -1069,7 +1079,8 @@ vglmer <- function(formula, data, family, control = vglmer_control()){
       output$r <- list(mu = vi_r_mu, sigma = vi_r_sigma, method = vi_r_method)
     }
 
-    output$internal_parameters <- list(it_used = it, it_max = iterations,
+    output$internal_parameters <- list(it_used = it, it_max = iterations, 
+                                       missing_obs = missing_obs, N = nrow(X),
                                        names_of_RE = names_of_RE, d_j = d_j, g_j = g_j)
 
     output$alpha$var <- variance_by_alpha_jg$variance_jg

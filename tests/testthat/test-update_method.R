@@ -112,7 +112,7 @@ test_that('Compare VI r methods', {
   
   all_r <- sapply(list_r, FUN=function(i){i$mu})
   #Check that mu are quite close
-  expect_lte(diff(range(all_r)), 0.01)
+  expect_lte(diff(range(all_r)), 0.02)
   #Check that the mu standard errors are close for Laplace/delta
   expect_lte(diff(sqrt(sapply(list_r, FUN=function(i){i$sigma}))[-1]), 0.02)
   

@@ -21,7 +21,7 @@ test_that('Prediction Matches Manual and (nearly) glmer', {
   def_predict <- predict(example_vglmer, newdata = data.frame(y =y, x = x, g = g))
   
   expect_gt(
-    cor(def_predict, glmer_predict), 0.99
+    cor(def_predict, glmer_predict), 0.95
   )
   
   alpha_names <- rownames(example_vglmer$alpha$mean)

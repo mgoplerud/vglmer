@@ -67,6 +67,8 @@ vcov.vglmer <- function(object, ...){
 #' @export
 print.vglmer <- function(x, ...){
   if (length(list(...)) > 0){'print.vglmer does not use ...'}
+  N_obs <- x$internal_parameters$N
+  missing_obs <- x$internal_parameters$missing_obs
   it_used <- x$internal_parameters$it_used
   it_max <- x$internal_parameters$it_max
   final_param_change <- round(max(x$parameter.change), 6)
@@ -77,14 +79,16 @@ print.vglmer <- function(x, ...){
   J <- length(x$sigma$cov)
   
   cat(paste0('Formula: J = ', J,', |Z| = ', p.Z, ', |X| = ', p.X,'\n\n'))
-  cat(paste(format(x$formula), collapse = '\n'))
+  cat(paste(format(x$formula), collapse = '\n\n'))
   cat('\n\n')
-
-
+  if (missing_obs > 0){
+    missing_info <- paste0('after ', missing_obs, ' deleted because of missing data and') 
+  }else{missing_info <- ' and'}
+  cat(paste0('Model fit with ', N_obs, ' observations', missing_info))
   if (converged){
-    cat(paste0('Model converged after ', it_used, ' iterations.'))
+    cat(paste0(' converged after ', it_used, ' iterations.'))
   }else{
-    cat(paste0('Model *failed* to converge after ', it_max, ' iterations.'))
+    cat(paste0(' *failed* to converge after ', it_max, ' iterations.'))
   } 
   cat('\n\n')
   cat(paste0('ELBO: ', round(x$ELBO[1],2), '\n\n'))
