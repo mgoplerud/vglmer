@@ -240,7 +240,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()){
       s <- (y - vi_r_mean)/2
       vi_pg_b <- y + vi_r_mean
       
-      choose_term <- -sum(lgamma(y + 1)) - sum(y) * log(2)
+      choose_term <- NA #-sum(lgamma(y + 1)) - sum(y) * log(2)
     }
 
     #Initalize variational parameters.
@@ -439,6 +439,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()){
           vi_joint_decomp = vi_joint_decomp, choose_term = choose_term,
           log_det_joint_var = log_det_joint_var, vi_r_mu = vi_r_mu, vi_r_mean = vi_r_mean, vi_r_sigma = vi_r_sigma
         )
+        
       }
       
       if (do_timing){
@@ -454,10 +455,12 @@ vglmer <- function(formula, data, family, control = vglmer_control()){
       }else{
         cyclical_T <- FALSE
       }
-      inv_mapping_alpha <- mapply(vi_sigma_alpha_nu, lapply(vi_sigma_alpha, solve), SIMPLIFY = FALSE, FUN=function(a,b){a * b})
+      inv_mapping_alpha <- mapply(vi_sigma_alpha_nu, lapply(vi_sigma_alpha, solve), 
+          SIMPLIFY = FALSE, FUN=function(a,b){a * b})
       inv_mapping_alpha <- make_mapping_alpha(inv_mapping_alpha)
+      
       Tinv <- prepare_T(mapping = inv_mapping_alpha, levels_per_RE = g_j, num_REs = number_of_RE,
-                        variables_per_RE = d_j, running_per_RE = breaks_for_RE, cyclical = cyclical_T)
+        variables_per_RE = d_j, running_per_RE = breaks_for_RE, cyclical = cyclical_T)
       if (!cyclical_T){
         Tinv <- as(Tinv, 'dgCMatrix')
       }else{
@@ -695,7 +698,8 @@ vglmer <- function(formula, data, family, control = vglmer_control()){
           log_det_beta_var = log_det_beta_var, log_det_alpha_var = log_det_alpha_var,
           vi_beta_decomp = vi_beta_decomp, vi_alpha_decomp = vi_alpha_decomp, 
           vi_joint_decomp = vi_joint_decomp, choose_term = choose_term,
-          log_det_joint_var = log_det_joint_var, vi_r_mu = vi_r_mu, vi_r_mean = vi_r_mean, vi_r_sigma = vi_r_sigma
+          log_det_joint_var = log_det_joint_var, vi_r_mu = vi_r_mu, vi_r_mean = vi_r_mean, 
+          vi_r_sigma = vi_r_sigma
         )
       }
       if (do_timing){

@@ -159,7 +159,8 @@ calculate_ELBO <- function(ELBO_type, factorization_method,
    log_det_joint_var = NULL,
    vi_joint_decomp = NULL,
    #r Parameters
-   vi_r_mu = NULL, vi_r_mean = NULL, vi_r_sigma = NULL
+   vi_r_mu = NULL, vi_r_mean = NULL, 
+   vi_r_sigma = NULL
 ){
   ####
   ##PREPARE INTERMEDIATE QUANTITES
@@ -170,11 +171,11 @@ calculate_ELBO <- function(ELBO_type, factorization_method,
   #quadratic var, i.e. Var(x_i^T beta + z_i^T alpha)
   if (factorization_method == 'weak'){
     if (is.null(vi_joint_decomp) | is.null(log_det_joint_var)){stop('Need to provide joint decomposition for ELBO weak')}
-    var_XBZA <- rowSums( (cbind(X,Z) %*% t(vi_joint_decomp))^2 )
+    var_XBZA <- rowSums( (cbind(X,Z) %*% t(vi_joint_decomp))^2 ) + vi_r_sigma
   }else{
     beta_quad <- rowSums( (X %*% t(vi_beta_decomp))^2 )
     alpha_quad <- rowSums( (Z %*% t(vi_alpha_decomp))^2 )
-    var_XBZA <- beta_quad + alpha_quad
+    var_XBZA <- beta_quad + alpha_quad + vi_r_sigma
   }
   #Prepare vi_sigma_alpha
   moments_sigma_alpha <- mapply(vi_sigma_alpha, vi_sigma_alpha_nu, d_j, SIMPLIFY = FALSE, FUN=function(phi, nu, d){
@@ -231,12 +232,18 @@ calculate_ELBO <- function(ELBO_type, factorization_method,
   }else if (ELBO_type == 'profiled'){
     vi_r_var <- ( exp(vi_r_sigma) - 1 ) * vi_r_mean^2 
     
-    logcomplete_1a <- sum(approx.lgamma(y, mean_r = vi_r_mean, var_r = vi_r_var)) +
-      - N * approx.lgamma(x = 0, mean_r = vi_r_mean, var_r = vi_r_var) - (vi_r_mean) * N * log(2) +
-      as.vector(t((y - vi_r_mean)/2) %*% ex_XBZA)
-    logcomplete_1b <- sum(-(y + vi_r_mean) * log(cosh(1/2 * sqrt(ex_XBZA^2 + vi_r_sigma + var_XBZA))))
-    logcomplete_1c <- N/2 * vi_r_mean * vi_r_sigma
-    logcomplete_1 <- logcomplete_1a + logcomplete_1b + logcomplete_1c + choose_term
+    psi <- ex_XBZA + vi_r_mu
+    zVz <- var_XBZA - vi_r_sigma
+
+    logcomplete_1 <- VEM.PELBO.r(ln_r = vi_r_mu, y, psi, zVz) +
+      1/2 * VEM.PELBO.r_hessian(ln_r = vi_r_mu, y, psi, zVz) * vi_r_sigma
+    
+    # logcomplete_1a <- sum(lgamma(y + vi_r_hat)) +
+    #   - N * lgamma(vi_r_hat) - (vi_r_hat) * N * log(2) +
+    #   as.vector(t((y - exp(vi_r_hat))/2) %*% ex_XBZA)
+    # logcomplete_1b <- sum(-(y + vi_r_mean) * log(cosh(1/2 * sqrt(ex_XBZA^2 + vi_r_sigma + var_XBZA))))
+    # logcomplete_1c <- N/2 * vi_r_mean * vi_r_sigma
+    # logcomplete_1 <- logcomplete_1a + logcomplete_1b + logcomplete_1c + choose_term
     
     logcomplete_2 <- sum(-d_j * g_j / 2 * log(2 * pi) - g_j/2 * ln_det_sigma_alpha) +
       -1/2 * sum(mapply(inv_sigma_alpha, vi_sigma_outer_alpha, FUN=function(a,b){sum(diag(a %*% b))}))
@@ -246,7 +253,6 @@ calculate_ELBO <- function(ELBO_type, factorization_method,
           -(prior_sigma_alpha_nu + d_j + 1)/2 * ln_det_sigma_alpha +
           -1/2 * mapply(prior_sigma_alpha_phi, inv_sigma_alpha, FUN=function(a,b){sum(diag(a %*% b))})
       )
-    
     if (factorization_method == 'weak'){
       entropy_1 <-  ncol(vi_joint_decomp)/2 * log(2 * pi * exp(1)) + 
         1/2 * log_det_joint_var 
@@ -254,7 +260,12 @@ calculate_ELBO <- function(ELBO_type, factorization_method,
       entropy_1 <- ncol(vi_beta_decomp)/2 * log(2 * pi * exp(1)) + 1/2 * log_det_beta_var +
         ncol(vi_alpha_decomp)/2 * log(2 * pi * exp(1)) + 1/2 * log_det_alpha_var
     }
-    entropy_2 <- 0
+    #Entropy of q(ln r)
+    if (vi_r_sigma == 0){
+      entropy_2 <- 0
+    }else{
+      entropy_2 <- 1/2 * log(2 * pi * exp(1) * vi_r_sigma)
+    }
     #Entropy Wisharts
     entropy_3 <- -mapply(vi_sigma_alpha_nu, vi_sigma_alpha, FUN=function(nu,Phi){make_log_invwishart_constant(nu = nu, Phi = Phi)}) +
       (vi_sigma_alpha_nu + d_j + 1)/2 * ln_det_sigma_alpha +
@@ -320,10 +331,12 @@ update_r <- function(vi_r_mu, vi_r_sigma, y, X, Z, factorization_method,
     
     opt_vi_r <- optim(par = vi_r_mu, fn = VEM.PELBO.r, gr = VEM.PELBO.r_deriv,
                       y = y, psi = ex_XBZA, zVz = var_XBZA, 
-                      control = list(fnscale = - 1), method = 'L-BFGS', hessian = T)
+                      control = list(fnscale = - 1), method = 'L-BFGS')
     
     if (vi_r_method == 'Laplace'){
-      proposed_vi_r_sigma <- as.numeric(-1/opt_vi_r$hessian)
+      proposed_vi_r_sigma <- -1/VEM.PELBO.r_hessian(ln_r = opt_vi_r$par, 
+                                                    y = y, psi = ex_XBZA, zVz = var_XBZA)
+      # proposed_vi_r_sigma <- #as.numeric(-1/opt_vi_r$hessian)
     }else{
       proposed_vi_r_sigma <- 0
     }
@@ -333,7 +346,7 @@ update_r <- function(vi_r_mu, vi_r_sigma, y, X, Z, factorization_method,
     
     if (opt_vi_r$value < prior_vi_r){
       warning('Optim for r decreased objective.')
-      out_par <- c(vi_r_mu, proposed_vi_r_sigma)
+      out_par <- c(vi_r_mu, vi_r_sigma)
     }else{
       out_par <- c(opt_vi_r$par, proposed_vi_r_sigma)
     }
