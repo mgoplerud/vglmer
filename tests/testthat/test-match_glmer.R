@@ -64,6 +64,47 @@ test_that('Compare against glmer.nb', {
   
 })
 
+test_that('Compare VI r methods', {
+  
+  skip_on_cran()
+  
+  N <- 1000
+  G <- 50
+  x <- rnorm(N)
+  g <- sample(1:G, N, replace = T) 
+  alpha <- rnorm(G)
+  
+  y <- rnbinom(n = N, mu = exp(-1 + x + alpha[g]), size = 5)
+  data <- data.frame(y = y, x = x, g = g)
+
+  list_output <- list()
+  list_r <- list()
+  for (v in c("Laplace", "delta", "VEM")){
+    
+    example_vglmer <- vglmer(formula = y ~ x + (1 | g), data = data, 
+     family = 'negbin',
+     control = vglmer_control(factorization_method = 'weak', 
+      vi_r_method = v, init = 'random'))    
+    #Test whether it monotonically increases    
+    #expect_gte(min(diff(example_vglmer$ELBO_trajectory$ELBO)), 0)
+    fmt_vglmer <- format_vglmer(example_vglmer)
+    names(fmt_vglmer)[-1] <- paste0(v, '_', names(fmt_vglmer)[-1])
+    list_output[[v]] <- fmt_vglmer
+    list_r[[v]] <- example_vglmer$r
+  }
+  
+  list_output <- Reduce(function(a,b){merge(a,b, by = 'name')}, list_output)
+  expect_gte(min(as.vector(cor(list_output[,c('Laplace_mean', 'delta_mean', 'VEM_mean')]))), 0.95)
+  expect_gte(min(as.vector(cor(list_output[,c('Laplace_var', 'delta_var', 'VEM_var')]))), 0.95)
+  
+  all_r <- sapply(list_r, FUN=function(i){i$mu})
+  #Check that mu are quite close
+  expect_lte(diff(range(all_r)), 0.01)
+  #Check that the mu standard errors are close
+  expect_lte(diff(sqrt(sapply(list_r, FUN=function(i){i$sigma}))[-3]), 0.01)
+  
+})
+
 test_that('EM_prelim matches glm', {
   N <- 100
   p <- 10

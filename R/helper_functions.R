@@ -305,20 +305,21 @@ update_r <- function(vi_r_mu, vi_r_sigma, y, X, Z, factorization_method,
   
   if (vi_r_method == 'delta'){
     
-    # opt_vi_r <- optim(par = c(vi_r_mu, log(vi_r_sigma)), fn = PELBO.r,
-    #                   y = y, psi = ex_XBZA, zVz = var_XBZA, N = N,
-    #                   control = list(fnscale = -1, trace = 1), method = 'L-BFGS-B')
-    # prior_vi_r <- PELBO.r(par = c(vi_r_mu, log(vi_r_sigma)), y = y,
-    #                       psi = ex_XBZA, zVz = var_XBZA, N = N)
-    # if (opt_vi_r$value < prior_vi_r){
-    #   warning('Optim for r decreased objective.')
-    #   out_par <- c(vi_r_mu, vi_r_sigma)
-    # }else{
-    #   out_par <- c(opt_vi_r$par[1], exp(opt_vi_r$par[2]))
-    # }
+    opt_vi_r <- optim(par = c(vi_r_mu, log(vi_r_sigma)), fn = VEM.delta_method,
+          y = y, psi = ex_XBZA, zVz = var_XBZA, 
+          control = list(fnscale = - 1), method = 'L-BFGS')
+    
+    prior_vi_r <- VEM.delta_method(par = c(vi_r_mu, log(vi_r_sigma)), y = y,
+                          psi = ex_XBZA, zVz = var_XBZA)
+    if (opt_vi_r$value < prior_vi_r){
+      warning('Optim for r decreased objective.')
+      out_par <- c(vi_r_mu, vi_r_sigma)
+    }else{
+      out_par <- c(opt_vi_r$par[1], exp(opt_vi_r$par[2]))
+    }
   }else if (vi_r_method %in% c('VEM', 'Laplace')){
     
-    opt_vi_r <- optim(par = vi_r_mu, fn = VEM.PELBO.r,
+    opt_vi_r <- optim(par = vi_r_mu, fn = VEM.PELBO.r, gr = VEM.PELBO.r_deriv,
                       y = y, psi = ex_XBZA, zVz = var_XBZA, 
                       control = list(fnscale = - 1), method = 'L-BFGS', hessian = T)
     
@@ -377,4 +378,64 @@ PELBO.r <- function(par, y, psi, zVz, N){
   )
   
   return(t1 + t2 + t3 + entropy_r)
+}
+
+VEM.delta_method <- function(par, ln_r, y, psi, zVz){
+  mu <- par[1]
+  sigma <- exp(par[2])
+  obj <- VEM.PELBO.r(ln_r = mu, y, psi, zVz) +
+    1/2 * VEM.PELBO.r_hessian(ln_r = mu, y, psi, zVz) * sigma +
+    1/2 * log(sigma)
+  return(obj)
+}
+
+sech <- function(x){1/cosh(x)}
+
+VEM.PELBO.r_deriv <- function(ln_r, y, psi, zVz){
+  N <- length(y)
+  r <- exp(ln_r)
+  meat <- sqrt(zVz + (psi - ln_r)^2)
+  
+  # -E^lnr PolyGamma[0, E^lnr] + E^lnr PolyGamma[0, E^lnr + y]
+  deriv_normcon <- - N * r * psigamma(r) + r * sum(psigamma(y + r))
+  # Mathematica Syntax for Derivative Ln[Cosh[1/2 * Sqrt[zVz + (psi - ln_r)^2]]]
+  # -E^lnr Log[Cosh[1/2 Sqrt[(lnr - psi)^2 + v]]] - ((lnr - psi) (E^lnr + y) Tanh[
+  #     1/2 Sqrt[(lnr - psi)^2 + v]])/(2 Sqrt[(lnr - psi)^2 + v])
+  deriv_lncosh <- - r * log(cosh(1/2 * meat)) - (ln_r - psi) * (y + r) * tanh(1/2 * meat)/(2 * meat)
+  deriv_lncosh <- sum(deriv_lncosh)
+  # Mathematic Synax for 
+  # 1/2 (-y + E^lnr (1 + lnr - psi - Log[4]))
+  deriv_prelim <- 1/2 * (-y + r * (1 + ln_r - psi - log(4)))
+  deriv_prelim <- sum(deriv_prelim)
+  return(deriv_normcon + deriv_lncosh + deriv_prelim)
+}
+
+VEM.PELBO.r_hessian <- function(ln_r, y, psi, zVz){
+  N <- length(y)
+  r <- exp(ln_r)
+  meat <- sqrt(zVz + (psi - ln_r)^2)
+ 
+  # -E^lnr PolyGamma[0, E^lnr] + E^lnr PolyGamma[0, E^lnr + y] - 
+  #   E^(2 lnr) PolyGamma[1, E^lnr] + E^(2 lnr) PolyGamma[1, E^lnr + y]
+  deriv_normcon <- - N * r * psigamma(r) + r * sum(psigamma(y + r)) +
+    - N * r^2 * psigamma(r, deriv = 1) + r^2 * sum(psigamma(r + y, deriv = 1))
+  # Mathematica Code
+  # E^r Log[Cosh[1/2 Sqrt[(psi - r)^2 + z]]] + (
+  # E^r (psi - r) Tanh[1/2 Sqrt[(psi - r)^2 + z]])/Sqrt[(psi - r)^2 + 
+  # z] + (-E^r - y) (((psi - r)^2 Sech[1/2 Sqrt[(psi - r)^2 + z]]^2)/(
+  #   4 ((psi - r)^2 + z)) - ((psi - r)^2 Tanh[
+  #     1/2 Sqrt[(psi - r)^2 + z]])/(2 ((psi - r)^2 + z)^(3/2)) + 
+  #     Tanh[1/2 Sqrt[(psi - r)^2 + z]]/(2 Sqrt[(psi - r)^2 + z]))
+  deriv_lncosh <- -r * log(cosh(1/2 * meat)) + r * (psi - ln_r) * tanh(1/2 * meat)/meat +
+    -(y + r) * ((psi - ln_r)^2 * sech(1/2 * meat)^2 / (4 * meat^2) - (psi - ln_r)^2 * tanh(1/2 * meat)/(2 * meat^3) +
+                  tanh(1/2 * meat)/(2 * meat))
+  deriv_lncosh <- sum(deriv_lncosh)
+  # deriv_lncosh <- -(psi - ln_r)^2 * (r + y)/(2 * meat^2 * (1 + cosh(meat))) +
+  # -r * log(cosh(1/2 * meat))  +
+  # (zVz * (y + r) + r * 2 * (ln_r - psi) * meat^2) * tanh(1/2 * meat) / (2 * meat^3) 
+  # Mathematica  
+  # E^lnr - 1/2 E^lnr (-lnr + psi) - E^lnr Log[2]
+   deriv_prelim <- N * r - 1/2 * r * sum(psi - ln_r) - N * r * log(2)
+   
+  return(deriv_normcon + deriv_lncosh + deriv_prelim)
 }
