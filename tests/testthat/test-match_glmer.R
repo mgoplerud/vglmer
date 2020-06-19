@@ -75,7 +75,7 @@ test_that('EM_prelim matches glm', {
   
   est_glm <- glm(y ~ Z, family = binomial)
   est_init <- EM_prelim_logit(X = drop0(matrix(1, nrow = N)), 
-      Z = drop0(Z), s = y - 1/2, pg_b = 1, iter = 200, ridge = Inf)  
+      Z = drop0(Z), s = y - 1/2, pg_b = rep(1,N), iter = 200, ridge = Inf)  
   est_init <- c(est_init$beta, est_init$alpha)
   expect_equal(as.vector(coef(est_glm)), est_init, tolerance = 1e-4)  
 })
