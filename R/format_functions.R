@@ -45,9 +45,6 @@ format_vglmer <- function(object){
 #' @importFrom stats var
 #' @export
 format_stan <- function(object, useSigma = FALSE){
-  if (!requireNamespace('stringr', quietly = T)){
-    stop('stringr required for format_stan')
-  }
   post_stan <- as.matrix(object)
   if (!useSigma){
     post_stan <- post_stan[,!grepl(colnames(post_stan), pattern='^Sigma')]

@@ -117,6 +117,7 @@ multi_digamma <- function(a, p){
 #' @param iter iterations
 #' @param ridge variance of ridge prior
 #' @name simple_EM
+#' @importFrom stats runif
 EM_prelim_logit <- function(X, Z, s, pg_b, iter, ridge = 2){
   
   jointXZ <- cbind(X, Z)
@@ -125,7 +126,7 @@ EM_prelim_logit <- function(X, Z, s, pg_b, iter, ridge = 2){
   EM_beta <- rep(0, ncol(jointXZ))
   
   if (all(jointXZ[,1] == 1)){
-    EM_beta[1] <- qlogis(mean(s + 1/2))
+    EM_beta[1] <- qlogis(sum(s + pg_b/2)/sum(pg_b))
   }
   if (EM_beta[1] == 0){
     EM_beta[1] <- runif(1, -.1, .1)
@@ -149,6 +150,7 @@ EM_prelim_logit <- function(X, Z, s, pg_b, iter, ridge = 2){
 }
 
 #' @rdname simple_EM
+#' @importFrom stats runif
 EM_prelim_nb <- function(X, Z, y, est_r, iter, ridge = 2){
   if (is.null(Z)){
     jointXZ <- drop0(X)
@@ -354,12 +356,12 @@ update_r <- function(vi_r_mu, vi_r_sigma, y, X, Z, factorization_method,
   
   N <- length(y)
   
-  vi_r_mu <<- vi_r_mu
-  vi_r_sigma <<- vi_r_sigma
-  ex_XBZA <<- ex_XBZA
-  var_XBZA <<- var_XBZA
-  y <<- y
-  N <<- N
+  # vi_r_mu <<- vi_r_mu
+  # vi_r_sigma <<- vi_r_sigma
+  # ex_XBZA <<- ex_XBZA
+  # var_XBZA <<- var_XBZA
+  # y <<- y
+  # N <<- N
   
   if (vi_r_method == 'delta'){
     
