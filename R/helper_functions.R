@@ -1,28 +1,28 @@
-extract_group_memberships <- function(x, fr, drop.unused.levels){
-  frloc <- factorize(x, frloc)
-  if (is.null(ff <- tryCatch(eval(substitute(makeFac(fac), 
-                                             list(fac = x[[3]])), frloc), error = function(e) NULL))) 
-    stop("couldn't evaluate grouping factor ", deparse(x[[3]]), 
-         " within model frame:", " try adding grouping factor to data ", 
-         "frame explicitly if possible", call. = FALSE)
-  if (all(is.na(ff))){ 
-    stop("Invalid grouping factor specification, ", deparse(x[[3]]), 
-         call. = FALSE)
-  }
-  if (drop.unused.levels){
-    ff <- factor(ff, exclude = NA)
-  }
-  return(ff)
-}
-
-make_dgC <- function(x){
-  if (!inherits(x, 'ddiMatrix')){
-    x <- as(x, 'dgCMatrix')
-  }else{
-    x <- sparseMatrix(i = 1:nrow(x), j =1:nrow(x), x = diag(x))
-  }
-  return(x)
-}
+# extract_group_memberships <- function(x, fr, drop.unused.levels){
+#   frloc <- factorize(x, frloc)
+#   if (is.null(ff <- tryCatch(eval(substitute(makeFac(fac), 
+#                                              list(fac = x[[3]])), frloc), error = function(e) NULL))) 
+#     stop("couldn't evaluate grouping factor ", deparse(x[[3]]), 
+#          " within model frame:", " try adding grouping factor to data ", 
+#          "frame explicitly if possible", call. = FALSE)
+#   if (all(is.na(ff))){ 
+#     stop("Invalid grouping factor specification, ", deparse(x[[3]]), 
+#          call. = FALSE)
+#   }
+#   if (drop.unused.levels){
+#     ff <- factor(ff, exclude = NA)
+#   }
+#   return(ff)
+# }
+# 
+# make_dgC <- function(x){
+#   if (!inherits(x, 'ddiMatrix')){
+#     x <- as(x, 'dgCMatrix')
+#   }else{
+#     x <- sparseMatrix(i = 1:nrow(x), j =1:nrow(x), x = diag(x))
+#   }
+#   return(x)
+# }
 
 #' @import Matrix
 #' @importFrom methods as
@@ -81,27 +81,26 @@ prepare_T <- function(mapping, levels_per_RE, variables_per_RE, running_per_RE, 
 }
 
 multi_lgamma <- function(a, p){
-  
   return(lmvgamma(x = a, p = p))
-  if (length(p) != 1){stop('P must have length 1')}
-  #if (any(a + 1 < p)){stop('Undefined for a < p - 1')}
-  term.1 <- log(pi) * (p) * (p - 1) / 4
-  term.2 <- mapply(1:p, SIMPLIFY = FALSE, FUN=function(i){
-    matrix(lgamma(a + (1 - i) / 2))
-  })
-  term.2 <- as.vector(Reduce('+', term.2))
-  return(term.1 + term.2)
+  # if (length(p) != 1){stop('P must have length 1')}
+  # #if (any(a + 1 < p)){stop('Undefined for a < p - 1')}
+  # term.1 <- log(pi) * (p) * (p - 1) / 4
+  # term.2 <- mapply(1:p, SIMPLIFY = FALSE, FUN=function(i){
+  #   matrix(lgamma(a + (1 - i) / 2))
+  # })
+  # term.2 <- as.vector(Reduce('+', term.2))
+  # return(term.1 + term.2)
 }
 
 multi_digamma <- function(a, p){
   return(mvdigamma(x = a, p = p))
-  if (length(p) != 1){stop('P must have length 1')}
-  #if (any(a + 1 < p)){stop('Undefined for a < p - 1')}
-  term.1 <- mapply(1:p, SIMPLIFY = FALSE, FUN=function(i){
-    digamma(a + (1 - i) / 2)
-  })
-  term.1 <- as.vector(Reduce('+', term.1))
-  return(term.1)
+  # if (length(p) != 1){stop('P must have length 1')}
+  # #if (any(a + 1 < p)){stop('Undefined for a < p - 1')}
+  # term.1 <- mapply(1:p, SIMPLIFY = FALSE, FUN=function(i){
+  #   digamma(a + (1 - i) / 2)
+  # })
+  # term.1 <- as.vector(Reduce('+', term.1))
+  # return(term.1)
 }
 
 
@@ -145,22 +144,22 @@ make_log_invwishart_constant <- function(nu, Phi){
 }
 
 calculate_ELBO <- function(ELBO_type, factorization_method,
-                           #Fixed constants or priors
-                           d_j, g_j, prior_sigma_alpha_phi, prior_sigma_alpha_nu, iw_prior_constant, choose_term,
-                           #Data
-                           X, Z, s, y,
-                           #PolyaGamma Parameters
-                           vi_pg_b, vi_pg_mean, vi_pg_c,
-                           #Sigma Parameters
-                           vi_sigma_alpha, vi_sigma_alpha_nu, vi_sigma_outer_alpha,
-                           #Beta Parameters / Alpha Parameters
-                           vi_beta_mean, vi_beta_decomp,
-                           vi_alpha_mean, vi_alpha_decomp,
-                           log_det_beta_var, log_det_alpha_var, 
-                           log_det_joint_var = NULL,
-                           vi_joint_decomp = NULL,
-                           #r Parameters
-                           vi_r_mu = NULL, vi_r_mean = NULL, vi_r_sigma = NULL
+   #Fixed constants or priors
+   d_j, g_j, prior_sigma_alpha_phi, prior_sigma_alpha_nu, iw_prior_constant, choose_term,
+   #Data
+   X, Z, s, y,
+   #PolyaGamma Parameters
+   vi_pg_b, vi_pg_mean, vi_pg_c,
+   #Sigma Parameters
+   vi_sigma_alpha, vi_sigma_alpha_nu, vi_sigma_outer_alpha,
+   #Beta Parameters / Alpha Parameters
+   vi_beta_mean, vi_beta_decomp,
+   vi_alpha_mean, vi_alpha_decomp,
+   log_det_beta_var, log_det_alpha_var, 
+   log_det_joint_var = NULL,
+   vi_joint_decomp = NULL,
+   #r Parameters
+   vi_r_mu = NULL, vi_r_mean = NULL, vi_r_sigma = NULL
 ){
   ####
   ##PREPARE INTERMEDIATE QUANTITES
@@ -354,30 +353,6 @@ approx.lgamma <- function(x, mean_r, var_r){
   input <- x + mean_r
   output <- lgamma(input) + 1/2 * psigamma(x = input, deriv = 1) * var_r
   return(output)
-}
-
-PELBO.r <- function(par, y, psi, zVz, N){
-  mu_r <- par[1]
-  log_sigma_r <- par[2]
-
-  sigma_r <- exp(log_sigma_r)
-  mean_r <- exp(mu_r + sigma_r/2)
-  var_r <- ( exp(sigma_r) - 1 ) * mean_r^2
-  cov_r <- mean_r * sigma_r
-  entropy_r <- mu_r + 1/2 * log_sigma_r
-  
-  #Gamma Approximation Term
-  t1 <- sum( approx.lgamma(x = y, mean_r = mean_r, var_r = var_r) ) +
-    - N * approx.lgamma(x = 0, mean_r = mean_r, var = var_r) +
-    - N * log(2) * mean_r
-  #E[s^T (psi - ln r)] ....
-  t2 <- sum( (y - mean_r)/2 * (psi - mu_r) ) + N/2 * cov_r
-  
-  t3 <- sum(
-    -(y + mean_r) * log(cosh(1/2 * sqrt(zVz + (psi - mu_r)^2 + sigma_r)))
-  )
-  
-  return(t1 + t2 + t3 + entropy_r)
 }
 
 VEM.delta_method <- function(par, ln_r, y, psi, zVz){

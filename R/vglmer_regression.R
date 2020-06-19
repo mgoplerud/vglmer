@@ -361,27 +361,27 @@ vglmer <- function(formula, data, family, control = vglmer_control()){
     
     if (parameter_expansion == 'translation'){
       stop('parameter_expansion_translation not allowed yet.')
-      accepted_times <- 0
-      zeromat_beta <- drop0(Diagonal(x = rep(0, ncol(X))))
-      
-      parsed_RE_groups <- get_RE_groups(formula = formula, data = data)
-      
-      mapping_new_Z <- do.call('cbind', parsed_RE_groups$design)
-      mapping_J <- split(1:sum(d_j^2), rep(1:length(d_j), d_j^2))
-      mapping_J <- lapply(mapping_J, FUN=function(i){i-1})
-      mapping_J <- sapply(mapping_J, min)
-      
-      mapping_to_re <- parsed_RE_groups$factor
-      mapping_to_re <- array_branch(do.call('cbind', mapping_to_re), margin = 1)
-      mapping_to_re <- lapply(mapping_to_re, FUN=function(i){
-        mapply(outer_alpha_RE_positions, i, SIMPLIFY = FALSE, FUN=function(a,b){a[[b]]})
-      })
-      Mmap <- t(sapply(mapping_to_re, FUN=function(i){as.integer(sapply(i, min))}))
-      
-      start_base_Z <- cumsum(c(0,d_j))[-(number_of_RE+1)]
-      names(start_base_Z) <- NULL
-      
-      rm(parsed_RE_groups, mapping_to_re)
+      # accepted_times <- 0
+      # zeromat_beta <- drop0(Diagonal(x = rep(0, ncol(X))))
+      # 
+      # parsed_RE_groups <- get_RE_groups(formula = formula, data = data)
+      # 
+      # mapping_new_Z <- do.call('cbind', parsed_RE_groups$design)
+      # mapping_J <- split(1:sum(d_j^2), rep(1:length(d_j), d_j^2))
+      # mapping_J <- lapply(mapping_J, FUN=function(i){i-1})
+      # mapping_J <- sapply(mapping_J, min)
+      # 
+      # mapping_to_re <- parsed_RE_groups$factor
+      # mapping_to_re <- array_branch(do.call('cbind', mapping_to_re), margin = 1)
+      # mapping_to_re <- lapply(mapping_to_re, FUN=function(i){
+      #   mapply(outer_alpha_RE_positions, i, SIMPLIFY = FALSE, FUN=function(a,b){a[[b]]})
+      # })
+      # Mmap <- t(sapply(mapping_to_re, FUN=function(i){as.integer(sapply(i, min))}))
+      # 
+      # start_base_Z <- cumsum(c(0,d_j))[-(number_of_RE+1)]
+      # names(start_base_Z) <- NULL
+      # 
+      # rm(parsed_RE_groups, mapping_to_re)
     }
     store_ELBO <- data.frame()
     
