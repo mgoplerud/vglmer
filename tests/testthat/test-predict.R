@@ -70,11 +70,11 @@ test_that('Prediction Matches for Missing in new.data', {
   
   N <- 50
   G <- 10
-  x <- rnorm(N)
-  g <- sample(1:G, N, replace = T) 
+  x <- rnorm(N + G)
+  g <- c(sample(1:G, N, replace = T), 1:G) 
   alpha <- rnorm(G)
   
-  y <- rbinom(n = N, size = 1, prob = plogis(-1 + x + alpha[g]))
+  y <- rbinom(n = N + G, size = 1, prob = plogis(-1 + x + alpha[g]))
   
   example_vglmer <- vglmer(formula = y ~ x + (1 | g), data = NULL, 
      control = vglmer_control(iterations = 2), family = 'binomial')

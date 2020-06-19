@@ -127,10 +127,12 @@ EM_prelim_logit <- function(X, Z, s, pg_b, iter, ridge = 2){
   if (all(jointXZ[,1] == 1)){
     EM_beta[1] <- qlogis(mean(s + 1/2))
   }
+  if (EM_beta[1] == 0){
+    EM_beta[1] <- runif(1, -.1, .1)
+  }
   EM_variance <- sparseMatrix(i = 1:ncol(jointXZ), j = 1:ncol(jointXZ), x = 1/ridge)
   
   for (it in 1:iter){
-    
     EM_pg_c <- jointXZ %*% EM_beta
     EM_pg_mean <- pg_b/(2 * EM_pg_c) * tanh(EM_pg_c / 2)
     if (any(abs(EM_pg_c) < 1e-10)){
@@ -159,6 +161,10 @@ EM_prelim_nb <- function(X, Z, y, est_r, iter, ridge = 2){
   if (all(jointXZ[,1] == 1)){
     EM_beta[1] <- log(mean(y))
   }
+  if (EM_beta[1] == 0){
+    EM_beta[1] <- runif(1, -.1, .1)
+  }
+  
   EM_variance <- sparseMatrix(i = 1:ncol(jointXZ), j = 1:ncol(jointXZ), x = 1/ridge)
   for (it in 1:iter){
     

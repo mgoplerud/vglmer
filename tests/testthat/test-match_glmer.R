@@ -66,10 +66,10 @@ test_that('Compare against glmer.nb', {
 
 test_that('EM_prelim matches glm', {
   N <- 100
-  p <- 10
+  p <- 5
   
   Z <- matrix(rnorm(N * p), ncol = p)  
-  beta <- rnorm(p)
+  beta <- runif(p, -1, 1)
   
   y <- rbinom(N, 1, plogis(Z %*% beta))
   
