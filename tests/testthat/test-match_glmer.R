@@ -51,7 +51,7 @@ test_that('Compare against glmer.nb', {
     
     example_vglmer <- vglmer(formula = y ~ x + (1 | g), data = data, 
      family = 'negbin',
-     control = vglmer_control(factorization_method = v, init = 'random'))    
+     control = vglmer_control(factorization_method = v))    
     #Test whether it monotonically increases    
     expect_gte(min(diff(example_vglmer$ELBO_trajectory$ELBO)), 0)
     
@@ -74,9 +74,22 @@ test_that('EM_prelim matches glm', {
   y <- rbinom(N, 1, plogis(Z %*% beta))
   
   est_glm <- glm(y ~ Z, family = binomial)
-  est_init <- EM_prelim(X = drop0(matrix(1, nrow = N)), Z = drop0(Z), s = y - 1/2, pg_b = 1, iter = 200, ridge = Inf)  
+  est_init <- EM_prelim_logit(X = drop0(matrix(1, nrow = N)), Z = drop0(Z), s = y - 1/2, pg_b = 1, iter = 200, ridge = Inf)  
   est_init <- c(est_init$beta, est_init$alpha)
   expect_equal(as.vector(coef(est_glm)), est_init, tolerance = 1e-4)  
 })
 
+
+test_that('EM_prelim matches glm.nb', {
+  quine <- MASS::quine
+  N <- nrow(quine)
+  quine.nb1 <- MASS::glm.nb(Days ~ Sex/(Age + Eth*Lrn), data = quine)
+  X <- model.matrix(quine.nb1)
+  y <- quine$Days
+  
+  est_init <- EM_prelim_nb(X = drop0(matrix(1, nrow = N)), Z = drop0(X[,-1]), y = y, 
+    est_r = quine.nb1$theta, iter = 100, ridge = Inf)
+  est_init <- c(est_init$beta, est_init$alpha)
+  expect_equal(as.vector(coef(quine.nb1)), est_init, tolerance = 1e-4)
+})
 

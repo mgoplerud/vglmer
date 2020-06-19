@@ -15,7 +15,7 @@ test_that('Prediction Matches Manual and (nearly) glmer', {
   est_glmer <- suppressMessages(suppressWarnings(lme4::glmer(y ~ x + (1 + x | g) + (1 | g2), family = binomial)))
   
   example_vglmer <- vglmer(formula = y ~ x + (1 + x | g) + (1 | g2), data = NULL, family = 'binomial',
-                           control = vglmer_control(factorization_method = 'strong'))
+                           control = vglmer_control(factorization_method = 'weak'))
 
   glmer_predict <- predict(est_glmer)
   def_predict <- predict(example_vglmer, newdata = data.frame(y =y, x = x, g = g))

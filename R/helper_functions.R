@@ -111,10 +111,13 @@ multi_digamma <- function(a, p){
 #' @param X Design matrix
 #' @param Z RE design matrix
 #' @param s (y_i - n_i)/2 for polya-gamma input
+#' @param y Raw observed y_i
+#' @param est_r Initial r value (not updated!)
 #' @param pg_b n_i as vector input
 #' @param iter iterations
 #' @param ridge variance of ridge prior
-EM_prelim <- function(X, Z, s, pg_b, iter, ridge = 2){
+#' @name simple_EM
+EM_prelim_logit <- function(X, Z, s, pg_b, iter, ridge = 2){
   
   jointXZ <- cbind(X, Z)
   N <- nrow(X)
@@ -135,6 +138,32 @@ EM_prelim <- function(X, Z, s, pg_b, iter, ridge = 2){
   }
   output <- list(beta = EM_beta[1:ncol(X)], alpha = EM_beta[-1:-ncol(X)])
   return(output)  
+}
+
+#' @rdname simple_EM
+EM_prelim_nb <- function(X, Z, y, est_r, iter, ridge = 2){
+  if (is.null(Z)){
+    jointXZ <- drop0(X)
+  }else{
+    jointXZ <- cbind(X,Z)
+  }
+  N <- nrow(jointXZ)
+  
+  EM_beta <- rep(0, ncol(jointXZ))
+  EM_variance <- sparseMatrix(i = 1:ncol(jointXZ), j = 1:ncol(jointXZ), x = 1/ridge)
+  for (it in 1:iter){
+    
+    pg_c <- as.vector(jointXZ %*% EM_beta - log(est_r))
+    pg_b <- y + est_r    
+    
+    pg_mean <- as.vector(pg_b/(2 * pg_c) * tanh(pg_c/2))
+    
+    adj_out <- (y - est_r)/2 + pg_mean * log(est_r)
+    EM_beta <- LinRegChol(X  = jointXZ, omega = sparseMatrix(i =1:N,j=1:N, x = pg_mean), y = adj_out, prior_precision = EM_variance)$mean
+  }
+  
+  output <- list(beta = EM_beta[1:ncol(X)], alpha = EM_beta[-1:-ncol(X)])
+  return(output)
 }
 
 make_log_invwishart_constant <- function(nu, Phi){

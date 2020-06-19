@@ -290,9 +290,12 @@ vglmer <- function(formula, data, family, control = vglmer_control()){
     vi_sigma_alpha_nu <- vi_sigma_alpha_nu + prior_sigma_alpha_nu
         
     if (control$init == 'EM'){
-      if (family == 'negbin'){stop('EM init not yet enabled for NB.')}
-      EM_init <- EM_prelim(X = X, Z = Z, s = s, pg_b = vi_pg_b, iter = 15, ridge = 4)
-
+      if (family == 'negbin'){
+        EM_init <- EM_prelim_nb(X = X, Z = Z, y = y, est_r = exp(vi_r_mu), iter = 15, ridge = 4)
+      }else{
+        EM_init <- EM_prelim_logit(X = X, Z = Z, s = s, pg_b = vi_pg_b, iter = 15, ridge = 4)
+      }
+      
       vi_beta_mean <- matrix(EM_init$beta)
       vi_alpha_mean <- matrix(EM_init$alpha)
       
