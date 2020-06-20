@@ -96,7 +96,6 @@ test_that('EM_prelim matches glm.nb', {
 
 test_that('Compare against glmer (binomial)', {
   
-  skip_on_travis()
   N <- 1000
   G <- 100
   x <- rnorm(N)

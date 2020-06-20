@@ -40,3 +40,23 @@ test_that('vglmer can run with objects in environment', {
   expect_equivalent(dta$Y[-c(38, 39,108, 190)], test_missing$data$y)
 
 })
+
+test_that('vglmer runs with timing and "quiet=F"',{
+  
+  N <- 25
+  G <- 2
+  G_names <- paste(sample(letters, G, replace = T), 1:G)
+  x <- rnorm(N)
+  g <- sample(G_names, N, replace = T)
+  alpha <- rnorm(G)
+  
+  y <- rbinom(n = N, size = 1, prob = plogis(-1 + x + alpha[match(g, G_names)]))
+  
+  est_simple <- suppressMessages(vglmer(y ~ x + (1 | g), 
+    data = NULL, 
+    control = vglmer_control(do_timing = T, quiet = F),
+    family = 'binomial'))
+  expect_true(inherits(est_simple$timing, 'data.frame'))
+  expect_gte(min(diff(est_simple$ELBO_trajectory$ELBO)), 0)
+  
+})

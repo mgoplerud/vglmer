@@ -40,3 +40,22 @@ As is standard, give an estimate of "0" for that effect.}
 \description{
 Get linear predictor for new observations after using vglmer.
 }
+\examples{
+
+sim_data <- data.frame(x = rnorm(100), 
+y = rbinom(100, 1, 0.5), 
+g =sample(letters, 100, replace = TRUE))
+
+# Run with defaults
+est_vglmer <- vglmer(y ~ x + (x|g), data = sim_data, family = "binomial")
+
+# Simple prediction 
+predict(est_vglmer, newdata = sim_data)
+
+\dontrun{
+#Fails!
+predict(est_vglmer, newdata = data.frame(g = "AB", x = 0))
+}
+predict(est_vglmer, newdata = data.frame(g = "AB", x = 0), 
+allow_missing_levels = TRUE)
+}

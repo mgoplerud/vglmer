@@ -17,6 +17,25 @@
 #' @param allow_missing_levels Allow prediction for random effects not in object.
 #'   As is standard, give an estimate of "0" for that effect.
 #' @param ... Not used; included to maintain compatability
+#' 
+#' @examples
+#' 
+#' sim_data <- data.frame(x = rnorm(100), 
+#' y = rbinom(100, 1, 0.5), 
+#' g =sample(letters, 100, replace = TRUE))
+#' 
+#' # Run with defaults
+#' est_vglmer <- vglmer(y ~ x + (x|g), data = sim_data, family = "binomial")
+#' 
+#' # Simple prediction 
+#' predict(est_vglmer, newdata = sim_data)
+#' 
+#' \dontrun{
+#' #Fails!
+#' predict(est_vglmer, newdata = data.frame(g = "AB", x = 0))
+#' }
+#' predict(est_vglmer, newdata = data.frame(g = "AB", x = 0), 
+#' allow_missing_levels = TRUE)
 #' @importFrom stats delete.response terms
 #' @export
 predict.vglmer <- function(object, newdata, 
@@ -102,8 +121,8 @@ predict.vglmer <- function(object, newdata,
   total_obs <- rownames(newdata)
   obs_in_both <- intersect(rownames(X), rownames(Z))
   
-  XZ <- cbind(X[match(obs_in_both, rownames(X)),],
-              Z[match(obs_in_both, rownames(Z)),])
+  XZ <- cbind(X[match(obs_in_both, rownames(X)),,drop=F],
+              Z[match(obs_in_both, rownames(Z)),,drop=F])
   
   factorization_method <- object$control$factorization_method
   if (is.matrix(samples)){

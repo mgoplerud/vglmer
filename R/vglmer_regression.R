@@ -117,7 +117,8 @@ vglmer <- function(formula, data, family, control = vglmer_control()){
   names(y) <- NULL
   
   if (family == 'binomial'){
-    if (!(class(y) %in% c('numeric', 'integer'))){
+    if (is.matrix(y)){
+    # if (!(class(y) %in% c('numeric', 'integer'))){
       if (min(y) < 0){
         stop('Negative Numbers not Permitted in outcome')
       }
@@ -379,7 +380,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()){
       log_det_joint_var <- NULL
     }
     
-    if (!quiet){warning('Check vi sigma alpha nu')}
+    # if (!quiet){warning('Check vi sigma alpha nu')}
     
     #Create mapping for this to allow sparse implementations.
     mapping_sigma_alpha <- make_mapping_alpha(vi_sigma_alpha)
@@ -1039,10 +1040,8 @@ vglmer <- function(formula, data, family, control = vglmer_control()){
         break
       }
       if (!quiet & (it %% print_prog == 0)){
-        plot(vi_alpha_mean)
         message(paste0('ELBO Change: ', round(change_elbo$ELBO, 10)))
-        message('Other Parameter Changes')
-        print(data.frame(change_all, accept.PX))
+        message(paste0('Other Parameter Changes: ', max(change_all)))
       }
       
       lagged_alpha_mean <- vi_alpha_mean
