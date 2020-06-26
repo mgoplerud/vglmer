@@ -4,10 +4,10 @@
 \alias{MAVB}
 \title{Perform MAVB after fitting vglmer}
 \usage{
-MAVB(model, samples, var_px = Inf)
+MAVB(object, samples, var_px = Inf)
 }
 \arguments{
-\item{model}{Model fit using vglmer}
+\item{object}{Model fit using vglmer}
 
 \item{samples}{Samples to draw from MAVB distribution.}
 
