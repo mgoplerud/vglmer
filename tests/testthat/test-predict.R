@@ -95,5 +95,78 @@ test_that('Prediction Matches for Missing in new.data', {
 
 test_that('Prediction Matches for Simulation', {
   
+  N <- 1000
+  G <- 10
+  x <- rnorm(N)
+  g <- sample(1:G, N, replace = T) 
+  g2 <- sample(1:G, N, replace = T)
+  alpha <- rnorm(G)
+  alpha2 <- rnorm(G)
+  
+  y <- rbinom(n = N, size = 1, prob = plogis(-1 + x + alpha[g] + alpha2[g]))
+  
+  est_glmer <- suppressMessages(suppressWarnings(lme4::glmer(y ~ x + (1 + x | g) + (1 | g2), family = binomial)))
+  
+  example_vglmer <- vglmer(formula = y ~ x + (1 + x | g) + (1 | g2), data = NULL, family = 'binomial',
+                           control = vglmer_control(factorization_method = 'weak'))
+  
+  mixed_data <- data.frame(x = rnorm(20), g = rep(1:10,2), g2 = sample(1:25, 20, replace = T))
+  rownames(mixed_data) <- letters[1:20]
+  
+  mixed_data$x[8] <- NA
+  mixed_data$g[7] <- NA
+  mixed_data$x[2] <- mixed_data$g[2] <- NA
+  
+  test_data <- rbind(mixed_data, data.frame(x = x, g = g, g2 = g2)[sample(1:length(y), 100, replace = T),])
+  
+  point_predict <- predict(example_vglmer, newdata = test_data, allow_missing_levels = T)
+  
+  mean_predict <- predict(example_vglmer, newdata = test_data, 
+          samples = 2 * 10^4, allow_missing_levels = T)
+  #should have "clean" rownames 
+  expect_equal(rownames(mean_predict), as.character(1:nrow(mean_predict)))
+  #Should be very close
+  expect_equal(mean_predict$mean, point_predict, 0.01)
+  
+  matrix_predict <- predict(example_vglmer, newdata = test_data, 
+    samples = 2 * 10^4, allow_missing_levels = T, samples_only = TRUE)
+  matrix_predict <- rowMeans(matrix_predict)
+  expect_equivalent(c(coef(example_vglmer), as.vector(example_vglmer$alpha$mean)), 
+    matrix_predict, 0.01)
+  
 })
 
+
+test_that('Prediction Matches for vglmer after MAVB', {
+  
+  N <- 1000
+  G <- 10
+  x <- rnorm(N)
+  g <- sample(1:G, N, replace = T) 
+  g2 <- sample(1:G, N, replace = T)
+  alpha <- rnorm(G)
+  alpha2 <- rnorm(G)
+  
+  y <- rbinom(n = N, size = 1, prob = plogis(-1 + x + alpha[g] + alpha2[g]))
+  
+  example_vglmer <- vglmer(formula = y ~ x + (1 + x | g) + (1 | g2), data = NULL, family = 'binomial',
+                           control = vglmer_control(factorization_method = 'weak'))
+  
+  
+  mixed_data <- data.frame(x = rnorm(20), g = rep(1:10,2), g2 = sample(1:25, 20, replace = T))
+  rownames(mixed_data) <- letters[1:20]
+  
+  mixed_data$x[8] <- NA
+  mixed_data$g[7] <- NA
+  mixed_data$x[2] <- mixed_data$g[2] <- NA
+  
+  test_data <- rbind(mixed_data, data.frame(x = x, g = g, g2 = g2)[sample(1:length(y), 100, replace = T),])
+  
+  pred.MAVB <- predict_MAVB(example_vglmer, newdata = test_data, 
+    samples = 1000, allow_missing_levels = T)  
+  base_predict <- predict(example_vglmer, newdata = test_data, allow_missing_levels = T)  
+  
+  expect_equal(pred.MAVB$mean, base_predict, tolerance = 0.1)
+  
+  
+})

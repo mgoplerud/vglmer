@@ -1,6 +1,7 @@
 #' Predict after vglmer
 #' 
-#' Get linear predictor for new observations after using vglmer.
+#' Get linear predictor for new observations after using vglmer. Use predict_MAVB
+#' to combine linear prediction after performing MAVB.
 #' 
 #' @name vglmer_predict
 #' @param object Object from vglmer.
@@ -131,7 +132,6 @@ predict.vglmer <- function(object, newdata,
     }
     samples <- t(samples)
     only.lp <- FALSE
-    print('Using Provided Samples')
   }else{
     if (samples == 0){
       only.lp <- TRUE
@@ -204,13 +204,16 @@ predict.vglmer <- function(object, newdata,
       lp <- t(apply(lp, MARGIN = 1, FUN=function(i){c(mean(i), var(i))}))
       lp <- data.frame(mean = lp[,1], var = lp[,2])  
       lp <- lp[match(total_obs, obs_in_both),]
+      rownames(lp) <- NULL
     }else{
       lp <- as.vector(t(apply(lp, MARGIN = 1, FUN=function(i){mean(i)})))
       lp <- lp[match(total_obs, obs_in_both)]
+      rownames(lp) <- NULL
     }
     return(lp)
   }else{
     lp <- lp[match(total_obs, obs_in_both)]
+    rownames(lp) <- NULL
     return(lp)
   }
 }
