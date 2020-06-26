@@ -282,6 +282,7 @@ calculate_ELBO <- function(ELBO_type, factorization_method,
   }else if (ELBO_type == 'profiled'){
     vi_r_var <- ( exp(vi_r_sigma) - 1 ) * vi_r_mean^2 
     
+    #Adjust to remove terms involving "R"
     psi <- ex_XBZA + vi_r_mu
     zVz <- var_XBZA - vi_r_sigma
 
@@ -314,7 +315,7 @@ calculate_ELBO <- function(ELBO_type, factorization_method,
     if (vi_r_sigma == 0){
       entropy_2 <- 0
     }else{
-      entropy_2 <- 1/2 * log(2 * pi * exp(1) * vi_r_sigma)
+      entropy_2 <- vi_r_mu + 1/2 * log(2 * pi * exp(1) * vi_r_sigma)
     }
     #Entropy Wisharts
     entropy_3 <- -mapply(vi_sigma_alpha_nu, vi_sigma_alpha, FUN=function(nu,Phi){make_log_invwishart_constant(nu = nu, Phi = Phi)}) +
@@ -337,7 +338,7 @@ calculate_ELBO <- function(ELBO_type, factorization_method,
 update_r <- function(vi_r_mu, vi_r_sigma, y, X, Z, factorization_method,
                      vi_beta_mean, vi_alpha_mean, 
                      vi_joint_decomp, vi_beta_decomp, vi_alpha_decomp,
-                     vi_r_method){
+                     vi_r_method, vi_pg_mean){
   
   if(vi_r_method == 'fixed'){
     return(c(vi_r_mu, vi_r_sigma))
@@ -356,14 +357,39 @@ update_r <- function(vi_r_mu, vi_r_sigma, y, X, Z, factorization_method,
   
   N <- length(y)
   
-  # vi_r_mu <<- vi_r_mu
-  # vi_r_sigma <<- vi_r_sigma
-  # ex_XBZA <<- ex_XBZA
-  # var_XBZA <<- var_XBZA
-  # y <<- y
-  # N <<- N
+  vi_pg_mean <<- vi_pg_mean
+  vi_r_mu <<- vi_r_mu
+  vi_r_sigma <<- vi_r_sigma
+  ex_XBZA <<- ex_XBZA
+  var_XBZA <<- var_XBZA
+  y <<- y
+  N <<- N
+  vi_b <<- y + exp(vi_r_mu + vi_r_sigma/2)
+  vi_c <<- sqrt((ex_XBZA - vi_r_mu)^2 + var_XBZA + vi_r_sigma)
   
-  if (vi_r_method == 'delta'){
+  if (vi_r_method == 'temp'){
+    stop('temp only allowed for debugging purposes')
+    # approx.ELBO.opt <- function(par, y, omega, b, c, psi, zVz){
+    #   mu <- par[1]
+    #   sigma <- exp(par[2])
+    # 
+    #   f <- ELBO.cond(r = exp(mu), y = y, omega = omega, b = b, c = c, psi = psi, zVz = zVz)
+    #   f.1 <- deriv.ELBO.cond(r = exp(mu), y = y, omega = omega, b = b, c = c, psi = psi, zVz = zVz)
+    #   f.2 <- hessian.ELBO.cond(r = exp(mu), y = y, omega = omega, b = b, c = c, psi = psi, zVz = zVz)
+    # 
+    #   # out <- f      
+    #   # out <- f + 1/2 * (f.1 * exp(mu) + f.2 * exp(2 * mu)) * sigma +
+    #   #   1/2 * log(sigma) + mu
+    #   # print(c(f, f.1, f.2))
+    #   return(out)
+    # }
+    # 
+    # opt_vi_r <- optim(par = c(vi_r_mu, log(1)), fn = approx.ELBO.opt,
+    #   y = y, psi = ex_XBZA, zVz = var_XBZA,  b = vi_b, c = vi_c, 
+    #   omega = vi_pg_mean, control = list(fnscale = - 1), hessian = T, method = 'L-BFGS')
+    # out_par <- c(opt_vi_r$par[1], exp(opt_vi_r$par[2]))
+    # print(out_par)
+  }else if (vi_r_method == 'delta'){
     
     opt_vi_r <- optim(par = c(vi_r_mu, log(vi_r_sigma)), fn = VEM.delta_method,
           y = y, psi = ex_XBZA, zVz = var_XBZA, 
@@ -384,10 +410,13 @@ update_r <- function(vi_r_mu, vi_r_sigma, y, X, Z, factorization_method,
                       control = list(fnscale = - 1), method = 'L-BFGS')
     
     if (vi_r_method == 'Laplace'){
+      
+      proposed_vi_r_mu <- opt_vi_r$par
       proposed_vi_r_sigma <- -1/VEM.PELBO.r_hessian(ln_r = opt_vi_r$par, 
                                                     y = y, psi = ex_XBZA, zVz = var_XBZA)
-      # proposed_vi_r_sigma <- #as.numeric(-1/opt_vi_r$hessian)
+      proposed_vi_r_mu <- proposed_vi_r_mu + proposed_vi_r_sigma
     }else{
+      proposed_vi_r_mu <- opt_vi_r$par
       proposed_vi_r_sigma <- 0
     }
     
@@ -398,7 +427,7 @@ update_r <- function(vi_r_mu, vi_r_sigma, y, X, Z, factorization_method,
       warning('Optim for r decreased objective.')
       out_par <- c(vi_r_mu, vi_r_sigma)
     }else{
-      out_par <- c(opt_vi_r$par, proposed_vi_r_sigma)
+      out_par <- c(proposed_vi_r_mu, proposed_vi_r_sigma)
     }
   }else{stop('vi_r method must be VI or VEM or fixed')}
   
@@ -418,12 +447,12 @@ approx.lgamma <- function(x, mean_r, var_r){
   return(output)
 }
 
-VEM.delta_method <- function(par, ln_r, y, psi, zVz){
+VEM.delta_method <- function(par, y, psi, zVz){
   mu <- par[1]
   sigma <- exp(par[2])
   obj <- VEM.PELBO.r(ln_r = mu, y, psi, zVz) +
     1/2 * VEM.PELBO.r_hessian(ln_r = mu, y, psi, zVz) * sigma +
-    1/2 * log(sigma)
+    1/2 * log(sigma) + mu
   return(obj)
 }
 

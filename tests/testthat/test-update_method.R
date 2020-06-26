@@ -85,6 +85,8 @@ test_that('Compare VI r methods', {
   y <- rnbinom(n = N, mu = exp(-1 + x + alpha[g]), size = 5)
   data <- data.frame(y = y, x = x, g = g)
   
+  est_glmer <- lme4::glmer.nb(y ~ x + (1 | g), data = data)
+  
   list_output <- list()
   list_r <- list()
   for (v in c("VEM", "delta", "Laplace")){

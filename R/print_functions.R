@@ -143,14 +143,14 @@ summary.vglmer <- function(object, display_re = TRUE, ...){
     r_output <- object$r
     #fmt_r <- function(x){formatC(x, format = 'e', digits = 2)}
     fmt_r <- function(x){round(x, digits = 2)}
-    r_ci <- exp(r_output$mu + sqrt(2 * r_output$sigma) * erfinv(c(0.05, 0.95)))
+    r_ci <- exp(r_output$mu + sqrt(2 * r_output$sigma) * erfinv(c(0.025, 0.975)))
     r_ci <- paste0('[', paste(fmt_r(r_ci), collapse = ', '),']')
     r_mean <- fmt_r(exp(r_output$mu + r_output$sigma/2))
 
     cat('Summary of Auxiliary Parameters:\n')
     cat('Dispersion Parameter r:\n')
-    if (object$r$method == 'VI'){
-      cat(paste0('Mean (90% Interval): ', r_mean, ' ', r_ci))
+    if (object$r$sigma != 0){
+      cat(paste0('Mean (95% Interval): ', r_mean, ' ', r_ci))
     }else{
       cat(paste0('Mean: ', r_mean))
       

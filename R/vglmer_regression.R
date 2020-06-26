@@ -266,15 +266,13 @@ vglmer <- function(formula, data, family, control = vglmer_control()){
         vi_r_mean <- MASS::glm.nb(y ~ 1)$theta
         vi_r_mu <- log(vi_r_mean)
         vi_r_sigma <- 0
-      }else if (vi_r_method %in% c('Laplace', 'delta')){
+      }else{
         init_r <- optim(par = 0, fn = VEM.PELBO.r, method = 'L-BFGS', hessian = T,
                         control = list(fnscale = -1), y = y, psi = rep(log(mean(y)), length(y)), zVz = 0)
         vi_r_mu <- init_r$par
         vi_r_sigma <- as.numeric(-1/init_r$hessian)
         
         vi_r_mean <- exp(vi_r_mu + vi_r_sigma/2)
-      }else{
-        stop('vi_r_method must be VEM, fixed, delta, or Laplace.')
       }
       s <- (y - vi_r_mean)/2
       vi_pg_b <- y + vi_r_mean
@@ -768,7 +766,8 @@ vglmer <- function(formula, data, family, control = vglmer_control()){
          y = y, X = X, Z = Z, factorization_method = factorization_method,
          vi_beta_mean = vi_beta_mean, vi_beta_decomp = vi_beta_decomp,
          vi_alpha_mean = vi_alpha_mean, vi_alpha_decomp = vi_alpha_decomp,
-         vi_joint_decomp = vi_joint_decomp, vi_r_method = vi_r_method)
+         vi_joint_decomp = vi_joint_decomp, vi_r_method = vi_r_method,
+         vi_pg_mean = vi_pg_mean)
         
         vi_r_mu <- vi_r_param[1]
         vi_r_sigma <- vi_r_param[2]
@@ -1197,7 +1196,7 @@ vglmer_control <- function(iterations = 1000,
     check_choice(factorization_method, c("weak", "strong", "partial")),
     check_choice(prior_variance, c('mean_exists', 'jeffreys', 'mcmcglmm', 'mvD', 'limit', 'uniform')),
     check_choice(linpred_method, c('joint', 'cyclical', 'solve_normal')),
-    check_choice(vi_r_method, c('VEM', 'fixed', 'Laplace', 'delta')),
+    check_choice(vi_r_method, c('VEM', 'fixed', 'Laplace', 'delta', 'temp')),
     check_double(vi_r_val, all.missing = TRUE),
     check_int(print_prog, null.ok = TRUE),
     check_choice(init, c('EM', 'random', 'zero')),
