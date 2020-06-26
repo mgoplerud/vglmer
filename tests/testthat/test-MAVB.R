@@ -15,11 +15,11 @@ test_that('Short test of MAVB running for CRAN', {
   est_glmer <- suppressMessages(suppressWarnings(lme4::glmer(y ~ x + (1 + x | g) + (1 | g2), family = binomial)))
   
   example_vglmer <- vglmer(formula = y ~ x + (1 + x | g) + (1 | g2), data = NULL, family = 'binomial',
-                           control = vglmer_control(factorization_method = 'strong'))
+                           control = vglmer_control(factorization_method = 'weak'))
   
-  mavb_samples <- MAVB(object = example_vglmer, samples = 10)
-  
-  
+  mavb_samples <- tryCatch(MAVB(object = example_vglmer, samples = 10), 
+                           error = function(e){NULL})
+  expect_false(is.null(mavb_samples))  
 })
 
 test_that('Longer Test of MAVB', {

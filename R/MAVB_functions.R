@@ -8,10 +8,11 @@
 #' @param samples Samples to draw from MAVB distribution.
 #' @param var_px Default (Inf); variance of working prior. Higher is more
 #'   diffuse and thus likely better.
+#' @param verbose Show progress of MAVB.
 #' @import CholWishart
 #' @importFrom mvtnorm rmvnorm
 #' @export
-MAVB <- function(object, samples, var_px = Inf){
+MAVB <- function(object, samples, verbose = FALSE, var_px = Inf){
   
   if (!inherits(object, 'vglmer')){
     stop('Must provide object from vglmer')
@@ -36,6 +37,7 @@ MAVB <- function(object, samples, var_px = Inf){
     decomp_varB <- object$beta$decomp_var
     p.XZ <- ncol(decomp_varA) + ncol(decomp_varB)
     p.X <- nrow(object$beta$mean)
+    p.Z <- nrow(object$alpha$mean)
   }
   
   MAVB_sims <- matrix(NA, nrow = samples, ncol = p.XZ)
@@ -48,18 +50,20 @@ MAVB <- function(object, samples, var_px = Inf){
   sigma_df <- object$sigma$df
   sigma_cov <- object$sigma$cov
   
+  all_sigma <- mapply(sigma_df, sigma_cov, SIMPLIFY = FALSE, FUN=function(i,j){rInvWishart(n = n_MAVB, df = i, Sigma = j)})
+  
   for (it in 1:n_MAVB){
-    if (it %% 1000 == 0){cat('.')}
+    if (it %% 1000 == 0 & verbose){message('.', appendLF = F)}
     #Sim from VARIATIONAL approximation to posterior.
     if (factorization_method == 'weak'){
       sim_joint <- joint_mean + t(decomp_joint) %*% rnorm(p.XZ)
       sim_beta <- sim_joint[1:p.X,,drop=F]
       sim_a <- sim_joint[-1:-p.X,,drop=F]
     }else{
-      sim_a <- alpha_mean + t(decomp_varA) %*% rnorm(ncol(decomp_varA))
-      sim_beta <- beta_mean + t(decomp_varB) %*% rnorm(ncol(decomp_varB))
+      sim_a <- alpha_mean + t(decomp_varA) %*% rnorm(p.Z)
+      sim_beta <- beta_mean + t(decomp_varB) %*% rnorm(p.X)
     }
-    sim_sigma <- mapply(sigma_df, sigma_cov, SIMPLIFY = FALSE, FUN=function(i,j){rInvWishart(n = 1, df = i, Sigma = j)[,,1]})
+    sim_sigma <- lapply(all_sigma, FUN=function(i){i[,,it]})
     #Working Prior
     if (var_px == Inf){
       sim_px <- rep(0, sum(d_j))
@@ -80,8 +84,7 @@ MAVB <- function(object, samples, var_px = Inf){
       #Use the SUM
       mean_redux <- var_redux %*% solve(bdiag(sim_sigma)) %*% t(M_prime_one) %*% sim_atilde
     }
-    regen_px <- rmvnorm(1, mean_redux, var_redux)
-    regen_px <- t(regen_px)
+    regen_px <- t(rmvnorm(1, mean_redux, var_redux))
     regen_store[it,] <- regen_px  
     MAVB_diff[it,] <- regen_px - sim_px
     final_atilde <- sim_atilde - M_prime_one %*% regen_px
@@ -92,16 +95,16 @@ MAVB <- function(object, samples, var_px = Inf){
   return(MAVB_sims)
 }
 
-#' Linear Predictor Following MAVB
-#' 
-#' Combine prediction and MAVB into a single function.
-#' 
+# Prediction and MAVB
 #' @inheritParams MAVB
 #' @inheritParams vglmer_predict
+#' @rdname vglmer_predict
 #' @export
-predict_MAVB <- function(object, newdata, samples, var_px = Inf, summary = TRUE){
+predict_MAVB <- function(object, newdata, samples = 0, samples_only = FALSE,
+                         var_px = Inf, summary = TRUE, allow_missing_levels = FALSE){
   pxSamples <- MAVB(object = object, samples = samples, var_px = var_px)
-  lp <- predict.vglmer(object, newdata = newdata, samples = pxSamples, summary = summary)
+  lp <- predict.vglmer(object, newdata = newdata, samples = pxSamples, samples_only = samples_only,
+                       summary = summary, allow_missing_levels = allow_missing_levels)
   return(lp)
 }
 
