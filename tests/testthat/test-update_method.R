@@ -85,8 +85,6 @@ test_that('Compare VI r methods', {
   y <- rnbinom(n = N, mu = exp(-1 + x + alpha[g]), size = 5)
   data <- data.frame(y = y, x = x, g = g)
   
-  est_glmer <- lme4::glmer.nb(y ~ x + (1 | g), data = data)
-  
   list_output <- list()
   list_r <- list()
   for (v in c("VEM", "delta", "Laplace")){
@@ -114,7 +112,9 @@ test_that('Compare VI r methods', {
   
   all_r <- sapply(list_r, FUN=function(i){i$mu})
   #Check that mu are quite close
-  expect_lte(diff(range(all_r)), 0.02)
+  expect_lte(diff(range(all_r)), 0.1)
+  #Very close for delta and Laplace
+  expect_lte(diff(range(all_r[names(all_r) != 'VEM'])), 0.02)
   #Check that the mu standard errors are close for Laplace/delta
   expect_lte(diff(sqrt(sapply(list_r, FUN=function(i){i$sigma}))[-1]), 0.02)
   

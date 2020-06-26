@@ -354,9 +354,15 @@ vglmer <- function(formula, data, family, control = vglmer_control()){
       
       if (family == 'binomial'){
         vi_beta_mean[1] <- qlogis(sum(y)/sum(trials))
+        #Deal with edge case of 0.5
+        if (vi_beta_mean[1] == 0){
+          vi_beta_mean[1] <- runif(1, -.1, .1)
+        }
+        
       }else if (family == 'negbin'){
         vi_beta_mean[1] <- log(mean(y))
       }else{stop('Set up init')}
+      
       
       vi_alpha_mean <- rep(0, ncol(Z))
       

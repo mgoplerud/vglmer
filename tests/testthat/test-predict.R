@@ -57,6 +57,7 @@ test_that('Prediction Matches for New Levels in newdata', {
     predict(example_vglmer, newdata = new_data, allow_missing_levels = TRUE),
     rep(example_vglmer$beta$mean[1], nrow(new_data))
   )
+  
   mixed_data <- data.frame(x = rnorm(10), g = sample(1:25, 10, replace = T))
   
   man_beta <- as.vector(cbind(1, mixed_data$x) %*% example_vglmer$beta$mean)
