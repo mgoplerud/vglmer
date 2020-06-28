@@ -12,3 +12,4 @@ Goplerud_MAVB*
 ^.*RDS$
 ^\.travis\.yml$
 ^codecov\.yml$
+^JASA_submission/*
