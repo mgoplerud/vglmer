@@ -120,4 +120,3 @@ test_that('Compare against glmer (binomial)', {
   expect_gt(cor_mean, expected = 0.99)
   
 })
-

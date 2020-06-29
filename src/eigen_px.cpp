@@ -3,6 +3,14 @@
 
 using namespace Rcpp;
 
+Eigen::MatrixXd px_mean(
+  const Eigen::Map<Eigen::MatrixXd> vi_alpha_mean,
+  const Rcpp::List re_index,
+  const Rcpp::List id_used
+){
+  
+}
+
 // [[Rcpp::export]]
 Eigen::MatrixXd vecR_ridge_general(
     const Eigen::MappedSparseMatrix<double> L,    //Decomposition of variance L^T L = VAR(alpha)

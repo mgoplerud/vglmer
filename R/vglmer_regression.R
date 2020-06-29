@@ -218,7 +218,9 @@ vglmer <- function(formula, data, family, control = vglmer_control()){
     
     M.names <- cbind(unlist(mapply(names_of_RE, g_j, FUN=function(i,j){rep(i,j)})))
     M <- cbind(match(M.names[,1], colnames(X)), rep(1/g_j, d_j * g_j))
-    M <- sparseMatrix(i = 1:ncol(Z), j = M[,1], x = M[,2], dims = c(ncol(Z), ncol(X)))
+    #Omit NAs when RE is not found in FE
+    M <- na.omit(M)
+    M <- sparseMatrix(i = setdiff(1:ncol(Z), attr(M, 'na.action')), j = M[,1], x = M[,2], dims = c(ncol(Z), ncol(X)))
     
     M_prime.names <- paste0(rep(names(names_of_RE), g_j * d_j), ' @ ', M.names)
     M_prime <- cbind(match(M_prime.names, unique(M_prime.names)), rep(1/g_j, d_j * g_j))
@@ -230,9 +232,25 @@ vglmer <- function(formula, data, family, control = vglmer_control()){
     
     stopifnot(identical(paste0(rep(names(names_of_RE), d_j), ' @ ', unlist(names_of_RE)), colnames(M_prime)))
     
-    M_mu_to_beta <- sparseMatrix(i = 1:sum(d_j), j = match(unlist(names_of_RE), colnames(X)), x = 1, dims = c(sum(d_j), p.X))
+    #Again, do na.omit to deal with case of REs not in FEs
+    #Calculate markers for later
+    RE_to_FE_lookup <- lapply(names_of_RE, FUN=function(i){match(i, colnames(X))})
+    unusual_RE <- any(sapply(RE_to_FE_lookup, FUN=function(i){any(is.na(i))}))
+    
+    M_mu_to_beta <- match(unlist(names_of_RE), colnames(X))
+    M_mu_to_beta <- na.omit(M_mu_to_beta)
+    
+    M_mu_to_beta <- sparseMatrix(i = setdiff(1:sum(d_j), attr(M_mu_to_beta, 'na.action')), 
+      j = M_mu_to_beta, x = 1, dims = c(sum(d_j), p.X))
     colnames(M_mu_to_beta) <- colnames(X)
     rownames(M_mu_to_beta) <- colnames(M_prime)
+    
+    #Names of RE that do not correspond to a FE
+    unmapped_re <- names(which(rowSums(M_mu_to_beta) == 0))
+    if (length(unmapped_re) > 0){
+      M_prime[,unmapped_re] <- 0
+      M_prime_one[,unmapped_re] <- 0
+    }
     #List of Lists
     #Outer list: one for RE
     #Inner List: One for each GROUP with its row positions.
@@ -447,18 +465,9 @@ vglmer <- function(formula, data, family, control = vglmer_control()){
       }
       
       if (factorization_method == 'weak'){
-        # joint_quad <- rowSums( (joint.XZ %*% t(vi_joint_decomp))^2 )
-        # vi_joint_decomp <<- vi_joint_decomp
-        # joint.XZ <<- joint.XZ
         joint_quad <- cpp_zVz(Z = joint.XZ, V = as(vi_joint_decomp, 'dgCMatrix')) + vi_r_sigma
         vi_pg_c <- sqrt(as.vector(X %*% vi_beta_mean + Z %*% vi_alpha_mean - vi_r_mu)^2 + joint_quad)
       }else{
-        # vi_beta_decomp <<- vi_beta_decomp
-        # vi_alpha_decomp <<- vi_alpha_decomp
-        # X <<- X
-        # Z <<- Z
-        # beta_quad <- cpp_zVz(Z = drop0(X), V = make_dgC(vi_beta_decomp))
-        # alpha_quad <- cpp_zVz(Z = Z, V = make_dgC(vi_alpha_decomp))
         beta_quad <- rowSums( (X %*% t(vi_beta_decomp))^2 )
         alpha_quad <- rowSums( (Z %*% t(vi_alpha_decomp))^2 )
         vi_pg_c <- sqrt(as.vector(X %*% vi_beta_mean + Z %*% vi_alpha_mean - vi_r_mu)^2 + beta_quad + alpha_quad + vi_r_sigma)
@@ -806,17 +815,37 @@ vglmer <- function(formula, data, family, control = vglmer_control()){
           tic('Update PX')
         }
         #Do a simple mean adjusted expansion.
-        #Get the mean of each random effect.
-        vi_mu_j <- t(M_prime) %*% vi_alpha_mean
+        #Get the mean of each random effect
+        #Set to ZERO if does not correspond to any FE
+        # vi_alpha_mean <<- vi_alpha_mean
+        # vi_alpha_decomp <<- vi_alpha_decomp
+        # vi_beta_mean <<- vi_beta_mean
+        # M_mu_to_beta <<- M_mu_to_beta
+        # M_prime_one <<- M_prime_one
+        # outer_alpha_RE_positions <<- outer_alpha_RE_positions
+        # M_prime <<- M_prime
+        # variance_by_alpha_jg <<- variance_by_alpha_jg
+        # vi_sigma_alpha <<- vi_sigma_alpha
+        # vi_sigma_alpha_nu <<- vi_sigma_alpha_nu
+        # d_j <<- d_j
+        # names_of_RE <<- names_of_RE
+        # X <<- X
+        # RE_to_FE_lookup <<- RE_to_FE_lookup 
+        # unusual_RE <<- unusual_RE
+        
+        vi_mu_j <- create_vi_mu_j(RE_to_FE_lookup, unusual_RE, M_prime, outer_alpha_RE_positions,
+          vi_alpha_mean, vi_sigma_alpha, vi_sigma_alpha_nu, d_j)
 
         #Remove the "excess mean" mu_j from each random effect \alpha_{j,g}
-        #and add the summd mass back to the betas.
+        #and add the sumedd mass back to the betas.
+        
         vi_alpha_mean <- vi_alpha_mean - M_prime_one %*% vi_mu_j
         vi_beta_mean <- vi_beta_mean + t(M_mu_to_beta) %*% vi_mu_j
-        
+
         variance_by_alpha_jg <- calculate_expected_outer_alpha(L = vi_alpha_decomp, 
-                                                               alpha_mu = as.vector(vi_alpha_mean), re_position_list = outer_alpha_RE_positions)
+            alpha_mu = as.vector(vi_alpha_mean), re_position_list = outer_alpha_RE_positions)
         vi_sigma_outer_alpha <- variance_by_alpha_jg$outer_alpha
+        
         accept.PX <- TRUE
         if (do_timing){
           toc(quiet = verbose_time, log = TRUE)

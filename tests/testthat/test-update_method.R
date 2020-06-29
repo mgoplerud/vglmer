@@ -118,3 +118,34 @@ test_that('Compare VI r methods', {
   
 })
 
+test_that('Parameter expansion (mean) works correctly with unusual formulae', {
+  
+  N <- 1000
+  G <- 10
+  x <- rnorm(N)
+  g <- sample(1:G, N, replace = T) 
+  alpha <- rnorm(G)
+  b <- rnorm(N)
+  
+  y <- rbinom(n = N, size = 1, prob = plogis(-1 + x + alpha[g]))
+  # Unusual (but possible!) case where a term in the RE
+  # is not in the FE (e.g. b)
+  
+  with_px <- vglmer(y ~ x + (1 + b | g), data = NULL, 
+                    control = vglmer_control(debug_ELBO = T, factorization_method = 'strong'),
+                    family = 'binomial')  
+  expect_gte(min(diff(with_px$ELBO_trajectory$ELBO)), -sqrt(.Machine$double.eps))
+  expect_equivalent(with_px$MAVB_parameters$M_mu_to_beta[2,], c(0,0))
+  
+  g2 <- sample(letters, length(x), replace = T)
+  complex_case <- vglmer(y ~ x + (1 | g2) + (0 + b | g), data = NULL, 
+                         control = vglmer_control( factorization_method = 'strong', debug_ELBO = T),
+                         family = 'binomial')  
+  expect_gte(min(diff(complex_case$ELBO_trajectory$ELBO)), -sqrt(.Machine$double.eps))
+  
+  complex_case <- vglmer(y ~ x + (1 | g2) + (x + b + 1 | g), data = NULL, 
+                         control = vglmer_control(factorization_method = 'strong', debug_ELBO = T),
+                         family = 'binomial')  
+  expect_gte(min(diff(complex_case$ELBO_trajectory$ELBO)), -sqrt(.Machine$double.eps))
+  
+})
