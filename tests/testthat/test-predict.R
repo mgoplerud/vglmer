@@ -191,7 +191,8 @@ test_that("Prediction with Samples", {
 
   example_vglmer <- vglmer(
     formula = y ~ x + (1 | g), data = NULL,
-    control = vglmer_control(iterations = 2), family = "binomial"
+    control = vglmer_control(iterations = 2, factorization_method = 'strong'), 
+    family = "binomial"
   )
 
   pred_samples <- predict(example_vglmer, newdata = data.frame(x = x, g = g), samples = 10, summary = F)
@@ -203,6 +204,26 @@ test_that("Prediction with Samples", {
   )
   expect_equivalent(dim(draw_coef), c(G + 2, 2 * 10^4))
 
+  expect_equivalent(
+    rowMeans(draw_coef), format_vglmer(example_vglmer)$mean,
+    tolerance = 0.02
+  )
+  #Confirms that it works with "weak"
+  example_vglmer <- vglmer(
+    formula = y ~ x + (1 | g), data = NULL,
+    control = vglmer_control(iterations = 2, factorization_method = 'weak'), 
+    family = "binomial"
+  )
+  
+  pred_samples <- predict(example_vglmer, newdata = data.frame(x = x, g = g), samples = 10, summary = F)
+  expect_equivalent(dim(pred_samples), c(N + G, 10))
+  
+  draw_coef <- predict(example_vglmer,
+                       newdata = data.frame(x = x, g = g),
+                       samples = 2 * 10^4, samples_only = T
+  )
+  expect_equivalent(dim(draw_coef), c(G + 2, 2 * 10^4))
+  
   expect_equivalent(
     rowMeans(draw_coef), format_vglmer(example_vglmer)$mean,
     tolerance = 0.02

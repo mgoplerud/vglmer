@@ -1,6 +1,6 @@
+^.*\.Rproj$
 ^misc_files/*
 ^pres_figures/*
-^.*\.Rproj$
 ^\.Rproj\.user$
 ^full_models/*
 ^old_versions/*
