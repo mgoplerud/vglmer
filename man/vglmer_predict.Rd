@@ -32,7 +32,7 @@ predict_MAVB(
 \item{newdata}{Data to get predictions on.}
 
 \item{samples}{How many samples to draw? 0, default, gets the expected value.
-Two methods: 
+Two methods:
 \itemize{
 \item Number - draw that many samples.
 \item Matrix - use previous samples for prediction. Currently used for MAVB
@@ -56,7 +56,7 @@ Returns an estimate of the linear predictor. The default returns the
   predicted posterior mean. If "samples > 0", then it returns a summary of
   the prediction for each observation, i.e. its mean and variance. Setting "summary = FALSE" will return \code{samples} posterior samples of
   the linear predictor for each observation.
-  
+
   \code{predict_MAVB} performs MAVB as described in Goplerud (2020) and then
   returns either a posterior summary or the samples using the same options as
   the generic predict.
@@ -70,22 +70,26 @@ to combine linear prediction after performing MAVB.
 }
 \examples{
 
-sim_data <- data.frame(x = rnorm(100), 
-y = rbinom(100, 1, 0.5), 
-g =sample(letters, 100, replace = TRUE))
+sim_data <- data.frame(
+  x = rnorm(100),
+  y = rbinom(100, 1, 0.5),
+  g = sample(letters, 100, replace = TRUE)
+)
 
 # Run with defaults
-est_vglmer <- vglmer(y ~ x + (x|g), data = sim_data, family = "binomial")
+est_vglmer <- vglmer(y ~ x + (x | g), data = sim_data, family = "binomial")
 
-# Simple prediction 
+# Simple prediction
 predict(est_vglmer, newdata = sim_data)
-#Return 10 posterior draws of the linear predictor for each observation.
+# Return 10 posterior draws of the linear predictor for each observation.
 predict_MAVB(est_vglmer, newdata = sim_data, summary = FALSE, samples = 10)
 \dontrun{
-#Fails!
+# Fails!
 predict(est_vglmer, newdata = data.frame(g = "AB", x = 0))
 }
-#Works
-predict(est_vglmer, newdata = data.frame(g = "AB", x = 0), 
-allow_missing_levels = TRUE)
+# Works
+predict(est_vglmer,
+  newdata = data.frame(g = "AB", x = 0),
+  allow_missing_levels = TRUE
+)
 }

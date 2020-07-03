@@ -33,7 +33,7 @@ vglmer_control(
 \item{prior_variance}{Options are jeffreys, mcmcglmm, mvD, mean_exists,
 limit, and uniform. They are defined as an Inverse Wishart with the
 following parameters where d is the dimensionality of the random effect. At
-present, all models use "mean_exists" for a well-defined proper prior. 
+present, all models use "mean_exists" for a well-defined proper prior.
 \itemize{
 \item jeffreys: IW(0, 0)
 \item mcmcglmm: IW(0, I)
@@ -73,7 +73,7 @@ costless and should always be used!}
 \item{linpred_method}{Method for updating means of beta and alpha. "joint" is best.}
 
 \item{vi_r_method}{Type of estimate for "r"; at moment, "fixed" (provide r),
-"VEM" (treat r as point estimate; default); 
+"VEM" (treat r as point estimate; default);
 "Laplace" (estimate using Laplace approximation described in the Addendum on GitHub); or "delta"
 (experimential).}
 

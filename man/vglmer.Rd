@@ -47,14 +47,16 @@ Options are described below.
 }
 \examples{
 
-sim_data <- data.frame(x = rnorm(100), 
-y = rbinom(100, 1, 0.5), 
-g =sample(letters, 100, replace = TRUE))
+sim_data <- data.frame(
+  x = rnorm(100),
+  y = rbinom(100, 1, 0.5),
+  g = sample(letters, 100, replace = TRUE)
+)
 
 # Run with defaults
-est_vglmer <- vglmer(y ~ x + (x|g), data = sim_data, family = "binomial")
+est_vglmer <- vglmer(y ~ x + (x | g), data = sim_data, family = "binomial")
 
-# Simple prediction 
+# Simple prediction
 predict(est_vglmer, newdata = sim_data)
 
 # Summarize results
@@ -63,14 +65,16 @@ summary(est_vglmer)
 # Extract parameters
 coef(est_vglmer); vcov(est_vglmer)
 
-# Comparability with lme4, 
+# Comparability with lme4,
 # although ranef is formatted differently.
 ranef(est_vglmer); fixef(est_vglmer)
 
 #' # Run with stronger (i.e. less good) approximation
 \dontrun{
-vglmer(y ~ x + (x|g), data = sim_data, 
-control = vglmer_control(factorization_method = "strong"),
-family = "binomial")
+vglmer(y ~ x + (x | g),
+  data = sim_data,
+  control = vglmer_control(factorization_method = "strong"),
+  family = "binomial"
+)
 }
 }

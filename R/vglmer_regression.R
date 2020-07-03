@@ -31,13 +31,11 @@
 #' summary(est_vglmer)
 #'
 #' # Extract parameters
-#' coef(est_vglmer)
-#' vcov(est_vglmer)
+#' coef(est_vglmer); vcov(est_vglmer)
 #'
 #' # Comparability with lme4,
 #' # although ranef is formatted differently.
-#' ranef(est_vglmer)
-#' fixef(est_vglmer)
+#' ranef(est_vglmer); fixef(est_vglmer)
 #'
 #' #' # Run with stronger (i.e. less good) approximation
 #' \dontrun{
