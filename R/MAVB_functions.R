@@ -210,7 +210,6 @@ custom_HMC_linpred <- function(HMC, data) {
 }
 
 #' Get HMC samples but ordered to match vector of names provided
-#' @export
 #' @keywords internal
 #' @name hmc_samples
 #' @param HMC Object from rstanarm
@@ -247,7 +246,6 @@ custom_HMC_samples <- function(HMC, ordering) {
 #' @param samples number of samples to draw
 #' @param ordering order of output
 #' @keywords internal
-#' @export
 #' @importFrom stats rnorm
 custom_glmer_samples <- function(glmer, samples, ordering) {
   fmt_glmer <- format_glmer(glmer)
