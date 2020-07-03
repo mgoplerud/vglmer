@@ -5,9 +5,11 @@ coverage:
     project:
       default:
         target: auto
+        threshold: 1%
     patch:
       default:
         target: auto
+        threshold: 1%
 
 codecov:
   token: b21bd71f-359a-4f1a-9aee-02b676659301
