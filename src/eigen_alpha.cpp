@@ -16,9 +16,9 @@ using namespace Rcpp;
 //' Linear Regression by Cholesky
 //' 
 //' Do linear regression of form (X^T O X + P)^{-1} X^T y where O is omega, P is
-//' precision. Gibbs version also provided.
+//' precision. 
 //' 
-//' @name ccp_linreg
+//' @keywords internal
 //' 
 //' @param X Design Matrix
 //' @param omega Polya-Gamma weights

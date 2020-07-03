@@ -20,3 +20,4 @@ custom_HMC_samples(HMC, ordering)
 \description{
 Get HMC samples but ordered to match vector of names provided
 }
+\keyword{internal}

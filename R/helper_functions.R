@@ -117,6 +117,7 @@ multi_digamma <- function(a, p){
 #' @param iter iterations
 #' @param ridge variance of ridge prior
 #' @name simple_EM
+#' @keywords internal
 #' @importFrom stats runif
 EM_prelim_logit <- function(X, Z, s, pg_b, iter, ridge = 2){
   

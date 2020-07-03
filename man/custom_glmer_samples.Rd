@@ -16,3 +16,4 @@ custom_glmer_samples(glmer, samples, ordering)
 \description{
 Order samples from glmer to match names from vglmer.
 }
+\keyword{internal}

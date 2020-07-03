@@ -51,6 +51,19 @@ As is standard, give an estimate of "0" for that effect.}
 
 \item{...}{Not used; included to maintain compatability}
 }
+\value{
+Returns an estimate of the linear predictor. The default returns the
+  predicted posterior mean. If "samples > 0", then it returns a summary of
+  the prediction for each observation, i.e. its mean and variance. Setting "summary = FALSE" will return \code{samples} posterior samples of
+  the linear predictor for each observation.
+  
+  \code{predict_MAVB} performs MAVB as described in Goplerud (2020) and then
+  returns either a posterior summary or the samples using the same options as
+  the generic predict.
+  If "allow_missing_levels = TRUE", then observations with a new
+  (unseen) level for the random effect get a "zero" for that term of the
+  prediction.
+}
 \description{
 Get linear predictor for new observations after using vglmer. Use predict_MAVB
 to combine linear prediction after performing MAVB.
@@ -66,11 +79,13 @@ est_vglmer <- vglmer(y ~ x + (x|g), data = sim_data, family = "binomial")
 
 # Simple prediction 
 predict(est_vglmer, newdata = sim_data)
-
+#Return 10 posterior draws of the linear predictor for each observation.
+predict_MAVB(est_vglmer, newdata = sim_data, summary = FALSE, samples = 10)
 \dontrun{
 #Fails!
 predict(est_vglmer, newdata = data.frame(g = "AB", x = 0))
 }
+#Works
 predict(est_vglmer, newdata = data.frame(g = "AB", x = 0), 
 allow_missing_levels = TRUE)
 }

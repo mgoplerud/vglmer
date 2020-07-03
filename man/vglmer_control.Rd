@@ -72,7 +72,10 @@ costless and should always be used!}
 
 \item{linpred_method}{Method for updating means of beta and alpha. "joint" is best.}
 
-\item{vi_r_method}{Type of estimate for "r"; at moment, accepts VEM (Variational EM) or fixed}
+\item{vi_r_method}{Type of estimate for "r"; at moment, "fixed" (provide r),
+"VEM" (treat r as point estimate; default); 
+"Laplace" (estimate using Laplace approximation described in the Addendum on GitHub); or "delta"
+(experimential).}
 
 \item{vi_r_val}{For fixed "r", which value?}
 

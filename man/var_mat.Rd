@@ -16,3 +16,4 @@ colVar(matrix)
 \description{
 Base R implementation for variance. Analogue of rowMeans.
 }
+\keyword{internal}

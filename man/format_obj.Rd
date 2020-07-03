@@ -3,13 +3,10 @@
 \name{format_obj}
 \alias{format_obj}
 \alias{format_glmer}
-\alias{format_vglmer}
 \alias{format_stan}
 \title{Format Existing Objects}
 \usage{
 format_glmer(object)
-
-format_vglmer(object)
 
 format_stan(object, useSigma = FALSE)
 }
@@ -23,3 +20,4 @@ function}
 Takes a regression output from glmer, stan, or vglmer and extracts the fixed
 and random effects.
 }
+\keyword{internal}

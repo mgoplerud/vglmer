@@ -1,8 +1,11 @@
 #' Perform MAVB after fitting vglmer
 #' 
-#' Given a model from vglmer, perform MAVB to improve approximation quality. See
-#' dissertation for details. This function uses a naive loop so is slower than
-#' necessary. This will be updated shortly.
+#' Given a model from vglmer, perform marginally augmented variational Bayes
+#' (MAVB) to improve approximation quality; Goplerud (2020) provides details. At
+#' present, it is only enabled for binomial models.
+#' 
+#' This should only be used if the parameters of the model are of interest; to
+#' use MAVB to improve prediction accuracy, use predict_MAVB.
 #' 
 #' @param object Model fit using vglmer
 #' @param samples Samples to draw from MAVB distribution.
@@ -101,7 +104,7 @@ MAVB <- function(object, samples, verbose = FALSE, var_px = Inf){
 #' @rdname vglmer_predict
 #' @export
 predict_MAVB <- function(object, newdata, samples = 0, samples_only = FALSE,
-                         var_px = Inf, summary = TRUE, allow_missing_levels = FALSE){
+  var_px = Inf, summary = TRUE, allow_missing_levels = FALSE){
   pxSamples <- MAVB(object = object, samples = samples, var_px = var_px)
   lp <- predict.vglmer(object, newdata = newdata, samples = pxSamples, samples_only = samples_only,
                        summary = summary, allow_missing_levels = allow_missing_levels)
@@ -152,6 +155,7 @@ simple_blist <- function(x, frloc, drop.unused.levels = TRUE, reorder.vars = FAL
 #' 
 #' Base R implementation for variance. Analogue of rowMeans.
 #' @name var_mat
+#' @keywords internal
 #' @param matrix Matrix of numeric inputs.
 rowVar <- function(matrix){apply(matrix, MARGIN = 1, var)}
 
@@ -190,6 +194,7 @@ custom_HMC_linpred <- function(HMC, data){
 
 #' Get HMC samples but ordered to match vector of names provided
 #' @export
+#' @keywords internal
 #' @name hmc_samples
 #' @param HMC Object from rstanarm
 #' @param ordering vector of names to order the posterior samples.
@@ -224,7 +229,7 @@ custom_HMC_samples <- function(HMC, ordering){
 #' @param glmer object fitted using glmer
 #' @param samples number of samples to draw
 #' @param ordering order of output
-#' 
+#' @keywords internal
 #' @export
 #' @importFrom stats rnorm
 custom_glmer_samples <- function(glmer, samples, ordering){

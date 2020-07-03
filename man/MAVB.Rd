@@ -17,7 +17,11 @@ MAVB(object, samples, verbose = FALSE, var_px = Inf)
 diffuse and thus likely better.}
 }
 \description{
-Given a model from vglmer, perform MAVB to improve approximation quality. See
-dissertation for details. This function uses a naive loop so is slower than
-necessary. This will be updated shortly.
+Given a model from vglmer, perform marginally augmented variational Bayes
+(MAVB) to improve approximation quality; Goplerud (2020) provides details. At
+present, it is only enabled for binomial models.
+}
+\details{
+This should only be used if the parameters of the model are of interest; to
+use MAVB to improve prediction accuracy, use predict_MAVB.
 }

@@ -9,6 +9,7 @@
 #'   function
 #' @importFrom dplyr bind_rows mutate
 #' @importFrom stats vcov
+#' @keywords internal
 #' @export
 format_glmer <- function(object){
   output <- bind_rows(lapply(ranef(object), FUN=function(i){
@@ -29,15 +30,6 @@ format_glmer <- function(object){
   return(output)
 }
 
-#' Format vglmer
-#' @rdname format_obj
-#' @export
-format_vglmer <- function(object){
-  beta.output <- data.frame(name = rownames(object$beta$mean), mean = as.vector(object$beta$mean), var = diag(object$beta$var), stringsAsFactors = F)
-  alpha.output <- data.frame(name = rownames(object$alpha$mean), mean = as.vector(object$alpha$mean), var = as.vector(object$alpha$dia.var), stringsAsFactors = F)
-  output <- bind_rows(beta.output, alpha.output)
-  return(output)
-}
 
 #' Format Stan
 #' @param useSigma Return variance component parameters from STAN? Default "FALSE".

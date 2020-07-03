@@ -19,10 +19,31 @@ set to FALSE in vglmer_control.}
 \item{control}{Control additional arguments. Must be made using
 vglmer_control(); see for documentation for additional details.}
 }
+\value{
+Returns an object of class vglmer: See the available methods (e.g.
+  \code{coef}) using \code{methods(class="vglmer")}. A few of the internal
+  outputs are described below.
+\describe{
+
+\item{alpha}{Contains the posterior distribution of each random effect.
+\code{mean} contains the posterior means; \code{dia.var} contains the
+variance of each random effect. \code{var} contains the variance-covariance
+matrix of each random effect (j,g). \code{decomp_var} contains a matrix L
+such that L^T L the full variance of the entire set of random effects.}
+
+\item{sigma}{Contains the posterior distribution of each random effect error
+variance.}
+
+\item{ELBO}{Contains the ELBO at the termination of the algorithm.}
+
+\item{ELBO_trajectory}{A data.frame tracking the ELBO per iteration.}
+
+}
+}
 \description{
 Estimate a hierarchical model using mean-field variational
-inference. Accepts standard syntax to glmer: y ~ X + (1 + Z | g). Options are
-described below.
+inference. Accepts standard syntax to glmer: \code{y ~ X + (1 + Z | g)}.
+Options are described below.
 }
 \examples{
 
@@ -52,5 +73,4 @@ vglmer(y ~ x + (x|g), data = sim_data,
 control = vglmer_control(factorization_method = "strong"),
 family = "binomial")
 }
-
 }

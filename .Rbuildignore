@@ -7,6 +7,7 @@
 ^remote_models/*
 ^replicate_GG/*
 ^figures/*
+^JASA_submission/*$
 ^old_figures/*
 Goplerud_MAVB*
 ^.*RDS$

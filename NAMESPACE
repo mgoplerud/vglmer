@@ -2,6 +2,7 @@
 
 S3method(coef,vglmer)
 S3method(fixef,vglmer)
+S3method(formula,vglmer)
 S3method(predict,vglmer)
 S3method(print,vglmer)
 S3method(ranef,vglmer)

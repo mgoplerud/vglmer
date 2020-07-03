@@ -1,17 +1,22 @@
 
-#' Summarize output from vglmer
+#' Generic Functions after Running vglmer
 #' 
 #' Allows the use of standard methods from lm or lmer to sumarize the posterior
-#' output. The format for ranef differs from lmer and is shown below. 
+#' output. 
 #' 
-#' \code{coef} and \code{vcov} return the mean and variance of the fixed effects. \code{fixef} is a
-#export' synonym for \code{coef}.
+#' @return \code{coef} and \code{vcov} return the mean and variance of the fixed
+#' effects. \code{fixef} is a synonym for \code{coef}. \code{ranef} extracts the
+#' random effects in a similar, although slightly different, format to
+#' \code{lme4}.
 #' 
-#' @name summary_vglmer
+#' \code{format_vglmer} collects the mean and variance of the fixed and random
+#' effects into a data.frame
+#' 
+#' @name vglmer-class
 #' @param object Model fit using vglmer
 #' 
 
-#' @rdname summary_vglmer
+#' @rdname vglmer-class
 #' @export
 fixef.vglmer <- function(object, ...){
   return(as.vector(object$beta$mean))
@@ -23,9 +28,10 @@ lme4::fixef
 #' @export
 lme4::ranef
 
-#' @rdname summary_vglmer
+#' @rdname vglmer-class
 #' @export
 ranef.vglmer <- function(object, ...){
+  if (length(list(...)) > 0){stop('... not used for ranef.vglmer')}
   
   d_j <- object$internal_parameters$d_j
   g_j <- object$internal_parameters$g_j
@@ -56,20 +62,22 @@ ranef.vglmer <- function(object, ...){
   return(vi_parsed)
 }
 
-#' @rdname summary_vglmer
+#' @rdname vglmer-class
 #' @export
 coef.vglmer <- function(object, ...){
+  if (length(list(...)) > 0){stop('... not used for coef.vglmer')}
   out <- as.vector(object$beta$mean)
   names(out) <- rownames(object$beta$mean)
   return(out)
 }
-#' @rdname summary_vglmer
+#' @rdname vglmer-class
 #' @export
 vcov.vglmer <- function(object, ...){
+  if (length(list(...)) > 0){stop('... not used for vcov.vglmer')}
   return(as.matrix(object$beta$var))
 }
 
-#' @rdname summary_vglmer 
+#' @rdname vglmer-class 
 #' @param x Model fit using vglmer
 #' @param ... Not used.
 #' @method print vglmer
@@ -111,7 +119,7 @@ print.vglmer <- function(x, ...){
   
 }
 
-#' @rdname summary_vglmer
+#' @rdname vglmer-class
 #' @param display_re Print summary of random effects. Default is TRUE
 #' @importFrom lmtest coeftest
 #' @method summary vglmer
@@ -161,6 +169,10 @@ summary.vglmer <- function(object, display_re = TRUE, ...){
   invisible()
 }
 
+#' @rdname vglmer-class
+#' @export
+formula.vglmer <- function(x, ...){x$formula}
+
 #' @importFrom stats qnorm
 erfinv <- function(x){qnorm((1 + x)/2)/sqrt(2)}
 
@@ -174,3 +186,13 @@ fmt_IW_mean <- function(Phi, nu, digits = 2){
     return(formatC(mean, format = "e", digits = 2))
   }
 }
+
+#' @rdname vglmer-class
+#' @export
+format_vglmer <- function(object){
+  beta.output <- data.frame(name = rownames(object$beta$mean), mean = as.vector(object$beta$mean), var = diag(object$beta$var), stringsAsFactors = F)
+  alpha.output <- data.frame(name = rownames(object$alpha$mean), mean = as.vector(object$alpha$mean), var = as.vector(object$alpha$dia.var), stringsAsFactors = F)
+  output <- bind_rows(beta.output, alpha.output)
+  return(output)
+}
+

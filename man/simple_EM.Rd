@@ -30,3 +30,4 @@ EM_prelim_nb(X, Z, y, est_r, iter, ridge = 2)
 \description{
 Use ridge penalty to prevent separation. Not be called by user!
 }
+\keyword{internal}
