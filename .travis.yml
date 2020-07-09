@@ -10,3 +10,8 @@ notifications:
   email:
     on_success: change
     on_failure: change
+
+addons:
+  apt:
+    packages:
+      - libv8-dev
