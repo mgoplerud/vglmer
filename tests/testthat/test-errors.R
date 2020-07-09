@@ -67,3 +67,25 @@ test_that('vglmer runs with timing and "quiet=F"', {
   expect_true(inherits(est_simple$timing, "data.frame"))
   expect_gte(min(diff(est_simple$ELBO_trajectory$ELBO)), 0)
 })
+
+test_that('vglmer parses environment correctly', {
+  rm(list=ls())  
+  N <- 25
+  G <- 2
+  G_names <- paste(sample(letters, G, replace = T), 1:G)
+  
+  dta <- data.frame(x = rnorm(N), g = sample(G_names, N, replace = T))
+  alpha <- rnorm(G)
+  
+  dta$y <- rbinom(n = N, size = 1, prob = plogis(-1 + dta$x + alpha[match(dta$g, G_names)]))
+  dta$size <- rpois(n = N, lambda = 2) + 1
+  dta$y_b <- rbinom(n = N, size = dta$size, prob = plogis(-1 + dta$x + alpha[match(dta$g, G_names)]))
+  #runs with clean environment
+  est_simple <- suppressMessages(vglmer(y ~ x + (1 | g), data = dta, family = 'binomial'))
+  expect_true(inherits(est_simple, 'vglmer'))
+  
+  est_simple <- suppressMessages(vglmer(cbind(y_b, size) ~ x + (1 | g), data = dta, family = 'binomial'))
+  expect_true(inherits(est_simple, 'vglmer'))
+  
+
+})

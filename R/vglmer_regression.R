@@ -92,6 +92,19 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
   if (length(missing_obs) == 0) {
     missing_obs <- "??"
   }
+
+  #Extract the Outcome
+  y <- model.response(data)
+  if (is.matrix(y)){
+    N <- nrow(y)
+    rownames(y) <- NULL
+  }else{
+    N <- length(y)
+    y <- as.vector(y)
+    names(y) <- NULL
+  }
+  
+  
   assert_choice(family, c("negbin", "binomial"))
   if (!inherits(control, "vglmer_control")) {
     stop("control must be object from vglmer_control().")
@@ -135,9 +148,6 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
   if (!(family %in% c("binomial", "negbin"))) {
     stop('family must be "binomial" or "negbin".')
   }
-  # Extract outcome y
-  y <- model.response(model.frame(nobars(formula), data = data))
-  names(y) <- NULL
 
   if (family == "binomial") {
     if (is.matrix(y)) {
@@ -192,13 +202,11 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     stop("Check ELBO_type")
   }
 
-  N <- length(y)
-
   # Extract X (FE design matrix)
   X <- model.matrix(nobars(formula), data = data)
 
   # Extract the Z (Random Effect) design matrix.
-  mk_Z <- mkReTrms(findbars(formula), model.frame(subbars(formula), data = data), reorder.terms = FALSE, reorder.vars = FALSE)
+  mk_Z <- mkReTrms(findbars(formula), data, reorder.terms = FALSE, reorder.vars = FALSE)
   Z <- t(mk_Z$Zt)
 
   p.X <- ncol(X)
