@@ -13,3 +13,4 @@ Goplerud_MAVB*
 ^.*RDS$
 ^\.travis\.yml$
 ^codecov\.yml$
+^paper_draft/*
