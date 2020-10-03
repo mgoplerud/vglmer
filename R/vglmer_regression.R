@@ -440,8 +440,10 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
       vi_beta_mean[1] <- qlogis(sum(y) / sum(trials))
     } else if (family == "negbin") {
       vi_beta_mean[1] <- log(mean(y))
+    } else if (family == 'linear'){
+      vi_beta_mean[1] <- mean(y)
     } else {
-      stop("Set up init")
+      stop('Set up init')
     }
 
     vi_alpha_mean <- rep(0, ncol(Z))

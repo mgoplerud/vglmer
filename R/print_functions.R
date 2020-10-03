@@ -22,11 +22,26 @@ fixef.vglmer <- function(object, ...) {
   return(as.vector(object$beta$mean))
 }
 
-# Load fixef, ranef from lme4
+# Load fixef, ranef, sigma from lme4
 #' @export
 lme4::fixef
 #' @export
 lme4::ranef
+
+#' @rdname vglmer-class
+#' @export
+sigma.vglmer <- function(object, ...){
+  #{\displaystyle \frac{\sqrt{2}}{2} \left(\frac{(2m-1)\Omega}{m}\right)^{1/2}}
+  
+  if (object$family != 'linear'){
+    stop('sigma from vglmer is only defined for linear models')
+  }
+  if (length(list(...)) > 0){
+    stop('... not used for sigma.vglmer')
+  }
+  naive_sigma <- with(object$sigmasq, sqrt(b/(a+1)))
+  return(naive_sigma)
+}
 
 #' @rdname vglmer-class
 #' @export
