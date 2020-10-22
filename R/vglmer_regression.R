@@ -337,7 +337,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     do_huangwand <- TRUE
     vi_a_nu_jp <- rep(2, length(d_j))
     names(vi_a_nu_jp) <- names(names_of_RE)
-    vi_a_APRIOR_jp <- lapply(d_j, FUN=function(i){rep(sqrt(10^4), i)})
+    vi_a_APRIOR_jp <- lapply(d_j, FUN=function(i){rep(25, i)})
     vi_a_a_jp <- mapply(d_j, vi_a_nu_jp, SIMPLIFY = FALSE, 
                         FUN=function(i,nu){1/2 * (nu + rep(i, i))})
     vi_a_b_jp <- lapply(vi_a_APRIOR_jp, FUN=function(i){1/i^2})
