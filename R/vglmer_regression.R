@@ -193,6 +193,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
       }
     }
   } else if (family == 'linear') {
+    y <- as.numeric(y)
     #Do nothing if linear
   } else {
     stop('family is invalid.')
