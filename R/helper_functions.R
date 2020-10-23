@@ -214,6 +214,9 @@ calculate_ELBO <- function(ELBO_type, factorization_method,
   ###
   N <- nrow(X)
   # linear predictor: E[XB + ZA - log(r)]
+  if (is.null(vi_r_mu)){vi_r_mu <- 0}
+  if (is.null(vi_r_sigma)){vi_r_sigma <- 0}
+  
   ex_XBZA <- (X %*% vi_beta_mean + Z %*% vi_alpha_mean) - vi_r_mu
   # quadratic var, i.e. Var(x_i^T beta + z_i^T alpha)
   if (factorization_method == "weak") {

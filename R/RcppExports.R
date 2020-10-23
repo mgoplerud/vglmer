@@ -24,3 +24,15 @@ cpp_zVz <- function(Z, V) {
     .Call('_vglmer_cpp_zVz', PACKAGE = 'vglmer', Z, V)
 }
 
+vecR_ridge_general <- function(L, pg_mean, Z, M, mapping_J, d, start_z) {
+    .Call('_vglmer_vecR_ridge_general', PACKAGE = 'vglmer', L, pg_mean, Z, M, mapping_J, d, start_z)
+}
+
+vecR_design <- function(alpha_mu, Z, M, mapping_J, d, start_z) {
+    .Call('_vglmer_vecR_design', PACKAGE = 'vglmer', alpha_mu, Z, M, mapping_J, d, start_z)
+}
+
+vecR_fast_ridge <- function(X, omega, prior_precision, y, adjust_y) {
+    .Call('_vglmer_vecR_fast_ridge', PACKAGE = 'vglmer', X, omega, prior_precision, y, adjust_y)
+}
+

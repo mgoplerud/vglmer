@@ -34,6 +34,7 @@ List LinRegChol(
   Eigen::SparseMatrix<double> adj_X = X.adjoint();
   Eigen::SimplicialLLT<Eigen::SparseMatrix<double> > Ch(adj_X * omega * X + prior_precision);
   Eigen::VectorXd mean = Ch.solve(adj_X * y);
+
   //Extract L to get the transformation of the std.normal
   //Into the correct form of N(0, Q^{-1}) and add the mean.
   Eigen::SparseMatrix<double> lower_l = Ch.matrixL();
@@ -132,5 +133,4 @@ List calculate_expected_outer_alpha(
     Rcpp::Named("mu_j") = mu_alpha
   );
 }
-
 
