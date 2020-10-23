@@ -3,6 +3,7 @@
 \name{vglmer-class}
 \alias{vglmer-class}
 \alias{fixef.vglmer}
+\alias{sigma.vglmer}
 \alias{ranef.vglmer}
 \alias{coef.vglmer}
 \alias{vcov.vglmer}
@@ -13,6 +14,8 @@
 \title{Generic Functions after Running vglmer}
 \usage{
 \method{fixef}{vglmer}(object, ...)
+
+\method{sigma}{vglmer}(object, ...)
 
 \method{ranef}{vglmer}(object, ...)
 

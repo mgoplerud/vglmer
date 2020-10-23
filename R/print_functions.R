@@ -28,6 +28,8 @@ lme4::fixef
 #' @export
 lme4::ranef
 
+#' @importFrom stats sigma
+
 #' @rdname vglmer-class
 #' @export
 sigma.vglmer <- function(object, ...){

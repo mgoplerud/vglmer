@@ -8,7 +8,7 @@ test_that("Compare against lmer", {
   alpha <- rnorm(G)
   sigmasq <- abs(rcauchy(1))
   coef_scale <- rexp(1, rate = 1/2)
-  y <- rnorm(n = N, mean = coef_scale * (-1 + x + alpha[g]) * sqrt(sigmasq), sd = sqrt(sigmsaq))
+  y <- rnorm(n = N, mean = coef_scale * (-1 + x + alpha[g]) * sqrt(sigmasq), sd = sqrt(sigmasq))
   
   est_glmer <- suppressWarnings(lme4::lmer(y ~ x + (1 | g), REML = FALSE))
   fmt_glmer <- format_glmer(est_glmer)
@@ -27,6 +27,8 @@ test_that("Compare against lmer", {
     
     cor_mean <- with(comp_methods, cor(mean.x, mean.y))
     expect_gt(cor_mean, expected = 0.99)
+    
+    expect_lt(with(comp_methods, mean(abs(mean.x - mean.y))), 0.1)
     
     expect_equal(sigma(example_vglmer), sigma(est_glmer), tol = 1e-1)
   }
