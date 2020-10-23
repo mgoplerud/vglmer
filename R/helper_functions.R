@@ -191,43 +191,56 @@ make_log_invwishart_constant <- function(nu, Phi) {
   return(output)
 }
 
-calculate_ELBO <- function(ELBO_type, factorization_method,
-                           # Fixed constants or priors
-                           d_j, g_j, prior_sigma_alpha_phi, prior_sigma_alpha_nu, iw_prior_constant, choose_term,
-                           # Data
-                           X, Z, s, y,
-                           # PolyaGamma Parameters
-                           vi_pg_b, vi_pg_mean, vi_pg_c,
-                           # Sigma Parameters
-                           vi_sigma_alpha, vi_sigma_alpha_nu, vi_sigma_outer_alpha,
-                           # Beta Parameters / Alpha Parameters
-                           vi_beta_mean, vi_beta_decomp,
-                           vi_alpha_mean, vi_alpha_decomp,
-                           log_det_beta_var, log_det_alpha_var,
-                           log_det_joint_var = NULL,
-                           vi_joint_decomp = NULL,
-                           # r Parameters
-                           vi_r_mu = NULL, vi_r_mean = NULL,
-                           vi_r_sigma = NULL) {
+calculate_ELBO <- function(family, ELBO_type, factorization_method,
+   # Fixed constants or priors
+   d_j, g_j, prior_sigma_alpha_phi, prior_sigma_alpha_nu, iw_prior_constant, choose_term,
+   # Data
+   X, Z, s, y,
+   # PolyaGamma Parameters
+   vi_pg_b, vi_pg_mean, vi_pg_c,
+   # Sigma Parameters
+   vi_sigma_alpha, vi_sigma_alpha_nu, vi_sigma_outer_alpha,
+   # Beta Parameters / Alpha Parameters
+   vi_beta_mean, vi_beta_decomp,
+   vi_alpha_mean, vi_alpha_decomp,
+   log_det_beta_var, log_det_alpha_var,
+   log_det_joint_var = NULL,
+   vi_joint_decomp = NULL,
+   # r Parameters
+   vi_r_mu = NULL, vi_r_mean = NULL,
+   vi_r_sigma = NULL,
+   # sigamsq Parameters
+   vi_sigmasq_a = NULL, vi_sigmasq_b = NULL,
+   vi_sigmasq_prior_a = NULL, vi_sigmasq_prior_b = NULL
+   ) {
   ####
   ## PREPARE INTERMEDIATE QUANTITES
   ###
   N <- nrow(X)
   # linear predictor: E[XB + ZA - log(r)]
-  if (is.null(vi_r_mu)){vi_r_mu <- 0}
-  if (is.null(vi_r_sigma)){vi_r_sigma <- 0}
-  
-  ex_XBZA <- (X %*% vi_beta_mean + Z %*% vi_alpha_mean) - vi_r_mu
+  if (family == 'negbin'){
+    ex_XBZA <- (X %*% vi_beta_mean + Z %*% vi_alpha_mean) - vi_r_mu
+  }else{
+    ex_XBZA <- (X %*% vi_beta_mean + Z %*% vi_alpha_mean)
+  }
   # quadratic var, i.e. Var(x_i^T beta + z_i^T alpha)
   if (factorization_method == "weak") {
     if (is.null(vi_joint_decomp) | is.null(log_det_joint_var)) {
       stop("Need to provide joint decomposition for ELBO weak")
     }
-    var_XBZA <- rowSums((cbind(X, Z) %*% t(vi_joint_decomp))^2) + vi_r_sigma
+    
+    var_XBZA <- rowSums((cbind(X, Z) %*% t(vi_joint_decomp))^2)
+    
+    if (family == 'negbin'){
+      var_XBZA <- var_XBZA + vi_r_sigma
+    }
   } else {
     beta_quad <- rowSums((X %*% t(vi_beta_decomp))^2)
     alpha_quad <- rowSums((Z %*% t(vi_alpha_decomp))^2)
-    var_XBZA <- beta_quad + alpha_quad + vi_r_sigma
+    var_XBZA <- beta_quad + alpha_quad
+    if (family == 'negbin'){
+      var_XBZA <- var_XBZA + vi_r_sigma 
+    }
   }
   # Prepare vi_sigma_alpha
   moments_sigma_alpha <- mapply(vi_sigma_alpha, vi_sigma_alpha_nu, d_j, SIMPLIFY = FALSE, FUN = function(phi, nu, d) {
@@ -249,16 +262,37 @@ calculate_ELBO <- function(ELBO_type, factorization_method,
   ## GET the terms for the expectation
   ## of the log-complete data given the variational distribution.
   if (ELBO_type == "augmented") {
-    # Get the terms for the p(y, w | alpha, beta, Sigma) EXCLUDING the intractable PG.
-    logcomplete_1 <- -sum(vi_pg_b) * log(2) +
-      as.vector(t(s) %*% ex_XBZA - 1 / 2 * t(ex_XBZA) %*% Diagonal(x = vi_pg_mean) %*% ex_XBZA) +
-      -1 / 2 * sum(var_XBZA * vi_pg_mean)
+    if (family == "linear") {
+      e_ln_sigmasq <- log(vi_sigmasq_b) - digamma(vi_sigmasq_a)
+      e_inv_sigmasq <- vi_sigmasq_a/vi_sigmasq_b
+      logcomplete_1 <- sum(-1/2 * ((y - ex_XBZA)^2 + var_XBZA) * e_inv_sigmasq) +
+        -1/2 * length(y) * (log(2 * pi) + e_ln_sigmasq)
+      #Add log prior
+      logcomplete_1 <- logcomplete_1 + (-vi_sigmasq_prior_a - 1) * e_ln_sigmasq +
+        -vi_sigmasq_prior_b * e_inv_sigmasq
+    } else {
+      # Get the terms for the p(y, w | alpha, beta, Sigma) EXCLUDING the intractable PG.
+      logcomplete_1 <- -sum(vi_pg_b) * log(2) +
+        as.vector(t(s) %*% ex_XBZA - 1 / 2 * t(ex_XBZA) %*% Diagonal(x = vi_pg_mean) %*% ex_XBZA) +
+        -1 / 2 * sum(var_XBZA * vi_pg_mean)
+    }
     # Get the terms for p(alpha | Sigma)
 
-    logcomplete_2 <- sum(-d_j * g_j / 2 * log(2 * pi) - g_j / 2 * ln_det_sigma_alpha) +
-      -1 / 2 * sum(mapply(inv_sigma_alpha, vi_sigma_outer_alpha, FUN = function(a, b) {
-        sum(diag(a %*% b))
-      }))
+    if (family == 'linear'){
+      e_ln_sigmasq <- log(vi_sigmasq_b) - digamma(vi_sigmasq_a)
+      
+      logcomplete_2 <- sum(-d_j * g_j / 2 * log(2 * pi) - g_j / 2 * ln_det_sigma_alpha) +
+        -e_inv_sigmasq * 1 / 2 * sum(mapply(inv_sigma_alpha, vi_sigma_outer_alpha, FUN = function(a, b) {
+          sum(diag(a %*% b))
+        }))
+      logcomplete_2 <-  logcomplete_2 +
+        -1/2 * sum(d_j * g_j) * e_ln_sigmasq
+    }else{
+      logcomplete_2 <- sum(-d_j * g_j / 2 * log(2 * pi) - g_j / 2 * ln_det_sigma_alpha) +
+        -1 / 2 * sum(mapply(inv_sigma_alpha, vi_sigma_outer_alpha, FUN = function(a, b) {
+          sum(diag(a %*% b))
+        }))
+    }
 
     # Get the terms for the final priors!
     logcomplete_3 <- 0 + # flat prior on beta
@@ -278,8 +312,14 @@ calculate_ELBO <- function(ELBO_type, factorization_method,
       entropy_1 <- ncol(vi_beta_decomp) / 2 * log(2 * pi * exp(1)) + 1 / 2 * log_det_beta_var +
         ncol(vi_alpha_decomp) / 2 * log(2 * pi * exp(1)) + 1 / 2 * log_det_alpha_var
     }
-    # Entropy for Polya-Gamma EXCLUDING intractable term that cancels
-    entropy_2 <- sum(vi_pg_b * vi_pg_c / 4 * tanh(vi_pg_c / 2) - vi_pg_b * log(cosh(vi_pg_c / 2)))
+    #ENTROPY FOR LINK SPECIFIC PARAMETERS
+    if (family == 'linear'){
+      entropy_2 <- vi_sigmasq_a + log(vi_sigmasq_b) + lgamma(vi_sigmasq_a) + 
+        -(vi_sigmasq_a + 1) * digamma(vi_sigmasq_a)
+    }else{
+      # Entropy for Polya-Gamma EXCLUDING intractable term that cancels
+      entropy_2 <- sum(vi_pg_b * vi_pg_c / 4 * tanh(vi_pg_c / 2) - vi_pg_b * log(cosh(vi_pg_c / 2)))
+    }
     # Entropy Wisharts
     entropy_3 <- -mapply(vi_sigma_alpha_nu, vi_sigma_alpha, FUN = function(nu, Phi) {
       make_log_invwishart_constant(nu = nu, Phi = Phi)
@@ -515,3 +555,22 @@ VEM.PELBO.r_hessian <- function(ln_r, y, psi, zVz) {
 
   return(deriv_normcon + deriv_lncosh + deriv_prelim)
 }
+
+#\sum_{j,g} E[tr(\alpha_{j,g}^T \Sigma_j^{-1} \alpha_{j,g})]
+expect_alpha_prior_kernel <- function(vi_sigma_alpha, vi_sigma_alpha_nu, vi_sigma_outer_alpha, d_j){
+  
+  moments_sigma_alpha <- mapply(vi_sigma_alpha, vi_sigma_alpha_nu, 
+    d_j, SIMPLIFY = FALSE, FUN = function(phi, nu, d) {
+    inv_phi <- solve(phi)
+    
+    sigma.inv <- nu * inv_phi
+    
+    return(list(sigma.inv = sigma.inv))
+  })
+  
+  inv_sigma_alpha <- lapply(moments_sigma_alpha, FUN = function(i) {i$sigma.inv})
+  
+  out <- sum(mapply(inv_sigma_alpha, vi_sigma_outer_alpha, FUN = function(a, b) {sum(diag(a %*% b))}))
+  
+  return(out)
+}	

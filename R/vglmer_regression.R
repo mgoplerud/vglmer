@@ -67,7 +67,7 @@
 #' @importFrom dplyr select group_by group_by_at summarize n lag
 #' @importFrom lme4 mkReTrms findbars subbars
 #' @importFrom stats model.response model.matrix model.frame rnorm rWishart
-#'   qlogis optim
+#'   qlogis optim residuals lm
 #' @importFrom rlang .data
 #' @importFrom graphics plot
 #' @importFrom checkmate assert assert_formula assert_choice
@@ -109,7 +109,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
   }
   
   
-  assert_choice(family, c("negbin", "binomial"))
+  assert_choice(family, c("negbin", "binomial", "linear"))
   if (!inherits(control, "vglmer_control")) {
     stop("control must be object from vglmer_control().")
   }
@@ -149,8 +149,8 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
   if (is.null(print_prog)) {
     print_prog <- max(c(1, floor(iterations / 20)))
   }
-  if (!(family %in% c("binomial", "negbin"))) {
-    stop('family must be "binomial" or "negbin".')
+  if (!(family %in% c("binomial", "negbin", "linear"))) {
+    stop('family must be "linear", "binomial", "negbin".')
   }
 
   if (family == "binomial") {
@@ -179,7 +179,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
       }
       trials <- rep(1, length(y))
     }
-  } else {
+  } else if (family == 'negbin') {
     if (!(class(y) %in% c("numeric", "integer"))) {
       stop("Must provide vector of numbers with negbin.")
     }
@@ -196,9 +196,14 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
         warning("Non-integer numbers in y")
       }
     }
+  } else if (family == 'linear') {
+    y <- as.numeric(y)
+    #Do nothing if linear
+  } else {
+    stop('family is invalid.')
   }
 
-  if (family == "binomial") {
+  if (family %in% c("binomial", "linear")) {
     ELBO_type <- "augmented"
   } else if (family == "negbin") {
     ELBO_type <- "profiled"
@@ -286,10 +291,28 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
   # Prepare Initial Values
   ###
 
-  if (family == "binomial") {
+  vi_sigmasq_prior_a <- 0
+  vi_sigmasq_a <- (length(y) + sum(d_j * g_j))/2 + vi_sigmasq_prior_a
+  
+  vi_sigmasq_prior_b <- 1
+  vi_sigmasq_b <- 0
+  
+  if (family == "linear") {
+    s <- y
+    vi_pg_b <- 1
+    vi_r_mu <- 0
+    vi_r_sigma <- 0
+    vi_r_mean <- 0
+    
+    vi_sigmasq_b <- sum(residuals(lm(y ~ 1))^2)/2 + vi_sigmasq_prior_b
+    
+
+    choose_term <- -length(y)/2 * log(2 * pi)
+  } else if (family == "binomial") {
     s <- y - trials / 2
     vi_pg_b <- trials
     vi_r_mu <- 0
+    vi_r_mean <- 0
     vi_r_sigma <- 0
     choose_term <- sum(lchoose(n = round(trials), k = round(y)))
   } else {
@@ -383,7 +406,14 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
   vi_sigma_alpha_nu <- vi_sigma_alpha_nu + prior_sigma_alpha_nu
 
   if (control$init == "EM") {
-    if (family == "negbin") {
+    if (family == "linear"){
+      jointXZ <- cbind(X,Z)
+      EM_init <- LinRegChol(X = jointXZ, 
+        omega = sparseMatrix(i = 1:nrow(jointXZ), j = 1:nrow(jointXZ), x = 1), 
+        y = y, prior_precision = sparseMatrix(i = 1:ncol(jointXZ), j = 1:ncol(jointXZ), x = 1/4))$mean
+      EM_init <- list('beta' = EM_init[1:ncol(X)], 'alpha' = EM_init[-1:-ncol(X)])
+      rm(jointXZ)
+    } else if (family == "negbin") {
       EM_init <- EM_prelim_nb(X = X, Z = Z, y = y, est_r = exp(vi_r_mu), iter = 15, ridge = 4)
     } else {
       EM_init <- EM_prelim_logit(X = X, Z = Z, s = s, pg_b = vi_pg_b, iter = 15, ridge = 4)
@@ -415,8 +445,10 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
       vi_beta_mean[1] <- qlogis(sum(y) / sum(trials))
     } else if (family == "negbin") {
       vi_beta_mean[1] <- log(mean(y))
+    } else if (family == 'linear'){
+      vi_beta_mean[1] <- mean(y)
     } else {
-      stop("Set up init")
+      stop('Set up init')
     }
 
     vi_alpha_mean <- rep(0, ncol(Z))
@@ -457,7 +489,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     lagged_beta_decomp <- vi_beta_decomp
   }
   lagged_vi_r_mu <- -Inf
-
+  lagged_vi_sigmasq_a <- lagged_vi_sigmasq_b <- -Inf
   lagged_ELBO <- -Inf
   accepted_times <- NA
 
@@ -517,7 +549,10 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
       # joint_quad <- rowSums( (joint.XZ %*% t(vi_joint_decomp))^2 )
       # vi_joint_decomp <<- vi_joint_decomp
       # joint.XZ <<- joint.XZ
-      joint_quad <- cpp_zVz(Z = joint.XZ, V = as(vi_joint_decomp, "dgCMatrix")) + vi_r_sigma
+      joint_quad <- cpp_zVz(Z = joint.XZ, V = as(vi_joint_decomp, "dgCMatrix")) 
+      if (family == 'negbin'){
+        joint_quad <- joint_quad + vi_r_sigma
+      }
       vi_pg_c <- sqrt(as.vector(X %*% vi_beta_mean + Z %*% vi_alpha_mean - vi_r_mu)^2 + joint_quad)
     } else {
       # vi_beta_decomp <<- vi_beta_decomp
@@ -528,12 +563,21 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
       # alpha_quad <- cpp_zVz(Z = Z, V = make_dgC(vi_alpha_decomp))
       beta_quad <- rowSums((X %*% t(vi_beta_decomp))^2)
       alpha_quad <- rowSums((Z %*% t(vi_alpha_decomp))^2)
-      vi_pg_c <- sqrt(as.vector(X %*% vi_beta_mean + Z %*% vi_alpha_mean - vi_r_mu)^2 + beta_quad + alpha_quad + vi_r_sigma)
+      joint_var <- beta_quad + alpha_quad
+      if (family == 'negbin'){
+        joint_var <- joint_var + vi_r_sigma
+      }
+      vi_pg_c <- sqrt(as.vector(X %*% vi_beta_mean + Z %*% vi_alpha_mean - vi_r_mu)^2 + joint_var)
     }
-    vi_pg_mean <- vi_pg_b / (2 * vi_pg_c) * tanh(vi_pg_c / 2)
-    diag_vi_pg_mean <- sparseMatrix(i = 1:N, j = 1:N, x = vi_pg_mean)
+    if (family == 'linear'){
+      vi_pg_mean <- rep(1, nrow(X))
+      diag_vi_pg_mean <- sparseMatrix(i = 1:N, j = 1:N, x = vi_pg_mean)
+    }else{
+      vi_pg_mean <- vi_pg_b / (2 * vi_pg_c) * tanh(vi_pg_c / 2)
+      diag_vi_pg_mean <- sparseMatrix(i = 1:N, j = 1:N, x = vi_pg_mean)
+    }
     if (debug_ELBO & it != 1) {
-      debug_ELBO.1 <- calculate_ELBO(
+      debug_ELBO.1 <- calculate_ELBO(family = family,
         ELBO_type = ELBO_type,
         factorization_method = factorization_method,
         d_j = d_j, g_j = g_j, prior_sigma_alpha_phi = prior_sigma_alpha_phi,
@@ -547,6 +591,8 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
         log_det_beta_var = log_det_beta_var, log_det_alpha_var = log_det_alpha_var,
         vi_beta_decomp = vi_beta_decomp, vi_alpha_decomp = vi_alpha_decomp,
         vi_joint_decomp = vi_joint_decomp, choose_term = choose_term,
+        vi_sigmasq_a = vi_sigmasq_a, vi_sigmasq_b = vi_sigmasq_b, 
+        vi_sigmasq_prior_a = vi_sigmasq_prior_a, vi_sigmasq_prior_b = vi_sigmasq_prior_b,
         log_det_joint_var = log_det_joint_var, vi_r_mu = vi_r_mu, vi_r_mean = vi_r_mean, vi_r_sigma = vi_r_sigma
       )
     }
@@ -797,12 +843,25 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     } else {
       stop("Invalid factorization method.")
     }
+    
+    if (family == 'linear'){
+      adjust_var <- 1/sqrt(vi_sigmasq_a/vi_sigmasq_b)
+      vi_beta_decomp <- vi_beta_decomp * adjust_var
+      vi_alpha_decomp <- vi_alpha_decomp * adjust_var
+      vi_joint_decomp <- vi_joint_decomp * adjust_var
+      
+      e_ln_sigmasq <- log(vi_sigmasq_b) - digamma(vi_sigmasq_a)
+      
+      log_det_joint_var <- log_det_joint_var + ncol(vi_joint_decomp) * e_ln_sigmasq
+      log_det_beta_var <- log_det_beta_var + ncol(vi_beta_decomp) * e_ln_sigmasq
+      log_det_alpha_var <- log_det_alpha_var + ncol(vi_alpha_decomp) * e_ln_sigmasq
+    }
 
     if (debug_ELBO & it != 1) {
       variance_by_alpha_jg <- calculate_expected_outer_alpha(L = vi_alpha_decomp, alpha_mu = as.vector(vi_alpha_mean), re_position_list = outer_alpha_RE_positions)
       vi_sigma_outer_alpha <- variance_by_alpha_jg$outer_alpha
-
-      debug_ELBO.2 <- calculate_ELBO(
+      
+      debug_ELBO.2 <- calculate_ELBO(family = family,
         ELBO_type = ELBO_type,
         factorization_method = factorization_method,
         d_j = d_j, g_j = g_j, prior_sigma_alpha_phi = prior_sigma_alpha_phi,
@@ -816,6 +875,8 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
         log_det_beta_var = log_det_beta_var, log_det_alpha_var = log_det_alpha_var,
         vi_beta_decomp = vi_beta_decomp, vi_alpha_decomp = vi_alpha_decomp,
         vi_joint_decomp = vi_joint_decomp, choose_term = choose_term,
+        vi_sigmasq_a = vi_sigmasq_a, vi_sigmasq_b = vi_sigmasq_b, 
+        vi_sigmasq_prior_a = vi_sigmasq_prior_a, vi_sigmasq_prior_b = vi_sigmasq_prior_b,
         log_det_joint_var = log_det_joint_var, vi_r_mu = vi_r_mu, vi_r_mean = vi_r_mean,
         vi_r_sigma = vi_r_sigma
       )
@@ -830,8 +891,14 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
 
     variance_by_alpha_jg <- calculate_expected_outer_alpha(L = vi_alpha_decomp, alpha_mu = as.vector(vi_alpha_mean), re_position_list = outer_alpha_RE_positions)
     vi_sigma_outer_alpha <- variance_by_alpha_jg$outer_alpha
-    vi_sigma_alpha <- mapply(vi_sigma_outer_alpha, prior_sigma_alpha_phi, SIMPLIFY = FALSE, FUN = function(i, j) {
-      i + j
+    
+    vi_sigma_alpha <- mapply(vi_sigma_outer_alpha, prior_sigma_alpha_phi,
+      SIMPLIFY = FALSE, FUN = function(i, j) {
+        if (family == 'linear'){
+          return(vi_sigmasq_a/vi_sigmasq_b * i + j)
+        }else{
+          return(i + j)
+        }
     })
 
     if (do_timing) {
@@ -855,6 +922,90 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
 
       s <- (y - vi_r_mean) / 2
       vi_pg_b <- y + vi_r_mean
+    } else if (family == 'linear') {
+      
+      if (factorization_method == 'weak'){
+        joint_quad <- cpp_zVz(Z = joint.XZ, V = as(vi_joint_decomp, "dgCMatrix"))
+        vi_lp <- (s - as.vector(X %*% vi_beta_mean + Z %*% vi_alpha_mean))^2 + joint_quad
+      } else{
+        beta_quad <- rowSums((X %*% t(vi_beta_decomp))^2)
+        alpha_quad <- rowSums((Z %*% t(vi_alpha_decomp))^2)
+        vi_lp <- (s - as.vector(X %*% vi_beta_mean + Z %*% vi_alpha_mean))^2 + beta_quad + alpha_quad
+      }
+      
+      vi_kernel <- expect_alpha_prior_kernel(vi_sigma_alpha = vi_sigma_alpha, 
+          vi_sigma_alpha_nu = vi_sigma_alpha_nu, d_j = d_j,
+          vi_sigma_outer_alpha = vi_sigma_outer_alpha)
+      
+      vi_sigmasq_b_trad <- (sum(vi_lp) + vi_kernel)/2 + vi_sigmasq_prior_b
+
+      # fn_man_opt <- function(par, family,
+      #   ELBO_type,
+      #   factorization_method ,
+      #   d_j, g_j, prior_sigma_alpha_phi ,
+      #   prior_sigma_alpha_nu,
+      #   iw_prior_constant,
+      #   X, Z, s, y,
+      #   vi_pg_b, vi_pg_mean, vi_pg_c,
+      #   vi_sigma_alpha, vi_sigma_alpha_nu,
+      #   vi_sigma_outer_alpha,
+      #   vi_beta_mean, vi_alpha_mean,
+      #   log_det_beta_var, log_det_alpha_var,
+      #   vi_beta_decomp, vi_alpha_decomp,
+      #   vi_joint_decomp, choose_term,
+      #   vi_sigmasq_a,
+      #   vi_sigmasq_prior_a, vi_sigmasq_prior_b,
+      #   log_det_joint_var){
+      # 
+      #   out <- calculate_ELBO(vi_sigmasq_b = exp(par), family = family,
+      #                  ELBO_type = ELBO_type,
+      #                  factorization_method = factorization_method,
+      #                  d_j = d_j, g_j = g_j, prior_sigma_alpha_phi = prior_sigma_alpha_phi,
+      #                  prior_sigma_alpha_nu = prior_sigma_alpha_nu,
+      #                  iw_prior_constant = iw_prior_constant,
+      #                  X = X, Z = Z, s = s, y = y,
+      #                  vi_pg_b = vi_pg_b, vi_pg_mean = vi_pg_mean, vi_pg_c = vi_pg_c,
+      #                  vi_sigma_alpha = vi_sigma_alpha, vi_sigma_alpha_nu = vi_sigma_alpha_nu,
+      #                  vi_sigma_outer_alpha = vi_sigma_outer_alpha,
+      #                  vi_beta_mean = vi_beta_mean, vi_alpha_mean = vi_alpha_mean,
+      #                  log_det_beta_var = log_det_beta_var, log_det_alpha_var = log_det_alpha_var,
+      #                  vi_beta_decomp = vi_beta_decomp, vi_alpha_decomp = vi_alpha_decomp,
+      #                  vi_joint_decomp = vi_joint_decomp, choose_term = choose_term,
+      #                  vi_sigmasq_a = vi_sigmasq_a,
+      #                  vi_r_mu = NULL,
+      #                  vi_r_mean = NULL, vi_r_sigma = NULL,
+      #                  vi_sigmasq_prior_a = vi_sigmasq_prior_a, vi_sigmasq_prior_b = vi_sigmasq_prior_b,
+      #                  log_det_joint_var = log_det_joint_var)
+      #   return(out$ELBO)
+      # }
+      # man_opt <- optim(par = log(vi_sigmasq_b),
+      #  method = 'BFGS',
+      #  family = family,
+      #  ELBO_type = ELBO_type,
+      #  factorization_method = factorization_method,
+      #  d_j = d_j, g_j = g_j, prior_sigma_alpha_phi = prior_sigma_alpha_phi,
+      #  prior_sigma_alpha_nu = prior_sigma_alpha_nu,
+      #  iw_prior_constant = iw_prior_constant,
+      #  X = X, Z = Z, s = s, y = y,
+      #  vi_pg_b = vi_pg_b, vi_pg_mean = vi_pg_mean, vi_pg_c = vi_pg_c,
+      #  vi_sigma_alpha = vi_sigma_alpha, vi_sigma_alpha_nu = vi_sigma_alpha_nu,
+      #  vi_sigma_outer_alpha = vi_sigma_outer_alpha,
+      #  vi_beta_mean = vi_beta_mean, vi_alpha_mean = vi_alpha_mean,
+      #  log_det_beta_var = log_det_beta_var, log_det_alpha_var = log_det_alpha_var,
+      #  vi_beta_decomp = vi_beta_decomp, vi_alpha_decomp = vi_alpha_decomp,
+      #  vi_joint_decomp = vi_joint_decomp, choose_term = choose_term,
+      #  vi_sigmasq_a = vi_sigmasq_a,
+      #  vi_sigmasq_prior_a = vi_sigmasq_prior_a, vi_sigmasq_prior_b = vi_sigmasq_prior_b,
+      #  log_det_joint_var = log_det_joint_var,
+      #   fn = fn_man_opt, control = list(fnscale = -1))
+      # 
+      # vi_sigmasq_b_man <- exp(man_opt$par)
+      # 
+      # man_val <- man_opt$value
+      # print(c(vi_sigmasq_b_trad, vi_sigmasq_b_man))
+      # print('Val')
+      # print(man_val)
+      vi_sigmasq_b <- vi_sigmasq_b_trad
     }
 
     if (do_timing) {
@@ -862,7 +1013,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     }
     ### PARAMETER EXPANSIONS!
     if (debug_ELBO) {
-      debug_ELBO.3 <- calculate_ELBO(
+      debug_ELBO.3 <- calculate_ELBO(family = family,
         ELBO_type = ELBO_type,
         factorization_method = factorization_method,
         d_j = d_j, g_j = g_j, prior_sigma_alpha_phi = prior_sigma_alpha_phi,
@@ -876,7 +1027,13 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
         log_det_beta_var = log_det_beta_var, log_det_alpha_var = log_det_alpha_var,
         vi_beta_decomp = vi_beta_decomp, vi_alpha_decomp = vi_alpha_decomp,
         vi_joint_decomp = vi_joint_decomp,
-        log_det_joint_var = log_det_joint_var, vi_r_mu = vi_r_mu, vi_r_mean = vi_r_mean, vi_r_sigma = vi_r_sigma, choose_term = choose_term
+        log_det_joint_var = log_det_joint_var, 
+        vi_r_mu = vi_r_mu, vi_r_mean = vi_r_mean, vi_r_sigma = vi_r_sigma, 
+        vi_sigmasq_a = vi_sigmasq_a, 
+        vi_sigmasq_b = vi_sigmasq_b, 
+        vi_sigmasq_prior_a = vi_sigmasq_prior_a, 
+        vi_sigmasq_prior_b = vi_sigmasq_prior_b,
+        choose_term = choose_term
       )
     }
 
@@ -1035,21 +1192,6 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
       prop_vi_sigma_alpha <- mapply(vi_sigma_alpha, update_expansion_R, SIMPLIFY = FALSE,
                                     FUN=function(Phi, R){R %*% Phi %*% t(R)})
       cat('r')
-      # if (prevent_degeneracy){
-      #   update_expansion_R <- mapply(prop_vi_sigma_alpha, update_expansion_R, SIMPLIFY = FALSE, FUN=function(prop, r){
-      #     #If determinant is negative or very small, do not allow!
-      #     det_prop <- det(prop)
-      #     if (det_prop < 1e-10 | det(r) < 0){
-      #       r <- diag(ncol(r))
-      #     }
-      #     return(r)
-      #   })
-      #
-      #   prop_vi_sigma_alpha <- mapply(vi_sigma_alpha, update_expansion_R, SIMPLIFY = FALSE,
-      #                                 FUN=function(Phi, R){R %*% Phi %*% t(R)})
-      # }
-      #
-      #
       mapping_for_R_block <- make_mapping_alpha(update_expansion_R, px.R = TRUE)
       update_expansion_Rblock <- prepare_T(mapping = mapping_for_R_block, levels_per_RE = g_j, num_REs = number_of_RE,
                         variables_per_RE = d_j, running_per_RE = breaks_for_RE, cyclical = FALSE, px.R = TRUE)
@@ -1136,7 +1278,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     #                log_det_joint_var <<- log_det_joint_var; vi_r_mu <<- vi_r_mu
 
     if (accept.PX) {
-      final.ELBO <- calculate_ELBO(
+      final.ELBO <- calculate_ELBO(family = family,
         ELBO_type = ELBO_type,
         factorization_method = factorization_method,
         d_j = d_j, g_j = g_j, prior_sigma_alpha_phi = prior_sigma_alpha_phi,
@@ -1150,6 +1292,8 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
         log_det_beta_var = log_det_beta_var, log_det_alpha_var = log_det_alpha_var,
         vi_beta_decomp = vi_beta_decomp, vi_alpha_decomp = vi_alpha_decomp,
         vi_joint_decomp = vi_joint_decomp, choose_term = choose_term,
+        vi_sigmasq_a = vi_sigmasq_a, vi_sigmasq_b = vi_sigmasq_b, 
+        vi_sigmasq_prior_a = vi_sigmasq_prior_a, vi_sigmasq_prior_b = vi_sigmasq_prior_b,
         log_det_joint_var = log_det_joint_var, vi_r_mu = vi_r_mu, vi_r_mean = vi_r_mean, vi_r_sigma = vi_r_sigma
       )
     } else {
@@ -1252,6 +1396,11 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     sigma = list(cov = vi_sigma_alpha, df = vi_sigma_alpha_nu),
     alpha = list(mean = vi_alpha_mean)
   )
+  if (family == 'linear'){
+    output$sigmasq <- list(a = vi_sigmasq_a, b = vi_sigmasq_b)
+  }else if (family == 'negbin'){
+    
+  }
   output$family <- family
   output$control <- control
 
