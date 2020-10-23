@@ -67,7 +67,7 @@
 #' @importFrom dplyr select group_by group_by_at summarize n lag
 #' @importFrom lme4 mkReTrms findbars subbars
 #' @importFrom stats model.response model.matrix model.frame rnorm rWishart
-#'   qlogis optim
+#'   qlogis optim residuals lm
 #' @importFrom rlang .data
 #' @importFrom graphics plot
 #' @importFrom checkmate assert assert_formula assert_choice
