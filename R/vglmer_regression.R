@@ -356,8 +356,36 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
   vi_sigma_alpha_nu <- g_j
 
   prior_variance <- control$prior_variance
+  do_huangwand <- FALSE
+  vi_a_APRIOR_jp <- vi_a_nu_jp <- vi_a_a_jp <- vi_a_b_jp <- NULL
+  prior_sigma_alpha_nu <- prior_sigma_alpha_phi <- NULL
+  
+  if (prior_variance == 'hw') {
+    do_huangwand <- TRUE
+    vi_a_nu_jp <- rep(2, length(d_j))
+    names(vi_a_nu_jp) <- names(names_of_RE)
+    vi_a_APRIOR_jp <- lapply(d_j, FUN=function(i){rep(25, i)})
+    vi_a_a_jp <- mapply(d_j, vi_a_nu_jp, SIMPLIFY = FALSE, 
+                        FUN=function(i,nu){1/2 * (nu + rep(i, i))})
+    vi_a_b_jp <- lapply(vi_a_APRIOR_jp, FUN=function(i){1/i^2})
+  } else if (prior_variance == 'kn') {
+    
+    if (family != 'binomial'){stop('Set up kn for non-binomial.')}
+    fe_only <- EM_prelim_logit(X = drop0(X), Z = NULL, s = s, pg_b =  vi_pg_b, iter = 15)
+    weight_p <- plogis(as.vector(X %*% fe_only$beta))
+    weight_p <- weight_p * (1-weight_p)
+        
+    weight_kn <- Diagonal(x = sqrt(weight_p)) %*% Z
+    weight_kn <- lapply(outer_alpha_RE_positions, FUN=function(i){
+      D_matrix <- Reduce('+', lapply(i, FUN=function(j){
+        crossprod(weight_kn[,j])
+      }))
+      D_matrix <- solve(1/length(i) * D_matrix)
+    })
+    prior_sigma_alpha_nu <- d_j
+    prior_sigma_alpha_phi <- lapply(weight_kn, FUN=function(i){i * nrow(i)})
 
-  if (prior_variance == "jeffreys") {
+  } else if (prior_variance == "jeffreys") {
     prior_sigma_alpha_nu <- rep(0, number_of_RE)
     prior_sigma_alpha_phi <- lapply(d_j, FUN = function(i) {
       diag(x = 0, nrow = i, ncol = i)
@@ -391,19 +419,28 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     stop("Options for prior variance are jeffreys and mean_exists")
   }
 
-  # normalizingly constant for wishart to make ELBO have right value to compare models.
-  iw_prior_constant <- mapply(prior_sigma_alpha_nu, prior_sigma_alpha_phi,
-    FUN = function(nu, Phi) {
-      if (nu <= (ncol(Phi) - 1)) {
-        return(0)
-      } else {
-        return(make_log_invwishart_constant(nu, Phi))
+  if (do_huangwand){
+    iw_prior_constant <- mapply(vi_a_nu_jp, d_j,
+      FUN = function(nu, d) {
+        nu <- nu + d - 1
+        return(- (nu * d) / 2 * log(2) - multi_lgamma(a = nu / 2, p = d))
       }
-    }
-  )
-
-
-  vi_sigma_alpha_nu <- vi_sigma_alpha_nu + prior_sigma_alpha_nu
+    )
+    vi_sigma_alpha_nu <- vi_sigma_alpha_nu + vi_a_nu_jp + d_j - 1
+  }else{
+    # normalizingly constant for wishart to make ELBO have right value to compare models.
+    iw_prior_constant <- mapply(prior_sigma_alpha_nu, prior_sigma_alpha_phi,
+                                FUN = function(nu, Phi) {
+                                  if (nu <= (ncol(Phi) - 1)) {
+                                    return(0)
+                                  } else {
+                                    return(make_log_invwishart_constant(nu, Phi))
+                                  }
+                                }
+    )
+    
+    vi_sigma_alpha_nu <- vi_sigma_alpha_nu + prior_sigma_alpha_nu
+  }
 
   if (control$init == "EM") {
     if (family == "linear"){
@@ -427,17 +464,49 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
       L = sparseMatrix(i = 1, j = 1, x = 0, dims = rep(ncol(Z), 2)),
       re_position_list = outer_alpha_RE_positions
     )
-    vi_sigma_alpha <- mapply(vi_sigma_alpha$outer_alpha, prior_sigma_alpha_phi, SIMPLIFY = FALSE, FUN = function(i, j) {
-      i + j
-    })
+    if (!do_huangwand){
+      vi_sigma_alpha <- mapply(vi_sigma_alpha$outer_alpha, prior_sigma_alpha_phi, SIMPLIFY = FALSE, FUN = function(i, j) {
+        i + j
+      })
+    }else{
+      #Update Inverse-Wishart
+      vi_a_b_jp <<- vi_a_b_jp
+      vi_a_nu_jp <<- vi_a_nu_jp
+      vi_a_a_jp <<- vi_a_a_jp
+      vi_sigma_alpha <<- vi_sigma_alpha
+      vi_a_APRIOR_jp <<- vi_a_APRIOR_jp
+      vi_sigma_alpha <- mapply(vi_sigma_alpha$outer_alpha, vi_a_a_jp, 
+       vi_a_b_jp, vi_a_nu_jp, SIMPLIFY = FALSE, FUN = function(i, tilde.a, tilde.b, nu) {
+         i + Diagonal(n = nrow(i))
+       })
+      #Update a_{j,p}
+      diag_Einv_sigma <- mapply(vi_sigma_alpha, 
+          vi_sigma_alpha_nu, d_j, SIMPLIFY = FALSE, FUN = function(phi, nu, d) {
+            inv_phi <- solve(phi)
+            sigma.inv <- nu * inv_phi
+            return(diag(sigma.inv))
+          })
+      # vi_a_b_jp <- lapply(vi_sigma_alpha, FUN=function(i){diag(solve(i))})
+      vi_a_b_jp <- mapply(vi_a_nu_jp, vi_a_APRIOR_jp, diag_Einv_sigma,
+        SIMPLIFY = FALSE,
+        FUN=function(nu, APRIOR, diag_j){
+          1/APRIOR^2 + nu * diag_j
+        })
+    }
   } else if (control$init == "random") {
     set.seed(control$random_seed)
     vi_beta_mean <- rnorm(ncol(X))
     vi_alpha_mean <- rep(0, ncol(Z))
 
-    vi_sigma_alpha <- mapply(d_j, g_j, SIMPLIFY = FALSE, FUN = function(d, g) {
-      rWishart(n = 1, df = g, Sigma = diag(d))[, , 1]
-    })
+    if (do_huangwand){
+      vi_sigma_alpha <- mapply(d_j, g_j, SIMPLIFY = FALSE, FUN = function(d, g) {
+        rWishart(n = 1, df = g, Sigma = diag(d))[, , 1]
+      })
+    }else{
+      vi_sigma_alpha <- mapply(d_j, g_j, SIMPLIFY = FALSE, FUN = function(d, g) {
+        rWishart(n = 1, df = g, Sigma = diag(d))[, , 1]
+      })
+    }
   } else if (control$init == "zero") {
     vi_beta_mean <- rep(0, ncol(X))
 
@@ -456,6 +525,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     vi_sigma_alpha <- mapply(d_j, g_j, SIMPLIFY = FALSE, FUN = function(d, g) {
       diag(x = 1, ncol = d, nrow = d)
     })
+    # if (do_huangwand){stop('Setup init for zero')}
   } else {
     stop("Provide init = EM or random")
   }
@@ -509,7 +579,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     mapping_J <- sapply(mapping_J, min)
 
     mapping_to_re <- parsed_RE_groups$factor
-    mapping_to_re <- array_branch(do.call('cbind', mapping_to_re), margin = 1)
+    mapping_to_re <- purrr::array_branch(do.call('cbind', mapping_to_re), margin = 1)
     mapping_to_re <- lapply(mapping_to_re, FUN=function(i){
       mapply(outer_alpha_RE_positions, i, SIMPLIFY = FALSE, FUN=function(a,b){a[[b]]})
     })
@@ -520,7 +590,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
 
     rm(parsed_RE_groups, mapping_to_re)
   }
-  store_ELBO <- data.frame()
+  store_parameter_traj <- store_vi <- store_ELBO <- data.frame()
 
   if (debug_param) {
     store_beta <- array(NA, dim = c(iterations, ncol(X)))
@@ -591,9 +661,9 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
         log_det_beta_var = log_det_beta_var, log_det_alpha_var = log_det_alpha_var,
         vi_beta_decomp = vi_beta_decomp, vi_alpha_decomp = vi_alpha_decomp,
         vi_joint_decomp = vi_joint_decomp, choose_term = choose_term,
-        vi_sigmasq_a = vi_sigmasq_a, vi_sigmasq_b = vi_sigmasq_b, 
-        vi_sigmasq_prior_a = vi_sigmasq_prior_a, vi_sigmasq_prior_b = vi_sigmasq_prior_b,
-        log_det_joint_var = log_det_joint_var, vi_r_mu = vi_r_mu, vi_r_mean = vi_r_mean, vi_r_sigma = vi_r_sigma
+        log_det_joint_var = log_det_joint_var, vi_r_mu = vi_r_mu, vi_r_mean = vi_r_mean, vi_r_sigma = vi_r_sigma,
+        do_huangwand = do_huangwand, vi_a_a_jp = vi_a_a_jp, vi_a_b_jp = vi_a_b_jp,
+        vi_a_nu_jp = vi_a_nu_jp, vi_a_APRIOR_jp = vi_a_APRIOR_jp
       )
     }
 
@@ -878,7 +948,9 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
         vi_sigmasq_a = vi_sigmasq_a, vi_sigmasq_b = vi_sigmasq_b, 
         vi_sigmasq_prior_a = vi_sigmasq_prior_a, vi_sigmasq_prior_b = vi_sigmasq_prior_b,
         log_det_joint_var = log_det_joint_var, vi_r_mu = vi_r_mu, vi_r_mean = vi_r_mean,
-        vi_r_sigma = vi_r_sigma
+        vi_r_sigma = vi_r_sigma,
+        do_huangwand = do_huangwand, vi_a_a_jp = vi_a_a_jp, vi_a_b_jp = vi_a_b_jp,
+        vi_a_nu_jp = vi_a_nu_jp, vi_a_APRIOR_jp = vi_a_APRIOR_jp
       )
     }
     if (do_timing) {
@@ -889,23 +961,53 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     # Update \Sigma_j
     ##
 
-    variance_by_alpha_jg <- calculate_expected_outer_alpha(L = vi_alpha_decomp, alpha_mu = as.vector(vi_alpha_mean), re_position_list = outer_alpha_RE_positions)
-    vi_sigma_outer_alpha <- variance_by_alpha_jg$outer_alpha
-    
-    vi_sigma_alpha <- mapply(vi_sigma_outer_alpha, prior_sigma_alpha_phi,
-      SIMPLIFY = FALSE, FUN = function(i, j) {
-        if (family == 'linear'){
-          return(vi_sigmasq_a/vi_sigmasq_b * i + j)
-        }else{
-          return(i + j)
+    if (!do_huangwand){#Update standard Inverse-Wishart
+      variance_by_alpha_jg <- calculate_expected_outer_alpha(L = vi_alpha_decomp, alpha_mu = as.vector(vi_alpha_mean), re_position_list = outer_alpha_RE_positions)
+      vi_sigma_outer_alpha <- variance_by_alpha_jg$outer_alpha
+      vi_sigma_alpha <- mapply(vi_sigma_outer_alpha, prior_sigma_alpha_phi, SIMPLIFY = FALSE, FUN = function(i, j) {
+        i + j
+      })
+    }else{
+        #Update Inverse-Wishart
+        # vi_sigma_outer_alpha <<- vi_sigma_outer_alpha
+        # vi_a_a_jp <<- vi_a_a_jp
+        # vi_a_b_jp <<- vi_a_b_jp
+        variance_by_alpha_jg <- calculate_expected_outer_alpha(L = vi_alpha_decomp, alpha_mu = as.vector(vi_alpha_mean), re_position_list = outer_alpha_RE_positions)
+        vi_sigma_outer_alpha <- variance_by_alpha_jg$outer_alpha
+        
+        for (inner_it in 1:1){
+          
+          vi_sigma_alpha <- mapply(vi_sigma_outer_alpha, vi_a_a_jp, 
+                                   vi_a_b_jp, vi_a_nu_jp, SIMPLIFY = FALSE, FUN = function(i, tilde.a, tilde.b, nu) {
+                                     i + Diagonal(x = tilde.a/tilde.b) * 2 * nu
+                                   })
+          
+          # vi_sigma_alpha <<- vi_sigma_alpha
+          #Update a_{j,p}
+          diag_Einv_sigma <- mapply(vi_sigma_alpha, 
+                                    vi_sigma_alpha_nu, d_j, SIMPLIFY = FALSE, FUN = function(phi, nu, d) {
+                                      inv_phi <- solve(phi)
+                                      sigma.inv <- nu * inv_phi
+                                      return(diag(sigma.inv))
+                                    })
+          vi_a_b_jp <- mapply(vi_a_nu_jp, vi_a_APRIOR_jp, diag_Einv_sigma,
+                              SIMPLIFY = FALSE,
+                              FUN=function(nu, APRIOR, diag_j){
+                                1/APRIOR^2 + nu * diag_j
+                              })
+          
         }
-    })
-
+        # d_j <<- d_j
+        # vi_alpha_decomp <<- vi_alpha_decomp
+        # Tinv <<- Tinv
+        # vi_alpha_mean <<- vi_alpha_mean
+    }
+    
     if (do_timing) {
       toc(quiet = verbose_time, log = T)
       tic("Update Aux")
     }
-
+    # print(unlist(lapply(vi_sigma_alpha, as.vector)))
     # Update the auxilary parameters
     if (family == "negbin") {
       vi_r_param <- update_r(
@@ -939,72 +1041,6 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
       
       vi_sigmasq_b_trad <- (sum(vi_lp) + vi_kernel)/2 + vi_sigmasq_prior_b
 
-      # fn_man_opt <- function(par, family,
-      #   ELBO_type,
-      #   factorization_method ,
-      #   d_j, g_j, prior_sigma_alpha_phi ,
-      #   prior_sigma_alpha_nu,
-      #   iw_prior_constant,
-      #   X, Z, s, y,
-      #   vi_pg_b, vi_pg_mean, vi_pg_c,
-      #   vi_sigma_alpha, vi_sigma_alpha_nu,
-      #   vi_sigma_outer_alpha,
-      #   vi_beta_mean, vi_alpha_mean,
-      #   log_det_beta_var, log_det_alpha_var,
-      #   vi_beta_decomp, vi_alpha_decomp,
-      #   vi_joint_decomp, choose_term,
-      #   vi_sigmasq_a,
-      #   vi_sigmasq_prior_a, vi_sigmasq_prior_b,
-      #   log_det_joint_var){
-      # 
-      #   out <- calculate_ELBO(vi_sigmasq_b = exp(par), family = family,
-      #                  ELBO_type = ELBO_type,
-      #                  factorization_method = factorization_method,
-      #                  d_j = d_j, g_j = g_j, prior_sigma_alpha_phi = prior_sigma_alpha_phi,
-      #                  prior_sigma_alpha_nu = prior_sigma_alpha_nu,
-      #                  iw_prior_constant = iw_prior_constant,
-      #                  X = X, Z = Z, s = s, y = y,
-      #                  vi_pg_b = vi_pg_b, vi_pg_mean = vi_pg_mean, vi_pg_c = vi_pg_c,
-      #                  vi_sigma_alpha = vi_sigma_alpha, vi_sigma_alpha_nu = vi_sigma_alpha_nu,
-      #                  vi_sigma_outer_alpha = vi_sigma_outer_alpha,
-      #                  vi_beta_mean = vi_beta_mean, vi_alpha_mean = vi_alpha_mean,
-      #                  log_det_beta_var = log_det_beta_var, log_det_alpha_var = log_det_alpha_var,
-      #                  vi_beta_decomp = vi_beta_decomp, vi_alpha_decomp = vi_alpha_decomp,
-      #                  vi_joint_decomp = vi_joint_decomp, choose_term = choose_term,
-      #                  vi_sigmasq_a = vi_sigmasq_a,
-      #                  vi_r_mu = NULL,
-      #                  vi_r_mean = NULL, vi_r_sigma = NULL,
-      #                  vi_sigmasq_prior_a = vi_sigmasq_prior_a, vi_sigmasq_prior_b = vi_sigmasq_prior_b,
-      #                  log_det_joint_var = log_det_joint_var)
-      #   return(out$ELBO)
-      # }
-      # man_opt <- optim(par = log(vi_sigmasq_b),
-      #  method = 'BFGS',
-      #  family = family,
-      #  ELBO_type = ELBO_type,
-      #  factorization_method = factorization_method,
-      #  d_j = d_j, g_j = g_j, prior_sigma_alpha_phi = prior_sigma_alpha_phi,
-      #  prior_sigma_alpha_nu = prior_sigma_alpha_nu,
-      #  iw_prior_constant = iw_prior_constant,
-      #  X = X, Z = Z, s = s, y = y,
-      #  vi_pg_b = vi_pg_b, vi_pg_mean = vi_pg_mean, vi_pg_c = vi_pg_c,
-      #  vi_sigma_alpha = vi_sigma_alpha, vi_sigma_alpha_nu = vi_sigma_alpha_nu,
-      #  vi_sigma_outer_alpha = vi_sigma_outer_alpha,
-      #  vi_beta_mean = vi_beta_mean, vi_alpha_mean = vi_alpha_mean,
-      #  log_det_beta_var = log_det_beta_var, log_det_alpha_var = log_det_alpha_var,
-      #  vi_beta_decomp = vi_beta_decomp, vi_alpha_decomp = vi_alpha_decomp,
-      #  vi_joint_decomp = vi_joint_decomp, choose_term = choose_term,
-      #  vi_sigmasq_a = vi_sigmasq_a,
-      #  vi_sigmasq_prior_a = vi_sigmasq_prior_a, vi_sigmasq_prior_b = vi_sigmasq_prior_b,
-      #  log_det_joint_var = log_det_joint_var,
-      #   fn = fn_man_opt, control = list(fnscale = -1))
-      # 
-      # vi_sigmasq_b_man <- exp(man_opt$par)
-      # 
-      # man_val <- man_opt$value
-      # print(c(vi_sigmasq_b_trad, vi_sigmasq_b_man))
-      # print('Val')
-      # print(man_val)
       vi_sigmasq_b <- vi_sigmasq_b_trad
     }
 
@@ -1027,13 +1063,9 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
         log_det_beta_var = log_det_beta_var, log_det_alpha_var = log_det_alpha_var,
         vi_beta_decomp = vi_beta_decomp, vi_alpha_decomp = vi_alpha_decomp,
         vi_joint_decomp = vi_joint_decomp,
-        log_det_joint_var = log_det_joint_var, 
-        vi_r_mu = vi_r_mu, vi_r_mean = vi_r_mean, vi_r_sigma = vi_r_sigma, 
-        vi_sigmasq_a = vi_sigmasq_a, 
-        vi_sigmasq_b = vi_sigmasq_b, 
-        vi_sigmasq_prior_a = vi_sigmasq_prior_a, 
-        vi_sigmasq_prior_b = vi_sigmasq_prior_b,
-        choose_term = choose_term
+        log_det_joint_var = log_det_joint_var, vi_r_mu = vi_r_mu, vi_r_mean = vi_r_mean, vi_r_sigma = vi_r_sigma, choose_term = choose_term,
+        do_huangwand = do_huangwand, vi_a_a_jp = vi_a_a_jp, vi_a_b_jp = vi_a_b_jp,
+        vi_a_nu_jp = vi_a_nu_jp, vi_a_APRIOR_jp = vi_a_APRIOR_jp
       )
     }
 
@@ -1064,20 +1096,23 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
       
       attempted_expansion <- attempted_expansion + 1
       
-      prior.ELBO <- calculate_ELBO(ELBO_type = ELBO_type,
-        factorization_method = factorization_method,
-        d_j = d_j, g_j = g_j, prior_sigma_alpha_phi = prior_sigma_alpha_phi,
-        prior_sigma_alpha_nu = prior_sigma_alpha_nu,
-        iw_prior_constant = iw_prior_constant,
-        X = X, Z = Z, s = s, y = y,
-        vi_pg_b = vi_pg_b, vi_pg_mean = vi_pg_mean, vi_pg_c = vi_pg_c,
-        vi_sigma_alpha = vi_sigma_alpha, vi_sigma_alpha_nu = vi_sigma_alpha_nu,
-        vi_sigma_outer_alpha = vi_sigma_outer_alpha,
-        vi_beta_mean = vi_beta_mean, vi_alpha_mean = vi_alpha_mean,
-        log_det_beta_var = log_det_beta_var, log_det_alpha_var = log_det_alpha_var,
-        vi_beta_decomp = vi_beta_decomp, vi_alpha_decomp = vi_alpha_decomp,
-        vi_joint_decomp = vi_joint_decomp, choose_term = choose_term,
-        log_det_joint_var = log_det_joint_var, vi_r_mu = vi_r_mu, vi_r_mean = vi_r_mean, vi_r_sigma = vi_r_sigma
+      prior.ELBO <- calculate_ELBO(family = family,
+       ELBO_type = ELBO_type,
+       factorization_method = factorization_method,
+       d_j = d_j, g_j = g_j, prior_sigma_alpha_phi = prior_sigma_alpha_phi,
+       prior_sigma_alpha_nu = prior_sigma_alpha_nu,
+       iw_prior_constant = iw_prior_constant,
+       X = X, Z = Z, s = s, y = y,
+       vi_pg_b = vi_pg_b, vi_pg_mean = vi_pg_mean, vi_pg_c = vi_pg_c,
+       vi_sigma_alpha = vi_sigma_alpha, vi_sigma_alpha_nu = vi_sigma_alpha_nu,
+       vi_sigma_outer_alpha = vi_sigma_outer_alpha,
+       vi_beta_mean = vi_beta_mean, vi_alpha_mean = vi_alpha_mean,
+       log_det_beta_var = log_det_beta_var, log_det_alpha_var = log_det_alpha_var,
+       vi_beta_decomp = vi_beta_decomp, vi_alpha_decomp = vi_alpha_decomp,
+       vi_joint_decomp = vi_joint_decomp,
+       log_det_joint_var = log_det_joint_var, vi_r_mu = vi_r_mu, vi_r_mean = vi_r_mean, vi_r_sigma = vi_r_sigma, choose_term = choose_term,
+       do_huangwand = do_huangwand, vi_a_a_jp = vi_a_a_jp, vi_a_b_jp = vi_a_b_jp,
+       vi_a_nu_jp = vi_a_nu_jp, vi_a_APRIOR_jp = vi_a_APRIOR_jp
       )
       lout <<- list(ELBO_type = ELBO_type,
         factorization_method = factorization_method,
@@ -1218,19 +1253,23 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
       prop_variance_by_alpha_jg <- calculate_expected_outer_alpha(L = prop_vi_alpha_decomp, alpha_mu = as.vector(prop_vi_alpha_mean), re_position_list = outer_alpha_RE_positions)
       prop_vi_sigma_outer_alpha <- prop_variance_by_alpha_jg$outer_alpha
 
-      prop.ELBO <- calculate_ELBO(ELBO_type = ELBO_type,
+      prop.ELBO <- calculate_ELBO(family = family,
+        ELBO_type = ELBO_type,
         factorization_method = factorization_method,
         d_j = d_j, g_j = g_j, prior_sigma_alpha_phi = prior_sigma_alpha_phi,
         prior_sigma_alpha_nu = prior_sigma_alpha_nu,
         iw_prior_constant = iw_prior_constant,
         X = X, Z = Z, s = s, y = y,
         vi_pg_b = vi_pg_b, vi_pg_mean = vi_pg_mean, vi_pg_c = vi_pg_c,
-        vi_sigma_alpha = prop_vi_sigma_alpha, vi_sigma_alpha_nu = vi_sigma_alpha_nu,
-        vi_sigma_outer_alpha = prop_vi_sigma_outer_alpha,
-        vi_beta_mean = prop_vi_beta_mean, vi_alpha_mean = prop_vi_alpha_mean,
-        log_det_beta_var = log_det_beta_var, log_det_alpha_var = prop_log_det_alpha_var,
-        vi_beta_decomp = vi_beta_decomp, vi_alpha_decomp = prop_vi_alpha_decomp,
-        choose_term = choose_term
+        vi_sigma_alpha = vi_sigma_alpha, vi_sigma_alpha_nu = vi_sigma_alpha_nu,
+        vi_sigma_outer_alpha = vi_sigma_outer_alpha,
+        vi_beta_mean = vi_beta_mean, vi_alpha_mean = vi_alpha_mean,
+        log_det_beta_var = log_det_beta_var, log_det_alpha_var = log_det_alpha_var,
+        vi_beta_decomp = vi_beta_decomp, vi_alpha_decomp = vi_alpha_decomp,
+        vi_joint_decomp = vi_joint_decomp,
+        log_det_joint_var = log_det_joint_var, vi_r_mu = vi_r_mu, vi_r_mean = vi_r_mean, vi_r_sigma = vi_r_sigma, choose_term = choose_term,
+        do_huangwand = do_huangwand, vi_a_a_jp = vi_a_a_jp, vi_a_b_jp = vi_a_b_jp,
+        vi_a_nu_jp = vi_a_nu_jp, vi_a_APRIOR_jp = vi_a_APRIOR_jp
       )
       cat('d')
       if (prop.ELBO$ELBO > prior.ELBO$ELBO){
@@ -1292,9 +1331,9 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
         log_det_beta_var = log_det_beta_var, log_det_alpha_var = log_det_alpha_var,
         vi_beta_decomp = vi_beta_decomp, vi_alpha_decomp = vi_alpha_decomp,
         vi_joint_decomp = vi_joint_decomp, choose_term = choose_term,
-        vi_sigmasq_a = vi_sigmasq_a, vi_sigmasq_b = vi_sigmasq_b, 
-        vi_sigmasq_prior_a = vi_sigmasq_prior_a, vi_sigmasq_prior_b = vi_sigmasq_prior_b,
-        log_det_joint_var = log_det_joint_var, vi_r_mu = vi_r_mu, vi_r_mean = vi_r_mean, vi_r_sigma = vi_r_sigma
+        log_det_joint_var = log_det_joint_var, vi_r_mu = vi_r_mu, vi_r_mean = vi_r_mean, vi_r_sigma = vi_r_sigma,
+        do_huangwand = do_huangwand, vi_a_a_jp = vi_a_a_jp, vi_a_b_jp = vi_a_b_jp,
+        vi_a_nu_jp = vi_a_nu_jp, vi_a_APRIOR_jp = vi_a_APRIOR_jp
       )
     } else {
       # Should be no case
@@ -1328,6 +1367,13 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
 
     change_alpha_mean <- max(abs(vi_alpha_mean - lagged_alpha_mean))
     change_beta_mean <- max(abs(vi_beta_mean - lagged_beta_mean))
+    
+    unlist_vi <- c(unlist(lapply(vi_sigma_alpha, as.vector)), unlist(vi_a_b_jp))
+    if (debug_ELBO){
+      store_vi <- rbind(store_vi, data.frame(t(as.vector(unlist_vi))) %>% mutate(it = it))
+      print(unlist_vi)
+    }
+    
     change_sigma_mean <- mapply(vi_sigma_alpha, lagged_sigma_alpha, FUN = function(i, j) {
       max(abs(i - j))
     })
@@ -1349,13 +1395,18 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     if (debug_param) {
       store_beta[it, ] <- as.vector(vi_beta_mean)
     }
-    change_all <- data.frame(change_alpha_mean, change_beta_mean, t(change_sigma_mean), change_alpha_var, change_beta_var, change_joint_var, change_vi_r_mu)
+    change_all <- data.frame(change_alpha_mean, change_beta_mean, 
+        t(change_sigma_mean), change_alpha_var, change_beta_var, change_joint_var, change_vi_r_mu)
     if ((max(change_all) < tolerance_parameters) | (change_elbo$ELBO > 0 & change_elbo$ELBO < tolerance_elbo)) {
       if (!quiet) {
         message(paste0("Converged after ", it, " iterations with ELBO change of ", round(change_elbo[1], 1 + abs(floor(log(tolerance_elbo) / log(10))))))
         message(paste0("The largest change in any variational parameter was ", round(max(change_all), 1 + abs(floor(log(tolerance_parameters) / log(10))))))
       }
       break
+    }
+    if (debug_ELBO){
+      change_all$it <- it
+      store_parameter_traj <- rbind(store_parameter_traj, change_all)
     }
     if (!quiet & (it %% print_prog == 0)) {
       message(paste0("ELBO Change: ", round(change_elbo$ELBO, 10)))
@@ -1378,11 +1429,11 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     d.ELBO <- with(store_ELBO, ELBO - dplyr::lag(ELBO))
     sum.ELBO <- store_ELBO
     sum.ELBO$diff <- d.ELBO
-    sum.ELBO
     sum.ELBO <- summarize(group_by_at(sum.ELBO, .vars = "step"),
       negative = mean(.data$diff < 0, na.rm = T)
     )
   } else {
+    store_parameter_traj <- NULL
     d.ELBO <- NULL
   }
   if (parameter_expansion == "translation") {
@@ -1393,6 +1444,8 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     ELBO = final.ELBO, debug_ELBO = d.ELBO,
     ELBO_trajectory = store_ELBO,
     parameter.change = change_all,
+    parameter.vi = store_vi,
+    parameter.path = store_parameter_traj,
     sigma = list(cov = vi_sigma_alpha, df = vi_sigma_alpha_nu),
     alpha = list(mean = vi_alpha_mean)
   )
@@ -1479,6 +1532,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
 #'   following parameters where d is the dimensionality of the random effect. At
 #'   present, all models use "mean_exists" for a well-defined proper prior.
 #'   \itemize{
+#'   \item kn: See Kass and Natarajan (2006)
 #'   \item jeffreys: IW(0, 0)
 #'   \item mcmcglmm: IW(0, I)
 #'   \item mvD: IW(-d, I)
@@ -1486,7 +1540,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
 #'   \item limit: IW(d - 1, 0)
 #'   \item uniform: IW(-[d+1], 0)
 #'   }
-#'   The model may fail to converge
+#'   The model may fail to converge if an improper prior is used.
 #' @param tolerance_elbo Change in ELBO to stop algorithm.
 #' @param tolerance_parameters Change in value of any parameter to stop algorithm.
 #'
@@ -1534,7 +1588,7 @@ vglmer_control <- function(iterations = 1000,
       debug_param, return_data, debug_ELBO, quiet
     ), len = 8),
     check_choice(factorization_method, c("weak", "strong", "partial")),
-    check_choice(prior_variance, c("mean_exists", "jeffreys", "mcmcglmm", "mvD", "limit", "uniform")),
+    check_choice(prior_variance, c("kn", "hw", "mean_exists", "jeffreys", "mcmcglmm", "mvD", "limit", "uniform")),
     check_choice(linpred_method, c("joint", "cyclical", "solve_normal")),
     check_choice(vi_r_method, c("VEM", "fixed", "Laplace", "delta")),
     check_double(vi_r_val, all.missing = TRUE),

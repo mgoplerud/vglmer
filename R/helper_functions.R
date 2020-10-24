@@ -192,27 +192,28 @@ make_log_invwishart_constant <- function(nu, Phi) {
 }
 
 calculate_ELBO <- function(family, ELBO_type, factorization_method,
-   # Fixed constants or priors
-   d_j, g_j, prior_sigma_alpha_phi, prior_sigma_alpha_nu, iw_prior_constant, choose_term,
-   # Data
-   X, Z, s, y,
-   # PolyaGamma Parameters
-   vi_pg_b, vi_pg_mean, vi_pg_c,
-   # Sigma Parameters
-   vi_sigma_alpha, vi_sigma_alpha_nu, vi_sigma_outer_alpha,
-   # Beta Parameters / Alpha Parameters
-   vi_beta_mean, vi_beta_decomp,
-   vi_alpha_mean, vi_alpha_decomp,
-   log_det_beta_var, log_det_alpha_var,
-   log_det_joint_var = NULL,
-   vi_joint_decomp = NULL,
-   # r Parameters
-   vi_r_mu = NULL, vi_r_mean = NULL,
-   vi_r_sigma = NULL,
-   # sigamsq Parameters
-   vi_sigmasq_a = NULL, vi_sigmasq_b = NULL,
-   vi_sigmasq_prior_a = NULL, vi_sigmasq_prior_b = NULL
-   ) {
+     # Fixed constants or priors
+     d_j, g_j, prior_sigma_alpha_phi, prior_sigma_alpha_nu, 
+     iw_prior_constant, choose_term,
+     # Data
+     X, Z, s, y,
+     # PolyaGamma Parameters
+     vi_pg_b, vi_pg_mean, vi_pg_c,
+     # Sigma Parameters
+     vi_sigma_alpha, vi_sigma_alpha_nu, vi_sigma_outer_alpha,
+     # Beta Parameters / Alpha Parameters
+     vi_beta_mean, vi_beta_decomp,
+     vi_alpha_mean, vi_alpha_decomp,
+     log_det_beta_var, log_det_alpha_var,
+     log_det_joint_var = NULL,
+     vi_joint_decomp = NULL,
+     # r Parameters
+     vi_r_mu = NULL, vi_r_mean = NULL,
+     vi_r_sigma = NULL,
+     # huang_wand parameters
+     do_huangwand = NULL, vi_a_a_jp = NULL, vi_a_b_jp = NULL,
+     vi_a_nu_jp = NULL, vi_a_APRIOR_jp = NULL
+  ) {
   ####
   ## PREPARE INTERMEDIATE QUANTITES
   ###
@@ -294,15 +295,6 @@ calculate_ELBO <- function(family, ELBO_type, factorization_method,
         }))
     }
 
-    # Get the terms for the final priors!
-    logcomplete_3 <- 0 + # flat prior on beta
-      sum(
-        iw_prior_constant +
-          -(prior_sigma_alpha_nu + d_j + 1) / 2 * ln_det_sigma_alpha +
-          -1 / 2 * mapply(prior_sigma_alpha_phi, inv_sigma_alpha, FUN = function(a, b) {
-            sum(diag(a %*% b))
-          })
-      )
     ## GET THE ENTROPY
     # Entropy for p(beta,alpha)
     if (factorization_method == "weak") {
@@ -330,8 +322,6 @@ calculate_ELBO <- function(family, ELBO_type, factorization_method,
       })
     entropy_3 <- sum(entropy_3)
 
-    logcomplete <- logcomplete_1 + logcomplete_2 + logcomplete_3
-    logcomplete <- logcomplete + choose_term
   } else if (ELBO_type == "profiled") {
     vi_r_var <- (exp(vi_r_sigma) - 1) * vi_r_mean^2
 
@@ -352,14 +342,6 @@ calculate_ELBO <- function(family, ELBO_type, factorization_method,
       -1 / 2 * sum(mapply(inv_sigma_alpha, vi_sigma_outer_alpha, FUN = function(a, b) {
         sum(diag(a %*% b))
       }))
-    logcomplete_3 <- 0 + # flat prior on beta
-      sum(
-        iw_prior_constant +
-          -(prior_sigma_alpha_nu + d_j + 1) / 2 * ln_det_sigma_alpha +
-          -1 / 2 * mapply(prior_sigma_alpha_phi, inv_sigma_alpha, FUN = function(a, b) {
-            sum(diag(a %*% b))
-          })
-      )
     if (factorization_method == "weak") {
       entropy_1 <- ncol(vi_joint_decomp) / 2 * log(2 * pi * exp(1)) +
         1 / 2 * log_det_joint_var
@@ -373,27 +355,85 @@ calculate_ELBO <- function(family, ELBO_type, factorization_method,
     } else {
       entropy_2 <- 1 / 2 * log(2 * pi * exp(1) * vi_r_sigma)
     }
-    # Entropy Wisharts
-    entropy_3 <- -mapply(vi_sigma_alpha_nu, vi_sigma_alpha, FUN = function(nu, Phi) {
-      make_log_invwishart_constant(nu = nu, Phi = Phi)
-    }) +
-      (vi_sigma_alpha_nu + d_j + 1) / 2 * ln_det_sigma_alpha +
-      1 / 2 * mapply(vi_sigma_alpha, inv_sigma_alpha, FUN = function(a, b) {
-        sum(diag(a %*% b))
-      })
-    entropy_3 <- sum(entropy_3)
 
-    logcomplete <- logcomplete_1 + logcomplete_2 + logcomplete_3
   } else {
     stop("ELBO must be profiled or augmented")
   }
-
-  entropy <- entropy_1 + entropy_2 + entropy_3
+  
+  ###############
+  # Log Complete and Entropy for p(Sigma_j) or similar
+  ###############
+  if (do_huangwand){
+    E_ln_vi_a <- mapply(vi_a_a_jp, vi_a_b_jp, FUN=function(tilde.a, tilde.b){
+      sum(log(tilde.b) - digamma(tilde.a))
+    })
+    E_inv_v_a <- mapply(vi_a_a_jp, vi_a_b_jp, vi_a_nu_jp, SIMPLIFY = FALSE, FUN=function(tilde.a, tilde.b, nu){
+      2 * nu * Diagonal(x = tilde.a/tilde.b)
+    })
+    logcomplete_3 <- 0 + # flat prior on beta
+      sum(
+        iw_prior_constant +
+          - (vi_a_nu_jp + d_j - 1)/2 * (d_j * log(2 * vi_a_nu_jp) + E_ln_vi_a) +
+          -(2 * d_j + vi_a_nu_jp) / 2 * ln_det_sigma_alpha +
+          -1 / 2 * mapply(E_inv_v_a, inv_sigma_alpha, FUN = function(a, b) {
+            sum(diag(a %*% b))
+          })
+      )
+    # inv_sigma_alpha <<- inv_sigma_alpha
+    # iw_prior_constant <<- iw_prior_constant
+    # ln_det_sigma_alpha <<- ln_det_sigma_alpha
+    # d_j <<- d_j; vi_a_a_jp <<- vi_a_a_jp
+    # vi_a_b_jp <<- vi_a_b_jp
+    # E_ln_vi_a <<- E_ln_vi_a
+    # vi_a_APRIOR_jp <<- vi_a_APRIOR_jp
+    logcomplete_3_a <- mapply(d_j, vi_a_a_jp, vi_a_b_jp, E_ln_vi_a, 
+        vi_a_APRIOR_jp, 
+        FUN=function(d, tilde.a, tilde.b, E_ln_vi_a.j, APRIOR.j){
+      1/2 * sum(log(1/APRIOR.j^2)) - d * lgamma(1/2) - 3/2 * E_ln_vi_a.j +
+        sum(-1/APRIOR.j^2 * tilde.a/tilde.b)
+    })
+    logcomplete_3 <- logcomplete_3 + sum(logcomplete_3_a)
+  }else{
+    logcomplete_3 <- 0 + # flat prior on beta
+      sum(
+        iw_prior_constant +
+          -(prior_sigma_alpha_nu + d_j + 1) / 2 * ln_det_sigma_alpha +
+          -1 / 2 * mapply(prior_sigma_alpha_phi, inv_sigma_alpha, FUN = function(a, b) {
+            sum(diag(a %*% b))
+          })
+      )
+  }
+  
+  entropy_3 <- -mapply(vi_sigma_alpha_nu, vi_sigma_alpha, FUN = function(nu, Phi) {
+    make_log_invwishart_constant(nu = nu, Phi = Phi)
+  }) +
+    (vi_sigma_alpha_nu + d_j + 1) / 2 * ln_det_sigma_alpha +
+    1 / 2 * mapply(vi_sigma_alpha, inv_sigma_alpha, FUN = function(a, b) {
+      sum(diag(a %*% b))
+    })
+  entropy_3 <- sum(entropy_3)
+  #########
+  # Optional Entropy if using Huang and Wand (2013) prior
+  #########
+  if (do_huangwand){
+    entropy_4 <- sum(mapply(vi_a_a_jp, vi_a_b_jp, FUN=function(tilde.a, tilde.b){
+      sum(tilde.a + log(tilde.b) + lgamma(tilde.a) - (1 + tilde.a) * digamma(tilde.a))
+    }))
+  }else{
+    entropy_4 <- 0
+  }
+  
+  ###Combine all of the terms together
+  
+  logcomplete <- logcomplete_1 + logcomplete_2 + logcomplete_3 +
+    choose_term
+  
+  entropy <- entropy_1 + entropy_2 + entropy_3 + entropy_4
   ELBO <- entropy + logcomplete
 
   return(data.frame(
     ELBO, logcomplete, entropy, logcomplete_1,
-    logcomplete_2, logcomplete_3, entropy_1, entropy_2, entropy_3
+    logcomplete_2, logcomplete_3, entropy_1, entropy_2, entropy_3, entropy_4
   ))
 }
 
