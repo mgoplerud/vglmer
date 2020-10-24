@@ -962,7 +962,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
       vi_r_mu <- vi_r_param[1]
       vi_r_sigma <- vi_r_param[2]
       vi_r_mean <- exp(vi_r_mu + vi_r_sigma / 2)
-
+      
       s <- (y - vi_r_mean) / 2
       vi_pg_b <- y + vi_r_mean
     }
@@ -1032,23 +1032,12 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
         log_det_beta_var = log_det_beta_var, log_det_alpha_var = log_det_alpha_var,
         vi_beta_decomp = vi_beta_decomp, vi_alpha_decomp = vi_alpha_decomp,
         vi_joint_decomp = vi_joint_decomp, choose_term = choose_term,
-        log_det_joint_var = log_det_joint_var, vi_r_mu = vi_r_mu, vi_r_mean = vi_r_mean, vi_r_sigma = vi_r_sigma
+        log_det_joint_var = log_det_joint_var, 
+        vi_r_mu = vi_r_mu, vi_r_mean = vi_r_mean, vi_r_sigma = vi_r_sigma,
+        do_huangwand = do_huangwand, vi_a_a_jp = vi_a_a_jp, vi_a_b_jp = vi_a_b_jp,
+        vi_a_nu_jp = vi_a_nu_jp, vi_a_APRIOR_jp = vi_a_APRIOR_jp
       )
-      lout <<- list(ELBO_type = ELBO_type,
-        factorization_method = factorization_method,
-        d_j = d_j, g_j = g_j, prior_sigma_alpha_phi = prior_sigma_alpha_phi,
-        prior_sigma_alpha_nu = prior_sigma_alpha_nu,
-        iw_prior_constant = iw_prior_constant,
-        X = X, Z = Z, s = s, y = y,
-        vi_pg_b = vi_pg_b, vi_pg_mean = vi_pg_mean, vi_pg_c = vi_pg_c,
-        vi_sigma_alpha = vi_sigma_alpha, vi_sigma_alpha_nu = vi_sigma_alpha_nu,
-        vi_sigma_outer_alpha = vi_sigma_outer_alpha,
-        vi_beta_mean = vi_beta_mean, vi_alpha_mean = vi_alpha_mean,
-        log_det_beta_var = log_det_beta_var, log_det_alpha_var = log_det_alpha_var,
-        vi_beta_decomp = vi_beta_decomp, vi_alpha_decomp = vi_alpha_decomp,
-        vi_joint_decomp = vi_joint_decomp, choose_term = choose_term,
-        log_det_joint_var = log_det_joint_var)
-      
+
       Mmap <<- Mmap
       start_base_Z <<- start_base_Z
       mapping_new_Z <<- mapping_new_Z
@@ -1060,6 +1049,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
       breaks_for_RE <<- breaks_for_RE
       
       cat('r')
+      
       base_Rvec_ridge <- function(vi_alpha_decomp, d_j, Z, diag_vi_pg_mean, outer_alpha_RE_positions){
         J <- length(d_j)
         d_sq <- d_j^2
@@ -1075,18 +1065,24 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
         return(bdiag(list_j))
       }
       
-      # R_ridge <- vecR_design(alpha_mu = as.vector(vi_alpha_mean), 
-      #                   Z = mapping_new_Z, M = Mmap, 
-      #                   mapping_J = mapping_J, d = d_j,
-      #                   start_z = start_base_Z)
-
-      R_ridge <- base_Rvec_ridge(
-        vi_alpha_decomp = vi_alpha_decomp,
-        d_j = d_j,
-        Z = Z,
-        diag_vi_pg_mean = diag_vi_pg_mean,
-        outer_alpha_RE_positions = outer_alpha_RE_positions
-      )
+      vi_alpha_decomp <<- vi_alpha_decomp
+      diag_vi_pg_mean <<- diag_vi_pg_mean
+      Z <<- Z
+      
+      if (factorization_method == 'strong'){
+        R_ridge <- base_Rvec_ridge(
+          vi_alpha_decomp = vi_alpha_decomp,
+          d_j = d_j,
+          Z = Z,
+          diag_vi_pg_mean = diag_vi_pg_mean,
+          outer_alpha_RE_positions = outer_alpha_RE_positions
+        )
+      }else{
+        R_ridge <- vecR_ridge_general(L = vi_alpha_decomp, 
+            pg_mean = diag(diag_vi_pg_mean), 
+            Z = mapping_new_Z, M = Mmap, 
+            mapping_J = mapping_J, d = d_j, start_z = start_base_Z)
+      }
       
       if (factorization_method == 'weak'){
         stop('no Translation PX for weak yet...')
@@ -1104,6 +1100,9 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
         M = Mmap, mapping_J = mapping_J, d = d_j,
         start_z = start_base_Z)
 
+      vi_sigma_alpha <<- vi_sigma_alpha
+      vi_sigma_alpha_nu <<- vi_sigma_alpha_nu
+      
       moments_sigma_alpha <- mapply(vi_sigma_alpha, vi_sigma_alpha_nu, d_j, SIMPLIFY = FALSE, FUN = function(phi, nu, d) {
         inv_phi <- solve(phi)
         
@@ -1122,6 +1121,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
       R_design <<- R_design
       R_ridge <<- R_ridge
       X <<- X
+      s <<- s
       
       XR <- cbind(X, R_design)
       R_ridge <- bdiag(zeromat_beta, R_ridge)
@@ -1139,10 +1139,10 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
 
       est_rho <<- update_expansion_XR[-1:-p.X]
       print(est_rho)
-      if (max(abs(est_rho - stationary_rho)) < 1e-5){
-        print('No further improvements')
-        skip_translate <- TRUE  
-      }
+      # if (max(abs(est_rho - stationary_rho)) < 1e-5){
+      #   print('No further improvements')
+      #   skip_translate <- TRUE  
+      # }
       
       prop_vi_sigma_alpha <- mapply(vi_sigma_alpha, update_expansion_R, SIMPLIFY = FALSE,
                                     FUN=function(Phi, R){R %*% Phi %*% t(R)})
@@ -1182,11 +1182,22 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
       # #L^T L = Variance
       # #R Var R^T --->
       # # L %*% R^T
-      prop_vi_alpha_decomp <- vi_alpha_decomp %*% t(update_expansion_Rblock)
-      prop_log_det_alpha_var <- log_det_alpha_var + 2 * sum(update_expansion_R_logdet * g_j)
-
-      prop_variance_by_alpha_jg <- calculate_expected_outer_alpha(L = prop_vi_alpha_decomp, alpha_mu = as.vector(prop_vi_alpha_mean), re_position_list = outer_alpha_RE_positions)
-      prop_vi_sigma_outer_alpha <- prop_variance_by_alpha_jg$outer_alpha
+      if (factorization_method != 'weak'){
+        prop_log_det_joint_var <- prop_vi_joint_decomp <- NULL
+        prop_vi_alpha_decomp <- vi_alpha_decomp %*% t(update_expansion_Rblock)
+        prop_log_det_alpha_var <- log_det_alpha_var + 2 * sum(update_expansion_R_logdet * g_j)
+        prop_log_det_beta_var <- log_det_beta_var
+        prop_vi_beta_decomp <- vi_beta_decomp
+        
+        prop_variance_by_alpha_jg <- calculate_expected_outer_alpha(L = prop_vi_alpha_decomp, alpha_mu = as.vector(prop_vi_alpha_mean), re_position_list = outer_alpha_RE_positions)
+        prop_vi_sigma_outer_alpha <- prop_variance_by_alpha_jg$outer_alpha
+      }else{
+        prop_log_det_alpha_var <- prop_vi_alpha_decomp <- NULL
+        prop_log_det_beta_var <- prop_vi_beta_decomp <- NULL
+        pro_vi_joint_decomp <- vi_joint_decomp %*% rbind(Diagonal(n = XX), t(update_expansion_Rblock))
+        prop_variance_by_alpha_jg <- calculate_expected_outer_alpha(L = prop_vi_alpha_decomp, alpha_mu = as.vector(prop_vi_alpha_mean), re_position_list = outer_alpha_RE_positions)
+        prop_vi_sigma_outer_alpha <- prop_variance_by_alpha_jg$outer_alpha
+      }
 
       prop.ELBO <- calculate_ELBO(ELBO_type = ELBO_type,
         factorization_method = factorization_method,
@@ -1198,9 +1209,18 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
         vi_sigma_alpha = prop_vi_sigma_alpha, vi_sigma_alpha_nu = vi_sigma_alpha_nu,
         vi_sigma_outer_alpha = prop_vi_sigma_outer_alpha,
         vi_beta_mean = prop_vi_beta_mean, vi_alpha_mean = prop_vi_alpha_mean,
-        log_det_beta_var = log_det_beta_var, log_det_alpha_var = prop_log_det_alpha_var,
-        vi_beta_decomp = vi_beta_decomp, vi_alpha_decomp = prop_vi_alpha_decomp,
-        choose_term = choose_term
+        
+        log_det_beta_var = prop_log_det_beta_var, 
+        log_det_alpha_var = prop_log_det_alpha_var,
+        log_det_joint_var = prop_vi_log_det_joint_var,
+        
+        vi_beta_decomp = prop_vi_beta_decomp, 
+        vi_alpha_decomp = prop_vi_alpha_decomp,
+        vi_joint_decomp = prop_vi_joint_decomp,
+        
+        choose_term = choose_term,
+        do_huangwand = do_huangwand, vi_a_a_jp = vi_a_a_jp, vi_a_b_jp = vi_a_b_jp,
+        vi_a_nu_jp = vi_a_nu_jp, vi_a_APRIOR_jp = vi_a_APRIOR_jp
       )
       cat('d')
       if (prop.ELBO$ELBO > prior.ELBO$ELBO){
@@ -1208,8 +1228,12 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
         vi_beta_mean <- prop_vi_beta_mean
         vi_alpha_mean <- prop_vi_alpha_mean
         vi_sigma_alpha <- prop_vi_sigma_alpha
-        vi_alpha_decomp <- prop_vi_alpha_decomp
-        log_det_alpha_var <- prop_log_det_alpha_var
+        if (factorization_method == 'weak'){
+          stop('Setup reassignment weak')
+        }else{
+          vi_alpha_decomp <- prop_vi_alpha_decomp
+          log_det_alpha_var <- prop_log_det_alpha_var
+        }
         variance_by_alpha_jg <- prop_variance_by_alpha_jg
         vi_sigma_outer_alpha <- prop_vi_sigma_outer_alpha
         accept.PX <- TRUE
