@@ -197,7 +197,7 @@ erfinv <- function(x) {
 # Internal function to tidy-up
 # inverse Wishart to extract mean
 fmt_IW_mean <- function(Phi, nu, digits = 2) {
-  mean <- solve(Phi) / (nu - nrow(Phi) - 1)
+  mean <- solve(as.matrix(Phi)) / (nu - nrow(Phi) - 1)
   if (nu - nrow(Phi) - 1 < 0) {
     return(matrix(NA, nrow = nrow(Phi), ncol = ncol(Phi)))
   } else {
