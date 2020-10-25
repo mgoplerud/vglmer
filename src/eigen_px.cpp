@@ -11,7 +11,8 @@ Eigen::MatrixXd vecR_ridge_general(
     const Eigen::Map<Eigen::MatrixXi> M,
     const Rcpp::NumericVector mapping_J, // Where to assign the elements to the larger matrix.
     const Rcpp::NumericVector d,
-    const Eigen::VectorXi start_z
+    const Eigen::VectorXi start_z,
+    bool diag_only
 ){
   //const Rcpp::List& mapping_z, // The base data split by observation i and level.
   //const Rcpp::List& mapping_to_re,    //The mapping to RE of each individual observation i.
@@ -38,7 +39,9 @@ Eigen::MatrixXd vecR_ridge_general(
     //Loop over all pairs of random effects.
     for (int j = 0; j < J; ++j){
       for (int jprime = 0; jprime <= j; ++jprime){
-
+        if (diag_only & (jprime != j)){
+          continue;         
+        }
         int d_j = d[j];
         int d_jprime = d[jprime];
 
