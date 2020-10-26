@@ -574,7 +574,9 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
 
     # parsed_RE_groups <- get_RE_groups(formula = formula, data = data)
     parsed_RE_groups <<- parsed_RE_groups
+    
     mapping_new_Z <- do.call('cbind', parsed_RE_groups$design)
+    
     mapping_J <- split(1:sum(d_j^2), rep(1:length(d_j), d_j^2))
     mapping_J <- lapply(mapping_J, FUN=function(i){i-1})
     mapping_J <- sapply(mapping_J, min)
@@ -590,6 +592,27 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     names(start_base_Z) <- NULL
 
     rm(parsed_RE_groups, mapping_to_re)
+    
+    store_re_id <- store_id <- list()
+    for (j in 1:number_of_RE){
+      store_re_id_j <- store_id_j <- list()
+      for (jprime in 1:j){
+        # print(c(j, jprime))
+        umap <- unique(Mmap[, c(j, jprime)])
+        store_re_id_j[[jprime]] <- purrr::array_branch(umap, margin = 1)
+        id_lookup <- lapply(1:nrow(umap), FUN=function(i){
+          umap_r <- umap[i,]
+          id_r <- which( (Mmap[,j] %in% umap_r[1]) & (Mmap[,jprime] %in% umap_r[2]))
+          return(id_r)
+        })
+        store_id_j[[jprime]] <- id_lookup
+      }
+      store_id[[j]] <- store_id_j
+      store_re_id[[j]] <- store_re_id_j
+    }
+    store_design <- parsed_RE_groups$design
+    
+    gc()
   }
   store_parameter_traj <- store_vi <- store_ELBO <- data.frame()
 
@@ -1131,13 +1154,15 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
       vi_alpha_decomp <<- vi_alpha_decomp
       diag_vi_pg_mean <<- diag_vi_pg_mean
       Z <<- Z
-
-      R_ridge <- vecR_ridge_general(L = vi_alpha_decomp, 
-        pg_mean = diag(diag_vi_pg_mean), 
-        Z = mapping_new_Z, M = Mmap, 
-        mapping_J = mapping_J, d = d_j, start_z = start_base_Z,
-        diag_only = (factorization_method == 'strong')  )
+      store_design <<- store_design
+      store_re_id <<- store_re_id
+      store_id <<- store_id
       
+      raw_R <- R_ridge <- vecR_ridge_new(L = vi_alpha_decomp, pg_mean = diag(diag_vi_pg_mean),
+        mapping_J = mapping_J, d = d_j,
+        store_id = store_id, store_re_id = store_re_id,
+        store_design = store_design, 
+        diag_only = (factorization_method == 'strong'))
 
       if (factorization_method == 'weak'){
         stop('no Translation PX for weak yet...')
@@ -1364,7 +1389,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
       }else{
         accept.PX <- FALSE
       }
-      # print(accept.PX)
+      print(accept.PX)
       accepted_times <- accept.PX + accepted_times
 
       rm(prop_vi_beta_mean, prop_vi_alpha_mean, prop_vi_sigma_alpha, prop_vi_alpha_decomp,

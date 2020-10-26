@@ -46,8 +46,8 @@ BEGIN_RCPP
 END_RCPP
 }
 // vecR_ridge_general
-Eigen::MatrixXd vecR_ridge_general(const Eigen::MappedSparseMatrix<double> L, const Rcpp::NumericVector pg_mean, const Eigen::Map<Eigen::MatrixXd> Z, const Eigen::Map<Eigen::MatrixXi> M, const Rcpp::NumericVector mapping_J, const Rcpp::NumericVector d, const Eigen::VectorXi start_z);
-RcppExport SEXP _vglmer_vecR_ridge_general(SEXP LSEXP, SEXP pg_meanSEXP, SEXP ZSEXP, SEXP MSEXP, SEXP mapping_JSEXP, SEXP dSEXP, SEXP start_zSEXP) {
+Eigen::MatrixXd vecR_ridge_general(const Eigen::MappedSparseMatrix<double> L, const Rcpp::NumericVector pg_mean, const Eigen::Map<Eigen::MatrixXd> Z, const Eigen::Map<Eigen::MatrixXi> M, const Rcpp::NumericVector mapping_J, const Rcpp::NumericVector d, const Eigen::VectorXi start_z, bool diag_only);
+RcppExport SEXP _vglmer_vecR_ridge_general(SEXP LSEXP, SEXP pg_meanSEXP, SEXP ZSEXP, SEXP MSEXP, SEXP mapping_JSEXP, SEXP dSEXP, SEXP start_zSEXP, SEXP diag_onlySEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -58,7 +58,8 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< const Rcpp::NumericVector >::type mapping_J(mapping_JSEXP);
     Rcpp::traits::input_parameter< const Rcpp::NumericVector >::type d(dSEXP);
     Rcpp::traits::input_parameter< const Eigen::VectorXi >::type start_z(start_zSEXP);
-    rcpp_result_gen = Rcpp::wrap(vecR_ridge_general(L, pg_mean, Z, M, mapping_J, d, start_z));
+    Rcpp::traits::input_parameter< bool >::type diag_only(diag_onlySEXP);
+    rcpp_result_gen = Rcpp::wrap(vecR_ridge_general(L, pg_mean, Z, M, mapping_J, d, start_z, diag_only));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -93,14 +94,33 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// vecR_ridge_new
+Eigen::MatrixXd vecR_ridge_new(const Eigen::MappedSparseMatrix<double> L, const Eigen::ArrayXd pg_mean, const Rcpp::NumericVector mapping_J, const Rcpp::NumericVector d, const Rcpp::List store_id, const Rcpp::List store_re_id, const Rcpp::List store_design, bool diag_only);
+RcppExport SEXP _vglmer_vecR_ridge_new(SEXP LSEXP, SEXP pg_meanSEXP, SEXP mapping_JSEXP, SEXP dSEXP, SEXP store_idSEXP, SEXP store_re_idSEXP, SEXP store_designSEXP, SEXP diag_onlySEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const Eigen::MappedSparseMatrix<double> >::type L(LSEXP);
+    Rcpp::traits::input_parameter< const Eigen::ArrayXd >::type pg_mean(pg_meanSEXP);
+    Rcpp::traits::input_parameter< const Rcpp::NumericVector >::type mapping_J(mapping_JSEXP);
+    Rcpp::traits::input_parameter< const Rcpp::NumericVector >::type d(dSEXP);
+    Rcpp::traits::input_parameter< const Rcpp::List >::type store_id(store_idSEXP);
+    Rcpp::traits::input_parameter< const Rcpp::List >::type store_re_id(store_re_idSEXP);
+    Rcpp::traits::input_parameter< const Rcpp::List >::type store_design(store_designSEXP);
+    Rcpp::traits::input_parameter< bool >::type diag_only(diag_onlySEXP);
+    rcpp_result_gen = Rcpp::wrap(vecR_ridge_new(L, pg_mean, mapping_J, d, store_id, store_re_id, store_design, diag_only));
+    return rcpp_result_gen;
+END_RCPP
+}
 
 static const R_CallMethodDef CallEntries[] = {
     {"_vglmer_LinRegChol", (DL_FUNC) &_vglmer_LinRegChol, 4},
     {"_vglmer_calculate_expected_outer_alpha", (DL_FUNC) &_vglmer_calculate_expected_outer_alpha, 3},
     {"_vglmer_cpp_zVz", (DL_FUNC) &_vglmer_cpp_zVz, 2},
-    {"_vglmer_vecR_ridge_general", (DL_FUNC) &_vglmer_vecR_ridge_general, 7},
+    {"_vglmer_vecR_ridge_general", (DL_FUNC) &_vglmer_vecR_ridge_general, 8},
     {"_vglmer_vecR_design", (DL_FUNC) &_vglmer_vecR_design, 6},
     {"_vglmer_vecR_fast_ridge", (DL_FUNC) &_vglmer_vecR_fast_ridge, 5},
+    {"_vglmer_vecR_ridge_new", (DL_FUNC) &_vglmer_vecR_ridge_new, 8},
     {NULL, NULL, 0}
 };
 

@@ -139,3 +139,78 @@ Eigen::VectorXd vecR_fast_ridge(
   Eigen::VectorXd mean = Ch.solve(adj_X * y + adjust_y);
   return mean;
 }
+
+
+// [[Rcpp::export]]
+Eigen::MatrixXd vecR_ridge_new(
+    const Eigen::MappedSparseMatrix<double> L,    //Decomposition of variance L^T L = VAR(alpha)
+    const Eigen::ArrayXd pg_mean,
+    const Rcpp::NumericVector mapping_J, // Where to assign the elements to the larger matrix.
+    const Rcpp::NumericVector d,
+    const Rcpp::List store_id,
+    const Rcpp::List store_re_id,
+    const Rcpp::List store_design,
+    bool diag_only
+){
+  
+  Rcpp::NumericVector dsq = d * d;
+  int size_vecR = Rcpp::sum(dsq);
+  int J = d.size();
+  
+  Eigen::MatrixXd ridge_R = Eigen::MatrixXd::Zero(size_vecR, size_vecR);
+  
+  for (int j = 0; j < J; ++j){
+    
+    Rcpp::List id_j = store_id[j];
+    Rcpp::List re_id_j = store_re_id[j];
+    Eigen::MatrixXd design_j = store_design[j];
+    int d_j = d[j];
+    for (int jprime = 0; jprime <= j; ++jprime){
+      
+      if (diag_only & (jprime != j)){
+        continue;
+      }
+      
+      Eigen::MatrixXd design_jprime = store_design[jprime];
+      int d_jprime = d[jprime];
+      Rcpp::List id_jjprime = id_j[jprime];
+      Rcpp::List re_id_jjprime = re_id_j[jprime];
+      int length_combo = id_jjprime.size();
+      
+      Eigen::MatrixXd kron = Eigen::MatrixXd::Zero(dsq[j], dsq[jprime]) ;
+      
+      for (int combo = 0; combo < length_combo; ++combo){
+        Rcpp::IntegerVector col_re = re_id_jjprime[combo];
+        Rcpp::IntegerVector u_comb = id_jjprime[combo];
+        Eigen::MatrixXd outer_Z = Eigen::MatrixXd::Zero(d_j, d_jprime);
+        for (int i = 0; i < u_comb.size(); ++i){
+        // for (IntegerVector::iterator i = u_comb.begin();  i != u_comb.end(); ++i){
+          int pos_i = u_comb[i] - 1;
+          Eigen::VectorXd row_j = design_j.row(pos_i);
+          Eigen::VectorXd row_jprime = design_jprime.row(pos_i);
+
+          Eigen::MatrixXd tmp_outer = row_j * row_jprime.transpose();
+          outer_Z += tmp_outer * pg_mean[pos_i];
+        }
+        Eigen::MatrixXd outer_alpha = Eigen::MatrixXd::Zero(d_j, d_jprime);
+        
+        int m_j = col_re[0];
+        int m_jprime = col_re[1];
+        
+        for (int k = 0; k < d_j; ++k){
+          for (int kprime = 0; kprime < d_jprime; ++kprime){
+            outer_alpha(k,kprime) = L.col(m_j + k - 1).cwiseProduct(L.col(m_jprime + kprime - 1)).sum();
+          }
+        }
+        kron += Eigen::kroneckerProduct(outer_alpha, outer_Z);
+      }
+      
+      ridge_R.block(mapping_J[j], mapping_J[jprime], dsq[j], dsq[jprime]) = kron;
+      if (j != jprime){
+        ridge_R.block(mapping_J[jprime], mapping_J[j], dsq[jprime], dsq[j]) = kron.transpose();
+      }
+      
+    } 
+  }
+  return(ridge_R);
+}

@@ -36,3 +36,7 @@ vecR_fast_ridge <- function(X, omega, prior_precision, y, adjust_y) {
     .Call('_vglmer_vecR_fast_ridge', PACKAGE = 'vglmer', X, omega, prior_precision, y, adjust_y)
 }
 
+vecR_ridge_new <- function(L, pg_mean, mapping_J, d, store_id, store_re_id, store_design, diag_only) {
+    .Call('_vglmer_vecR_ridge_new', PACKAGE = 'vglmer', L, pg_mean, mapping_J, d, store_id, store_re_id, store_design, diag_only)
+}
+
