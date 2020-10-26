@@ -627,6 +627,11 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
   if (!quiet) {
     message("Begin Regression")
   }
+  do_SQUAREM <- TRUE
+  if (do_SQUAREM){
+    squarem_list <- list()
+    squarem_counter <- 1
+  }
   for (it in 1:iterations) {
     if (it %% print_prog == 0) {
       cat(".")
@@ -1451,7 +1456,140 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
         final.ELBO <- prior.ELBO
       }
     }
+    
+    if (do_SQUAREM){
+      squarem_list[[squarem_counter]] <- namedList(vi_sigma_alpha_nu, 
+           vi_sigma_alpha, vi_alpha_mean, vi_beta_mean,
+           vi_pg_c,
+           vi_a_a_jp, vi_a_b_jp)
+      if (squarem_counter %% 3 == 0){
+        final.ELBO <<- final.ELBO
+        squarem_list <<- squarem_list
+        ELBOargs <<- list(family = family,
+           ELBO_type = ELBO_type,
+           factorization_method = factorization_method,
+           d_j = d_j, g_j = g_j, prior_sigma_alpha_phi = prior_sigma_alpha_phi,
+           prior_sigma_alpha_nu = prior_sigma_alpha_nu,
+           iw_prior_constant = iw_prior_constant,
+           X = X, Z = Z, s = s, y = y,
+           vi_pg_b = vi_pg_b, vi_pg_mean = vi_pg_mean, vi_pg_c = vi_pg_c,
+           vi_sigma_alpha = vi_sigma_alpha, vi_sigma_alpha_nu = vi_sigma_alpha_nu,
+           vi_sigma_outer_alpha = vi_sigma_outer_alpha,
+           vi_beta_mean = vi_beta_mean, vi_alpha_mean = vi_alpha_mean,
+           log_det_beta_var = log_det_beta_var, log_det_alpha_var = log_det_alpha_var,
+           vi_beta_decomp = vi_beta_decomp, vi_alpha_decomp = vi_alpha_decomp,
+           vi_joint_decomp = vi_joint_decomp, choose_term = choose_term,
+           log_det_joint_var = log_det_joint_var, vi_r_mu = vi_r_mu, vi_r_mean = vi_r_mean, vi_r_sigma = vi_r_sigma,
+           do_huangwand = do_huangwand, vi_a_a_jp = vi_a_a_jp, vi_a_b_jp = vi_a_b_jp,
+           vi_a_nu_jp = vi_a_nu_jp, vi_a_APRIOR_jp = vi_a_APRIOR_jp
+        )
+        
+        squarem_par <- c('vi_a_b_jp', 'vi_sigma_alpha', 'vi_pg_c',
+                         'vi_alpha_mean', 'vi_beta_mean')
+        # squarem_par <- c('vi_alpha_mean', 'vi_beta_mean')
+        
+        prep_SQUAREM <- mapply(squarem_par, SIMPLIFY = FALSE, FUN=function(i){
+          if (class(squarem_list[[1]][[i]]) == 'list'){
+            r <- mapply(squarem_list[[2]][[i]], squarem_list[[1]][[i]], FUN=function(i,j){i - j})
+            d2 <- mapply(squarem_list[[3]][[i]], squarem_list[[2]][[i]], FUN=function(i,j){i - j})
+            v <- mapply(d2, r, FUN=function(i,j){i - j})
+            norm_sq_r <- sum(unlist(lapply(r, as.vector))^2)
+            norm_sq_v <- sum(unlist(lapply(v, as.vector))^2)
+          }else{
+            r <- squarem_list[[2]][[i]] - squarem_list[[1]][[i]]
+            d2 <- squarem_list[[3]][[i]] - squarem_list[[2]][[i]]
+            v <- d2 - r
+            norm_sq_r <- sum(r^2)
+            norm_sq_v <- sum(v^2)
+          }
+          return(list(first = squarem_list[[1]][[i]], 
+                      second = squarem_list[[2]][[i]], r = r, v = v, norm_sq_r = norm_sq_r, norm_sq_v = norm_sq_v))
+        })
+        
+        alpha <- -sqrt(sum(sapply(prep_SQUAREM, FUN=function(i){i$norm_sq_r}))) /
+          sqrt(sum(sapply(prep_SQUAREM, FUN=function(i){i$norm_sq_v})))
 
+        alpha <- alpha / 2
+        
+        if (alpha > -1){
+          alpha <- -1.01
+        }
+
+        prop_squarem <- lapply(prep_SQUAREM, FUN=function(i){
+          if (class(i$first) == 'list'){
+            prop_squarem <- mapply(i$first, i$second, 
+                                   i$r, i$v, SIMPLIFY = FALSE, FUN=function(i_1, s_1, r_1, v_1){
+              i_1 - 2 * alpha * r_1 + alpha^2 * v_1
+              # s_1 - alpha * (v_1 + r_1)
+            })
+            names(prop_squarem) <- names(i$first)
+          }else{
+            # prop_squarem <- i$second - alpha * (i$r + i$v)
+            prop_squarem <- i$first - 2 * alpha * i$r + alpha^2 * i$v
+          }
+          return(prop_squarem)
+        })
+        
+        names(prop_squarem) <- squarem_par
+
+        prop_ELBOargs <- ELBOargs
+        
+        if ('vi_a_b_jp' %in% squarem_par){
+          prop_squarem$vi_a_b_jp <- mapply(prop_squarem$vi_a_b_jp, squarem_list[[3]]$vi_a_b_jp, FUN=function(i,j){
+            i[i < 0] <- j[i < 0]
+            return(i)
+          })
+        }
+        if ('vi_pg_c' %in% squarem_par){
+          prop_squarem$vi_pg_c[prop_squarem$vi_pg_c < 0] <- squarem_list[[3]]$vi_pg_c[prop_squarem$vi_pc_c < 0]
+        }
+        if ('vi_sigma_alpha' %in% squarem_par){
+          prop_squarem$vi_sigma_alpha <- mapply(prop_squarem$vi_sigma_alpha, squarem_list[[3]]$vi_sigma_alpha, FUN=function(i,j){
+            if (det(i) < 0){
+              i <- j 
+            }
+            return(i)
+          })
+        }
+        
+        for (v in names(prop_squarem)){
+          prop_ELBOargs[[v]] <- prop_squarem[[v]]
+        }
+        if ('vi_alpha_mean' %in% squarem_par){
+          prop_variance_by_alpha_jg <- calculate_expected_outer_alpha(L = vi_alpha_decomp, 
+              alpha_mu = as.vector(prop_squarem$vi_alpha_mean), re_position_list = outer_alpha_RE_positions)
+          prop_ELBOargs[['vi_sigma_outer_alpha']] <- prop_variance_by_alpha_jg$outer_alpha
+          squarem_par <- c(squarem_par, 'vi_sigma_outer_alpha')
+        }
+        if ('vi_pg_c' %in% squarem_par){
+          if (family != 'binomial'){stop('check squarem for non-binomial case')}
+          prop_vi_pg_mean <- vi_pg_b / (2 * prop_ELBOargs$vi_pg_c) * tanh(prop_ELBOargs$vi_pg_c / 2)
+          prop_ELBOargs[['vi_pg_mean']] <- prop_vi_pg_mean
+          squarem_par <- c(squarem_par, 'vi_pg_c')
+        }
+        
+        
+        elbo_init <- do.call("calculate_ELBO", ELBOargs)$ELBO
+        elbo_squarem <- do.call("calculate_ELBO", prop_ELBOargs)$ELBO
+        print(c(elbo_squarem, elbo_init))
+        
+        if (elbo_squarem > elbo_init){
+          cat('SUCCESS')
+          for (v in squarem_par){
+            assign(v, prop_ELBOargs[[v]])
+          }
+        }else{
+          cat('FAIL')
+        }
+        squarem_list <- list()
+        squarem_counter <- 1
+      }else{
+        
+        squarem_counter <- squarem_counter + 1
+        
+      }
+      
+    }
     if (do_timing) {
       toc(quiet = verbose_time, log = T)
       tic("Final Cleanup")
