@@ -442,26 +442,43 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     vi_sigma_alpha_nu <- vi_sigma_alpha_nu + prior_sigma_alpha_nu
   }
 
-  if (control$init == "EM") {
+  if ( control$init %in% c("EM", "EM_FE") ){
     if (family == "linear"){
       jointXZ <- cbind(X,Z)
-      EM_init <- LinRegChol(X = jointXZ, 
-        omega = sparseMatrix(i = 1:nrow(jointXZ), j = 1:nrow(jointXZ), x = 1), 
-        y = y, prior_precision = sparseMatrix(i = 1:ncol(jointXZ), j = 1:ncol(jointXZ), x = 1/4))$mean
-      EM_init <- list('beta' = EM_init[1:ncol(X)], 'alpha' = EM_init[-1:-ncol(X)])
+      if (control$init == 'EM_FE'){
+        EM_init <- LinRegChol(X = X, 
+           omega = sparseMatrix(i = 1:nrow(X), j = 1:nrow(X), x = 1), 
+           y = y, prior_precision = sparseMatrix(i = 1:ncol(X), j = 1:ncol(X), x = 1e-5))$mean
+        EM_init <- list('beta' = EM_init, 'alpha' = rep(0, ncol(Z)))
+      }else{
+        EM_init <- LinRegChol(X = jointXZ, 
+                              omega = sparseMatrix(i = 1:nrow(jointXZ), j = 1:nrow(jointXZ), x = 1), 
+                              y = y, prior_precision = sparseMatrix(i = 1:ncol(jointXZ), j = 1:ncol(jointXZ), x = 1/4))$mean
+        EM_init <- list('beta' = EM_init[1:ncol(X)], 'alpha' = EM_init[-1:-ncol(X)])
+      }
       rm(jointXZ)
     } else if (family == "negbin") {
-      EM_init <- EM_prelim_nb(X = X, Z = Z, y = y, est_r = exp(vi_r_mu), iter = 15, ridge = 4)
+      if (control$init == 'EM_FE'){
+        EM_init <- EM_prelim_nb(X = X, Z = Z, y = y, est_r = exp(vi_r_mu), iter = 15, ridge = 10^5)
+        EM_init <- list('beta' = EM_init$beta, 'alpha' = rep(0, ncol(Z)))
+      }else{
+        EM_init <- EM_prelim_nb(X = X, Z = Z, y = y, est_r = exp(vi_r_mu), iter = 15, ridge = 4)
+      }
     } else {
-      EM_init <- EM_prelim_logit(X = X, Z = Z, s = s, pg_b = vi_pg_b, iter = 15, ridge = 4)
+      if (control$init == 'EM_FE'){
+        EM_init <- EM_prelim_logit(X = X, Z = Z, s = s, pg_b = vi_pg_b, iter = 15, ridge = 10^5)
+        EM_init <- list('beta' = EM_init$beta, 'alpha' = rep(0, ncol(Z)))
+      }else{
+        EM_init <- EM_prelim_logit(X = X, Z = Z, s = s, pg_b = vi_pg_b, iter = 15, ridge = 4)
+      }
     }
 
     vi_beta_mean <- matrix(EM_init$beta)
     vi_alpha_mean <- matrix(EM_init$alpha)
 
     vi_sigma_alpha <- calculate_expected_outer_alpha(
-      alpha_mu = matrix(EM_init$alpha),
-      L = sparseMatrix(i = 1, j = 1, x = 0, dims = rep(ncol(Z), 2)),
+      alpha_mu = vi_alpha_mean,
+      L = sparseMatrix(i = 1, j = 1, x = 1e-4, dims = rep(ncol(Z), 2)),
       re_position_list = outer_alpha_RE_positions
     )
     if (!do_huangwand){
@@ -475,10 +492,12 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
       vi_a_a_jp <<- vi_a_a_jp
       vi_sigma_alpha <<- vi_sigma_alpha
       vi_a_APRIOR_jp <<- vi_a_APRIOR_jp
+      
       vi_sigma_alpha <- mapply(vi_sigma_alpha$outer_alpha, vi_a_a_jp, 
        vi_a_b_jp, vi_a_nu_jp, SIMPLIFY = FALSE, FUN = function(i, tilde.a, tilde.b, nu) {
-         i + Diagonal(n = nrow(i))
+         i + sparseMatrix(i = seq_len(nrow(i)), j = seq_len(nrow(i)), x = 1)
        })
+      
       #Update a_{j,p}
       diag_Einv_sigma <- mapply(vi_sigma_alpha, 
           vi_sigma_alpha_nu, d_j, SIMPLIFY = FALSE, FUN = function(phi, nu, d) {
@@ -486,7 +505,6 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
             sigma.inv <- nu * inv_phi
             return(diag(sigma.inv))
           })
-      # vi_a_b_jp <- lapply(vi_sigma_alpha, FUN=function(i){diag(solve(i))})
       vi_a_b_jp <- mapply(vi_a_nu_jp, vi_a_APRIOR_jp, diag_Einv_sigma,
         SIMPLIFY = FALSE,
         FUN=function(nu, APRIOR, diag_j){
@@ -545,6 +563,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
   # if (!quiet){warning('Check vi sigma alpha nu')}
 
   # Create mapping for this to allow sparse implementations.
+
   mapping_sigma_alpha <- make_mapping_alpha(vi_sigma_alpha)
 
   running_log_det_alpha_var <- rep(NA, number_of_RE)
@@ -627,7 +646,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
   if (!quiet) {
     message("Begin Regression")
   }
-  do_SQUAREM <- TRUE
+  do_SQUAREM <- control$do_SQUAREM
   if (do_SQUAREM){
     squarem_list <- list()
     squarem_counter <- 1
@@ -668,6 +687,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
       }
       vi_pg_c <- sqrt(as.vector(X %*% vi_beta_mean + Z %*% vi_alpha_mean - vi_r_mu)^2 + joint_var)
     }
+    
     if (family == 'linear'){
       vi_pg_mean <- rep(1, nrow(X))
       diag_vi_pg_mean <- sparseMatrix(i = 1:N, j = 1:N, x = vi_pg_mean)
@@ -768,7 +788,9 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
         # P origL oriL^T P^T = PRECISION
         # t(decompVar) %*%  decompVar = VARIANCE = (origL^{-1} t(P))^T (origL^{-1} t(P))
 
-        vi_beta_decomp <- solve(chol.update.beta$origL) %*% t(Pmatrix)
+        vi_beta_L_nonpermute <- drop0(solve(chol.update.beta$origL))
+        vi_beta_LP <- Pmatrix
+        vi_beta_decomp <- vi_beta_L_nonpermute %*% t(vi_beta_LP)
         vi_beta_mean <- chol.update.beta$mean
         log_det_beta_var <- -2 * sum(log(diag(chol.update.beta$origL)))
 
@@ -778,7 +800,9 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
         )
         Pmatrix <- sparseMatrix(i = 1:p.Z, j = 1 + chol.update.alpha$Pindex, x = 1)
 
-        vi_alpha_decomp <- solve(chol.update.alpha$origL) %*% t(Pmatrix)
+        vi_alpha_L_nonpermute <- drop0(solve(chol.update.alpha$origL))
+        vi_alpha_LP <- Pmatrix
+        vi_alpha_decomp <- vi_alpha_L_nonpermute  %*% t(vi_alpha_LP)
         vi_alpha_decomp <- drop0(vi_alpha_decomp)
         vi_alpha_mean <- chol.update.alpha$mean
         log_det_alpha_var <- -2 * sum(log(diag(chol.update.alpha$origL)))
@@ -793,8 +817,12 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
         )
         vi_beta_mean <- Matrix(chol.update.joint$mean[1:p.X], dimnames = list(colnames(X), NULL))
         vi_alpha_mean <- Matrix(chol.update.joint$mean[-1:-p.X], dimnames = list(fmt_names_Z, NULL))
-
+        
         vi_beta_decomp <- solve(t(chol(as.matrix(t(X) %*% diag_vi_pg_mean %*% X))))
+        
+        vi_beta_L_nonpermute <- vi_beta_decomp
+        vi_beta_LP <- Diagonal(n = ncol(vi_beta_decomp))
+        
         log_det_beta_var <- 2 * sum(log(diag(vi_beta_decomp)))
 
         chol.update.alpha <- LinRegChol(
@@ -803,7 +831,10 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
         )
         Pmatrix <- sparseMatrix(i = 1:p.Z, j = 1 + chol.update.alpha$Pindex, x = 1)
 
-        vi_alpha_decomp <- solve(chol.update.alpha$origL) %*% t(Pmatrix)
+        vi_alpha_L_nonpermute <- drop0(solve(chol.update.alpha$origL))
+        vi_alpha_LP <- Pmatrix
+        
+        vi_alpha_decomp <- vi_alpha_L_nonpermute %*% t(vi_alpha_LP)
         vi_alpha_decomp <- drop0(vi_alpha_decomp)
         log_det_alpha_var <- -2 * sum(log(diag(chol.update.alpha$origL)))
       } else {
@@ -837,6 +868,8 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
         vi_alpha_mean <- Matrix(chol.update.joint$mean[-1:-p.X], dimnames = list(fmt_names_Z, NULL))
 
         vi_beta_decomp <- solve(t(chol(as.matrix(t(X) %*% diag_vi_pg_mean %*% X))))
+        vi_beta_L_nonpermute <- vi_beta_decomp
+        vi_beta_LP <- Diagonal(n = nrow(vi_beta_decomp))
         log_det_beta_var <- 2 * sum(log(diag(vi_beta_decomp)))
         #-log(det(t(X) %*% diag_vi_pg_mean %*% X))
 
@@ -852,7 +885,9 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
 
           vi_alpha_decomp[index_j, index_j] <- as(chol_var_j, "dgTMatrix")
         }
-
+        vi_alpha_L_nonpermute <- vi_alpha_decomp
+        vi_alpha_LP <- Diagonal(n = nrow(vi_alpha_L_nonpermute))
+        
         log_det_alpha_var <- sum(running_log_det_alpha_var)
       } else if (linpred_method == "solve_normal") {
         bind_rhs_j <- list()
@@ -1460,7 +1495,9 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     if (do_SQUAREM){
       squarem_list[[squarem_counter]] <- namedList(vi_sigma_alpha_nu, 
            vi_sigma_alpha, vi_alpha_mean, vi_beta_mean,
-           vi_pg_c,
+           vi_pg_c, vi_alpha_L_nonpermute, vi_alpha_LP,
+           vi_beta_L_nonpermute, vi_beta_LP,
+           vi_alpha_L_nonpermute,
            vi_a_a_jp, vi_a_b_jp)
       if (squarem_counter %% 3 == 0){
         final.ELBO <<- final.ELBO
@@ -1485,47 +1522,98 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
         )
         
         squarem_par <- c('vi_a_b_jp', 'vi_sigma_alpha', 'vi_pg_c',
-                         'vi_alpha_mean', 'vi_beta_mean')
-        # squarem_par <- c('vi_alpha_mean', 'vi_beta_mean')
+                         'vi_alpha_mean', 'vi_beta_mean', 'vi_beta_L_nonpermute',
+                         'vi_alpha_L_nonpermute')
+        squarem_type <- c('positive', 'matrix', 'positive',
+                          'real', 'real', 'cholesky', 'cholesky')
+        squarem_structure <- c('list', 'list', 'vector', 'vector', 'vector',
+                               'vector', 'vector')
         
-        prep_SQUAREM <- mapply(squarem_par, SIMPLIFY = FALSE, FUN=function(i){
-          if (class(squarem_list[[1]][[i]]) == 'list'){
-            r <- mapply(squarem_list[[2]][[i]], squarem_list[[1]][[i]], FUN=function(i,j){i - j})
-            d2 <- mapply(squarem_list[[3]][[i]], squarem_list[[2]][[i]], FUN=function(i,j){i - j})
-            v <- mapply(d2, r, FUN=function(i,j){i - j})
-            norm_sq_r <- sum(unlist(lapply(r, as.vector))^2)
-            norm_sq_v <- sum(unlist(lapply(v, as.vector))^2)
-          }else{
-            r <- squarem_list[[2]][[i]] - squarem_list[[1]][[i]]
-            d2 <- squarem_list[[3]][[i]] - squarem_list[[2]][[i]]
-            v <- d2 - r
-            norm_sq_r <- sum(r^2)
-            norm_sq_v <- sum(v^2)
-          }
-          return(list(first = squarem_list[[1]][[i]], 
-                      second = squarem_list[[2]][[i]], r = r, v = v, norm_sq_r = norm_sq_r, norm_sq_v = norm_sq_v))
+        if (!do_huangwand){
+          squarem_par <- squarem_par[-1]
+          squarem_type <- squarem_type[-1]
+          squarem_structure <- squarem_structure[-1]
+        }
+        
+        squarem_list <- lapply(squarem_list, FUN=function(i){
+          i[squarem_par] <- mapply(squarem_par, squarem_type, 
+            squarem_structure, SIMPLIFY = FALSE, FUN=function(s_par, s_type, s_str){
+              if (s_str == 'vector'){
+                out <- squarem_prep_function(i[[s_par]], s_type) 
+              }else{
+                out <- lapply(i[[s_par]], FUN=function(j){squarem_prep_function(j, s_type)})
+              }
+              return(out)
+          })
+          return(i)
+        })
+
+        prep_SQUAREM <- mapply(squarem_par, squarem_structure,
+          SIMPLIFY = FALSE, FUN=function(s_par, s_str){
+              
+            if (s_str == 'list'){
+              r <- mapply(squarem_list[[2]][[s_par]], squarem_list[[1]][[s_par]], FUN=function(i,j){i - j})
+              d2 <- mapply(squarem_list[[3]][[s_par]], squarem_list[[2]][[s_par]], FUN=function(i,j){i - j})
+              v <- mapply(d2, r, FUN=function(i,j){i - j})
+              norm_sq_r <- sum(unlist(lapply(r, as.vector))^2)
+              norm_sq_v <- sum(unlist(lapply(v, as.vector))^2)
+              max_d <- max(abs(sapply(d2, FUN=function(j){max(abs(j))})))
+            }else{
+              r <- squarem_list[[2]][[s_par]] - squarem_list[[1]][[s_par]]
+              d2 <- squarem_list[[3]][[s_par]] - squarem_list[[2]][[s_par]]
+              v <- d2 - r
+              norm_sq_r <- sum(r^2)
+              norm_sq_v <- sum(v^2)
+              max_d = max(abs(d2))
+            }
+          return(list(first = squarem_list[[1]][[s_par]], 
+                      second = squarem_list[[2]][[s_par]], 
+                      max_d = max_d, 
+                      r = r, v = v, norm_sq_r = norm_sq_r, norm_sq_v = norm_sq_v))
         })
         
-        alpha <- -sqrt(sum(sapply(prep_SQUAREM, FUN=function(i){i$norm_sq_r}))) /
-          sqrt(sum(sapply(prep_SQUAREM, FUN=function(i){i$norm_sq_v})))
-
-        alpha <- alpha / 2
+        ind_alpha <- FALSE
         
-        if (alpha > -1){
-          alpha <- -1.01
+        if (ind_alpha){
+          alpha <- -sqrt((sapply(prep_SQUAREM, FUN=function(i){i$norm_sq_r}))) /
+            sqrt((sapply(prep_SQUAREM, FUN=function(i){i$norm_sq_v})))
+          if (any(alpha > -1)){
+            alpha[which(alpha > -1)] <- -1.01
+          }
+          if (any(alpha < -10)){
+            alpha[which(alpha < -10)] <- -10
+          }
+          max_d <- sapply(prep_SQUAREM, FUN=function(i){i$max_d})
+          if (any(max_d < tolerance_parameters)){
+            alpha[which(max_d < tolerance_parameters)] <- -1
+          }
+        }else{
+          alpha <- -sqrt(sum(sapply(prep_SQUAREM, FUN=function(i){i$norm_sq_r}))) /
+            sqrt(sum(sapply(prep_SQUAREM, FUN=function(i){i$norm_sq_v})))
+          if (alpha > -1){
+            alpha <- -1.01
+          }
+          if (alpha < -10){
+            alpha <- -10
+          }
+          
+          alpha <- rep(alpha, length(prep_SQUAREM))
+          names(alpha) <- names(prep_SQUAREM)
         }
+        print(alpha)
+        
 
-        prop_squarem <- lapply(prep_SQUAREM, FUN=function(i){
-          if (class(i$first) == 'list'){
+        prop_squarem <- mapply(prep_SQUAREM, squarem_structure, alpha, SIMPLIFY = FALSE,
+                               FUN=function(i, s_str, s_alpha){
+          if (s_str == 'list'){
             prop_squarem <- mapply(i$first, i$second, 
                                    i$r, i$v, SIMPLIFY = FALSE, FUN=function(i_1, s_1, r_1, v_1){
-              i_1 - 2 * alpha * r_1 + alpha^2 * v_1
-              # s_1 - alpha * (v_1 + r_1)
+              out <- i_1 - 2 * s_alpha * r_1 + s_alpha^2 * v_1
+              return(out)
             })
             names(prop_squarem) <- names(i$first)
           }else{
-            # prop_squarem <- i$second - alpha * (i$r + i$v)
-            prop_squarem <- i$first - 2 * alpha * i$r + alpha^2 * i$v
+            prop_squarem <- i$first - 2 * s_alpha * i$r + s_alpha^2 * i$v
           }
           return(prop_squarem)
         })
@@ -1534,50 +1622,83 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
 
         prop_ELBOargs <- ELBOargs
         
-        if ('vi_a_b_jp' %in% squarem_par){
-          prop_squarem$vi_a_b_jp <- mapply(prop_squarem$vi_a_b_jp, squarem_list[[3]]$vi_a_b_jp, FUN=function(i,j){
-            i[i < 0] <- j[i < 0]
-            return(i)
-          })
-        }
-        if ('vi_pg_c' %in% squarem_par){
-          prop_squarem$vi_pg_c[prop_squarem$vi_pg_c < 0] <- squarem_list[[3]]$vi_pg_c[prop_squarem$vi_pc_c < 0]
-        }
-        if ('vi_sigma_alpha' %in% squarem_par){
-          prop_squarem$vi_sigma_alpha <- mapply(prop_squarem$vi_sigma_alpha, squarem_list[[3]]$vi_sigma_alpha, FUN=function(i,j){
-            if (det(i) < 0){
-              i <- j 
-            }
-            return(i)
-          })
-        }
+        prop_squarem <- mapply(prop_squarem, squarem_type, 
+           squarem_structure, SIMPLIFY = FALSE, FUN=function(i, s_type, s_str){
+             if (s_str == 'vector'){
+               out <- squarem_unprep_function(i, s_type) 
+             }else{
+               out <- lapply(i, FUN=function(j){squarem_unprep_function(j, s_type)})
+             }
+             return(out)
+        })
+        prop_squarem$vi_beta_decomp <- prop_squarem$vi_beta_L_nonpermute %*% t(squarem_list[[1]]$vi_beta_LP)
+        prop_squarem$vi_alpha_decomp <- prop_squarem$vi_alpha_L_nonpermute %*% t(squarem_list[[1]]$vi_alpha_LP)
         
         for (v in names(prop_squarem)){
           prop_ELBOargs[[v]] <- prop_squarem[[v]]
         }
-        if ('vi_alpha_mean' %in% squarem_par){
-          prop_variance_by_alpha_jg <- calculate_expected_outer_alpha(L = vi_alpha_decomp, 
-              alpha_mu = as.vector(prop_squarem$vi_alpha_mean), re_position_list = outer_alpha_RE_positions)
+        if ('vi_alpha_L_nonpermute' %in% names(prop_squarem)){
+          prop_ELBOargs$log_det_alpha_var <- 2 * sum(log(diag(prop_squarem$vi_alpha_L_nonpermute)))
+          squarem_par <- c(squarem_par, 'log_det_alpha_var')
+          squarem_par <- c(squarem_par, 'vi_alpha_decomp')
+        }
+        if ("vi_beta_L_nonpermute" %in% names(prop_squarem)){
+          prop_ELBOargs$log_det_beta_var <- 2 * sum(log(diag(prop_squarem$vi_beta_L_nonpermute)))
+          squarem_par <- c(squarem_par, 'log_det_beta_var')
+          squarem_par <- c(squarem_par, 'vi_beta_decomp')
+        }
+        if (factorization_method == 'weak'){stop('Check SQUAREM for weak')}
+        if (family != 'binomial'){stop('Check SQUAREM for non-binomial')}
+        if ('vi_alpha_mean' %in% names(prop_squarem)){
+          prop_variance_by_alpha_jg <- calculate_expected_outer_alpha(
+              L = prop_squarem$vi_alpha_decomp, 
+              alpha_mu = as.vector(prop_squarem$vi_alpha_mean), 
+              re_position_list = outer_alpha_RE_positions)
           prop_ELBOargs[['vi_sigma_outer_alpha']] <- prop_variance_by_alpha_jg$outer_alpha
           squarem_par <- c(squarem_par, 'vi_sigma_outer_alpha')
         }
+        
         if ('vi_pg_c' %in% squarem_par){
           if (family != 'binomial'){stop('check squarem for non-binomial case')}
-          prop_vi_pg_mean <- vi_pg_b / (2 * prop_ELBOargs$vi_pg_c) * tanh(prop_ELBOargs$vi_pg_c / 2)
+          prop_vi_pg_mean <- prop_ELBOargs$vi_pg_b / (2 * prop_ELBOargs$vi_pg_c) * tanh(prop_ELBOargs$vi_pg_c / 2)
           prop_ELBOargs[['vi_pg_mean']] <- prop_vi_pg_mean
-          squarem_par <- c(squarem_par, 'vi_pg_c')
+          squarem_par <- c(squarem_par, 'vi_pg_mean')
         }
         
+        prop_ELBOargs$vi_alpha_L_nonpermute <- NULL
+        prop_ELBOargs$vi_beta_L_nonpermute <- NULL
         
         elbo_init <- do.call("calculate_ELBO", ELBOargs)$ELBO
         elbo_squarem <- do.call("calculate_ELBO", prop_ELBOargs)$ELBO
         print(c(elbo_squarem, elbo_init))
-        
+        squarem_par <<- squarem_par
+        prop_ELBOargs <<- prop_ELBOargs
+
         if (elbo_squarem > elbo_init){
           cat('SUCCESS')
           for (v in squarem_par){
             assign(v, prop_ELBOargs[[v]])
           }
+          
+          test_ELBO <- calculate_ELBO(family = family,
+               ELBO_type = ELBO_type,
+               factorization_method = factorization_method,
+               d_j = d_j, g_j = g_j, prior_sigma_alpha_phi = prior_sigma_alpha_phi,
+               prior_sigma_alpha_nu = prior_sigma_alpha_nu,
+               iw_prior_constant = iw_prior_constant,
+               X = X, Z = Z, s = s, y = y,
+               vi_pg_b = vi_pg_b, vi_pg_mean = vi_pg_mean, vi_pg_c = vi_pg_c,
+               vi_sigma_alpha = vi_sigma_alpha, vi_sigma_alpha_nu = vi_sigma_alpha_nu,
+               vi_sigma_outer_alpha = vi_sigma_outer_alpha,
+               vi_beta_mean = vi_beta_mean, vi_alpha_mean = vi_alpha_mean,
+               log_det_beta_var = log_det_beta_var, log_det_alpha_var = log_det_alpha_var,
+               vi_beta_decomp = vi_beta_decomp, vi_alpha_decomp = vi_alpha_decomp,
+               vi_joint_decomp = vi_joint_decomp, choose_term = choose_term,
+               log_det_joint_var = log_det_joint_var, vi_r_mu = vi_r_mu, vi_r_mean = vi_r_mean, vi_r_sigma = vi_r_sigma,
+               do_huangwand = do_huangwand, vi_a_a_jp = vi_a_a_jp, vi_a_b_jp = vi_a_b_jp,
+               vi_a_nu_jp = vi_a_nu_jp, vi_a_APRIOR_jp = vi_a_APRIOR_jp
+          )
+          if (test_ELBO$ELBO != elbo_squarem){stop('....')}
         }else{
           cat('FAIL')
         }
@@ -1826,7 +1947,7 @@ vglmer_control <- function(iterations = 1000,
                            prevent_degeneracy = FALSE, force_whole = TRUE, verbose_time = TRUE,
                            parameter_expansion = "mean", random_seed = 1, do_timing = FALSE,
                            debug_param = FALSE, return_data = FALSE, linpred_method = "joint",
-                           vi_r_method = "VEM", vi_r_val = NA,
+                           vi_r_method = "VEM", vi_r_val = NA, do_SQUAREM = TRUE,
                            debug_ELBO = FALSE, print_prog = NULL, quiet = T, init = "EM") {
   # use checkmate package to verify arguments
   assert(
@@ -1842,7 +1963,7 @@ vglmer_control <- function(iterations = 1000,
     check_choice(vi_r_method, c("VEM", "fixed", "Laplace", "delta")),
     check_double(vi_r_val, all.missing = TRUE),
     check_int(print_prog, null.ok = TRUE),
-    check_choice(init, c("EM", "random", "zero")),
+    check_choice(init, c("EM", "random", "zero", "EM_FE")),
     check_double(random_seed),
     combine = "and"
   )
@@ -1854,7 +1975,7 @@ vglmer_control <- function(iterations = 1000,
   output <- namedList(
     iterations, prior_variance, factorization_method,
     tolerance_elbo, tolerance_parameters,
-    prevent_degeneracy, force_whole, verbose_time,
+    prevent_degeneracy, force_whole, verbose_time, do_SQUAREM,
     parameter_expansion, random_seed, do_timing, debug_param, return_data,
     linpred_method, vi_r_method, vi_r_val, debug_ELBO, print_prog, quiet, init
   )
