@@ -12,12 +12,25 @@
 #' @param omega Polya-Gamma weights
 #' @param prior_precision Prior Precision for Regression
 #' @param y Outcome
-LinRegChol <- function(X, omega, prior_precision, y) {
-    .Call('_vglmer_LinRegChol', PACKAGE = 'vglmer', X, omega, prior_precision, y)
+#' @param save_chol
+LinRegChol <- function(X, omega, prior_precision, y, save_chol = TRUE) {
+    .Call('_vglmer_LinRegChol', PACKAGE = 'vglmer', X, omega, prior_precision, y, save_chol)
 }
 
 calculate_expected_outer_alpha <- function(L, alpha_mu, re_position_list) {
     .Call('_vglmer_calculate_expected_outer_alpha', PACKAGE = 'vglmer', L, alpha_mu, re_position_list)
+}
+
+unique_rows <- function(m) {
+    .Call('_vglmer_unique_rows', PACKAGE = 'vglmer', m)
+}
+
+prepare_Z_for_px <- function(Mmap) {
+    .Call('_vglmer_prepare_Z_for_px', PACKAGE = 'vglmer', Mmap)
+}
+
+chol_sparse <- function(X, omega, precision) {
+    .Call('_vglmer_chol_sparse', PACKAGE = 'vglmer', X, omega, precision)
 }
 
 cpp_zVz <- function(Z, V) {

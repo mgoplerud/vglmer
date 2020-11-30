@@ -7,8 +7,8 @@
 using namespace Rcpp;
 
 // LinRegChol
-List LinRegChol(const Eigen::MappedSparseMatrix<double> X, const Eigen::MappedSparseMatrix<double> omega, const Eigen::MappedSparseMatrix<double> prior_precision, const Eigen::Map<Eigen::VectorXd> y);
-RcppExport SEXP _vglmer_LinRegChol(SEXP XSEXP, SEXP omegaSEXP, SEXP prior_precisionSEXP, SEXP ySEXP) {
+List LinRegChol(const Eigen::MappedSparseMatrix<double> X, const Eigen::MappedSparseMatrix<double> omega, const Eigen::MappedSparseMatrix<double> prior_precision, const Eigen::Map<Eigen::VectorXd> y, const bool save_chol);
+RcppExport SEXP _vglmer_LinRegChol(SEXP XSEXP, SEXP omegaSEXP, SEXP prior_precisionSEXP, SEXP ySEXP, SEXP save_cholSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -16,7 +16,8 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< const Eigen::MappedSparseMatrix<double> >::type omega(omegaSEXP);
     Rcpp::traits::input_parameter< const Eigen::MappedSparseMatrix<double> >::type prior_precision(prior_precisionSEXP);
     Rcpp::traits::input_parameter< const Eigen::Map<Eigen::VectorXd> >::type y(ySEXP);
-    rcpp_result_gen = Rcpp::wrap(LinRegChol(X, omega, prior_precision, y));
+    Rcpp::traits::input_parameter< const bool >::type save_chol(save_cholSEXP);
+    rcpp_result_gen = Rcpp::wrap(LinRegChol(X, omega, prior_precision, y, save_chol));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -30,6 +31,41 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< const Eigen::Map<Eigen::VectorXd> >::type alpha_mu(alpha_muSEXP);
     Rcpp::traits::input_parameter< const Rcpp::List& >::type re_position_list(re_position_listSEXP);
     rcpp_result_gen = Rcpp::wrap(calculate_expected_outer_alpha(L, alpha_mu, re_position_list));
+    return rcpp_result_gen;
+END_RCPP
+}
+// unique_rows
+IntegerMatrix unique_rows(const IntegerMatrix m);
+RcppExport SEXP _vglmer_unique_rows(SEXP mSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const IntegerMatrix >::type m(mSEXP);
+    rcpp_result_gen = Rcpp::wrap(unique_rows(m));
+    return rcpp_result_gen;
+END_RCPP
+}
+// prepare_Z_for_px
+Rcpp::List prepare_Z_for_px(Rcpp::IntegerMatrix& Mmap);
+RcppExport SEXP _vglmer_prepare_Z_for_px(SEXP MmapSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< Rcpp::IntegerMatrix& >::type Mmap(MmapSEXP);
+    rcpp_result_gen = Rcpp::wrap(prepare_Z_for_px(Mmap));
+    return rcpp_result_gen;
+END_RCPP
+}
+// chol_sparse
+Rcpp::List chol_sparse(const Eigen::MappedSparseMatrix<double> X, const Eigen::MappedSparseMatrix<double> omega, const Eigen::MappedSparseMatrix<double> precision);
+RcppExport SEXP _vglmer_chol_sparse(SEXP XSEXP, SEXP omegaSEXP, SEXP precisionSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const Eigen::MappedSparseMatrix<double> >::type X(XSEXP);
+    Rcpp::traits::input_parameter< const Eigen::MappedSparseMatrix<double> >::type omega(omegaSEXP);
+    Rcpp::traits::input_parameter< const Eigen::MappedSparseMatrix<double> >::type precision(precisionSEXP);
+    rcpp_result_gen = Rcpp::wrap(chol_sparse(X, omega, precision));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -114,8 +150,11 @@ END_RCPP
 }
 
 static const R_CallMethodDef CallEntries[] = {
-    {"_vglmer_LinRegChol", (DL_FUNC) &_vglmer_LinRegChol, 4},
+    {"_vglmer_LinRegChol", (DL_FUNC) &_vglmer_LinRegChol, 5},
     {"_vglmer_calculate_expected_outer_alpha", (DL_FUNC) &_vglmer_calculate_expected_outer_alpha, 3},
+    {"_vglmer_unique_rows", (DL_FUNC) &_vglmer_unique_rows, 1},
+    {"_vglmer_prepare_Z_for_px", (DL_FUNC) &_vglmer_prepare_Z_for_px, 1},
+    {"_vglmer_chol_sparse", (DL_FUNC) &_vglmer_chol_sparse, 3},
     {"_vglmer_cpp_zVz", (DL_FUNC) &_vglmer_cpp_zVz, 2},
     {"_vglmer_vecR_ridge_general", (DL_FUNC) &_vglmer_vecR_ridge_general, 8},
     {"_vglmer_vecR_design", (DL_FUNC) &_vglmer_vecR_design, 6},

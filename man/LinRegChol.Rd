@@ -4,7 +4,7 @@
 \alias{LinRegChol}
 \title{Linear Regression by Cholesky}
 \usage{
-LinRegChol(X, omega, prior_precision, y)
+LinRegChol(X, omega, prior_precision, y, save_chol = TRUE)
 }
 \arguments{
 \item{X}{Design Matrix}

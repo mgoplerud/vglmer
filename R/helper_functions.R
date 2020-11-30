@@ -142,7 +142,10 @@ EM_prelim_logit <- function(X, Z, s, pg_b, iter, ridge = 2) {
     }
     EM_pg_diag <- sparseMatrix(i = 1:N, j = 1:N, x = EM_pg_mean)
 
-    EM_beta <- LinRegChol(X = jointXZ, omega = EM_pg_diag, y = s, prior_precision = EM_variance)$mean
+    EM_beta <- solve(Matrix::Cholesky(  t(jointXZ) %*% EM_pg_diag %*% jointXZ + EM_variance),
+                               t(jointXZ) %*% (s) )
+    
+    # EM_beta <- LinRegChol(X = jointXZ, omega = EM_pg_diag, y = s, prior_precision = EM_variance)$mean
   }
   output <- list(beta = EM_beta[1:ncol(X)], alpha = EM_beta[-1:-ncol(X)])
   return(output)
@@ -178,7 +181,11 @@ EM_prelim_nb <- function(X, Z, y, est_r, iter, ridge = 2) {
     }
 
     adj_out <- (y - est_r) / 2 + pg_mean * log(est_r)
-    EM_beta <- LinRegChol(X = jointXZ, omega = sparseMatrix(i = 1:N, j = 1:N, x = pg_mean), y = adj_out, prior_precision = EM_variance)$mean
+    # EM_beta <- LinRegChol(X = jointXZ, omega = sparseMatrix(i = 1:N, j = 1:N, x = pg_mean), y = adj_out, prior_precision = EM_variance)$mean
+    
+    EM_beta <- solve(Matrix::Cholesky(  t(jointXZ) %*% sparseMatrix(i = 1:N, j = 1:N, x = pg_mean) %*% jointXZ + EM_variance),
+                     t(jointXZ) %*% (adj_out) )
+    
   }
 
   output <- list(beta = EM_beta[1:ncol(X)], alpha = EM_beta[-1:-ncol(X)])
@@ -359,7 +366,6 @@ calculate_ELBO <- function(family, ELBO_type, factorization_method,
   } else {
     stop("ELBO must be profiled or augmented")
   }
-  
   ###############
   # Log Complete and Entropy for p(Sigma_j) or similar
   ###############
@@ -430,7 +436,6 @@ calculate_ELBO <- function(family, ELBO_type, factorization_method,
   
   entropy <- entropy_1 + entropy_2 + entropy_3 + entropy_4
   ELBO <- entropy + logcomplete
-
   return(data.frame(
     ELBO, logcomplete, entropy, logcomplete_1,
     logcomplete_2, logcomplete_3, entropy_1, entropy_2, entropy_3, entropy_4

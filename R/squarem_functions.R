@@ -1,4 +1,15 @@
 
+prep_lu <- function(M){
+ fact_lu <- expand(Matrix::lu(M))
+ return(fact_lu)
+}
+unprep_lu <- function(M){
+  recons_M <- t(M$P) %*% M$L %*% M$U %*% M$Q
+  # recons_M <- t(M$P) %*% drop0(zapsmall(M$L %*% M$U, 15)) %*% M$Q
+  logdet_M <- 2 * sum(log(abs(diag(M$U))))
+  return(list(M = recons_M, logdet_M = logdet_M))
+}
+
 prep_cholesky <- function(L){
   diag(L) <- log(diag(L))
   return(L)
@@ -16,6 +27,8 @@ unprep_positive <- function(x){exp(x)}
 squarem_prep_function <- function(x, type){
   if (type == 'real'){
     x
+  }else if (type == 'lu'){
+    prep_lu(x)
   }else if (type == 'cholesky'){
     prep_cholesky(x)
   }else if (type == 'matrix'){
@@ -28,6 +41,8 @@ squarem_prep_function <- function(x, type){
 squarem_unprep_function <- function(x, type){
   if (type == 'real'){
     x
+  }else if (type == 'lu'){
+    unprep_lu(x)
   }else if (type == 'cholesky'){
     unprep_cholesky(x)
   }else if (type == 'matrix'){
