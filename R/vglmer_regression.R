@@ -120,6 +120,9 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
   tolerance_parameters <- control$tolerance_parameters
   prevent_degeneracy <- control$prevent_degeneracy
   debug_param <- control$debug_param
+  
+  debug_mean <- control$debug_mean
+  
   linpred_method <- control$linpred_method
   vi_r_method <- control$vi_r_method
   vi_r_val <- control$vi_r_val
@@ -487,7 +490,6 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
   lagged_vi_r_mu <- -Inf
   lagged_vi_sigmasq_a <- lagged_vi_sigmasq_b <- -Inf
   lagged_ELBO <- -Inf
-  accepted_times <- NA
 
   if (parameter_expansion == "translation") {
     stop("parameter_expansion_translation not allowed yet.")
@@ -517,6 +519,9 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
 
   if (debug_param) {
     store_beta <- array(NA, dim = c(iterations, ncol(X)))
+  }
+  if (debug_mean) {
+    track_mean <- array(NA, dim = c(iterations, sum(d_j)))
   }
   if (do_timing) {
     toc(quiet = verbose_time, log = TRUE)
@@ -1179,6 +1184,10 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
       stop("Invalid PX method.")
     }
 
+    if (debug_mean){
+      track_mean[it,] <- as.vector(t(M_prime) %*% vi_alpha_mean)
+    }
+    
     # Adjust the terms in the ELBO calculation that are different.
 
     # ELBO_type <<- ELBO_type;
@@ -1348,11 +1357,21 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
   if (debug_param) {
     output$parameter_trajectory <- list(beta = store_beta)
   }
+  if (debug_mean) {
+    output$track_mean <- track_mean
+  }
   if (factorization_method == "weak") {
     output$joint <- vi_joint_decomp
   }
   if (control$return_data) {
-    output$data <- list(X = X, Z = Z, y = y, trials = trials)
+    output$data <- list(X = X, Z = Z, 
+        d_j = d_j, g_j = g_j,
+        pg_c = vi_pg_c,
+        pg_mean = vi_pg_mean,
+        prior_sigma_alpha_nu = prior_sigma_alpha_nu,
+        prior_sigma_alpha_phi = prior_sigma_alpha_phi,
+        outer_alpha_RE_positions = outer_alpha_RE_positions,
+        y = y, trials = trials)
   }
   output$formula <- formula
   output$alpha$dia.var <- unlist(lapply(variance_by_alpha_jg$variance_jg, FUN = function(i) {
@@ -1442,7 +1461,9 @@ vglmer_control <- function(iterations = 1000,
                            tolerance_elbo = 1e-8, tolerance_parameters = 1e-5,
                            prevent_degeneracy = FALSE, force_whole = TRUE, verbose_time = TRUE,
                            parameter_expansion = "mean", random_seed = 1, do_timing = FALSE,
-                           debug_param = FALSE, return_data = FALSE, linpred_method = "joint",
+                           debug_param = FALSE, 
+                           debug_mean = FALSE,
+                           return_data = FALSE, linpred_method = "joint",
                            vi_r_method = "VEM", vi_r_val = NA,
                            debug_ELBO = FALSE, print_prog = NULL, quiet = T, init = "EM") {
   # use checkmate package to verify arguments
@@ -1471,7 +1492,7 @@ vglmer_control <- function(iterations = 1000,
   output <- namedList(
     iterations, prior_variance, factorization_method,
     tolerance_elbo, tolerance_parameters,
-    prevent_degeneracy, force_whole, verbose_time,
+    prevent_degeneracy, force_whole, verbose_time, debug_mean,
     parameter_expansion, random_seed, do_timing, debug_param, return_data,
     linpred_method, vi_r_method, vi_r_val, debug_ELBO, print_prog, quiet, init
   )

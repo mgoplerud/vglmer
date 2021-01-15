@@ -17,6 +17,7 @@ vglmer_control(
   random_seed = 1,
   do_timing = FALSE,
   debug_param = FALSE,
+  debug_mean = FALSE,
   return_data = FALSE,
   linpred_method = "joint",
   vi_r_method = "VEM",
