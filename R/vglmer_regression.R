@@ -90,6 +90,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
   if (control$parameter_expansion %in% c('translation', 'diagonal')){
     parsed_RE_groups <- get_RE_groups(formula = formula, data = data)
   }
+  
   data <- model.frame(subbars(formula), data)
   nobs_complete <- nrow(data)
   missing_obs <- nobs_init - nobs_complete
@@ -598,9 +599,9 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     stationary_rho <- do.call('c', lapply(d_j, FUN=function(i){as.vector(diag(x = i))}))
     diag_rho <- which(stationary_rho == 1)
     zeromat_beta <- drop0(Diagonal(x = rep(0, ncol(X))))
-
+    
     # parsed_RE_groups <- get_RE_groups(formula = formula, data = data)
-    # parsed_RE_groups <<- parsed_RE_groups
+    # parsed_RE_groups <- parsed_RE_groups
     
     mapping_new_Z <- do.call('cbind', parsed_RE_groups$design)
     
@@ -620,8 +621,6 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     start_base_Z <- cumsum(c(0,d_j))[-(number_of_RE+1)]
     names(start_base_Z) <- NULL
 
-    rm(parsed_RE_groups, mapping_to_re)
-    
     store_re_id <- store_id <- list()
     id_range <- 1:nrow(Mmap)
     for (j in 1:number_of_RE){
@@ -647,6 +646,8 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
       store_re_id[[j]] <- store_re_id_j
     }
     store_design <- parsed_RE_groups$design
+    
+    rm(parsed_RE_groups, mapping_to_re)
     
     gc()
     if (do_timing){
