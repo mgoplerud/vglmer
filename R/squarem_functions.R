@@ -1,6 +1,9 @@
 
 prep_lu <- function(M){
  fact_lu <- expand(Matrix::lu(M))
+ if (is.null(fact_lu$Q)){
+   fact_lu$Q <- Diagonal(n = ncol(fact_lu$U))
+ }
  return(fact_lu)
 }
 unprep_lu <- function(M){

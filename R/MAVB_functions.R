@@ -158,7 +158,7 @@ simple_blist <- function(x, frloc, drop.unused.levels = TRUE, reorder.vars = FAL
   mm <- model.matrix(eval(substitute(~foo, list(foo = x[[2]]))),
                      frloc)
   if (reorder.vars) {
-    mm <- mm[colSort(colnames(mm)), ]
+    mm <- mm[lme4:::colSort(colnames(mm)), ]
   }
   list(ff = ff, nl = nl, mm = mm, cnms = colnames(mm))
 }

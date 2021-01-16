@@ -217,6 +217,9 @@ calculate_ELBO <- function(family, ELBO_type, factorization_method,
      # r Parameters
      vi_r_mu = NULL, vi_r_mean = NULL,
      vi_r_sigma = NULL,
+     #linear parameters
+     vi_sigmasq_a = NULL, vi_sigmasq_b = NULL,
+     vi_sigmasq_prior_a = NULL, vi_sigmasq_prior_b = NULL,
      # huang_wand parameters
      do_huangwand = NULL, vi_a_a_jp = NULL, vi_a_b_jp = NULL,
      vi_a_nu_jp = NULL, vi_a_APRIOR_jp = NULL

@@ -22,10 +22,13 @@ Imports:
 	lmtest, 
 	checkmate
 Suggests: 
+	glue, 
 	MASS,
 	tictoc,
 	stringr,
-    rstanarm,
+	rstan,
+    rstanarm, 
+	brms,
     testthat,
     covr
 LinkingTo: Rcpp, RcppEigen

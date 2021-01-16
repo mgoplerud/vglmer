@@ -1,16 +1,20 @@
+
 convert_brm <- function(formula = NULL, data = NULL, brms_args = list(),
                         compile = TRUE, prior_method = 'default_iw'){
   message('Compiling original BRM model')
+  
+  glue <- glue::glue
+  brm <- brms::brm
   
   brms_args$formula <- formula
   brms_args$data <- data
   brms_args$chains <- 0
   brm_object <- do.call('brm', brms_args)
 
-  data_brm <- standata(brm_object)
+  data_brm <- brms::standata(brm_object)
   
   #Get the code and split by whitespace
-  code_brm <- stancode(brm_object)
+  code_brm <- brms::stancode(brm_object)
   code_brm <- strsplit(code_brm, split='\\n')[[1]]
 
   message('Rewriting Code')
@@ -119,9 +123,9 @@ convert_brm <- function(formula = NULL, data = NULL, brms_args = list(),
   
   if (compile){
     message('Compiling Again')
-    compile_adjusted <- stan_model(model_code = code_brm, save_dso = TRUE)
+    compile_adjusted <- rstan::stan_model(model_code = code_brm, save_dso = TRUE)
     #Check convergence
-    convg <- suppressMessages(sampling(compile_adjusted, data = data_brm, chains = 0))
+    convg <- suppressMessages(rstan::sampling(compile_adjusted, data = data_brm, chains = 0))
   }else{
     compile_adjusted <- NULL
   }

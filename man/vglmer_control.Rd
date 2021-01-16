@@ -25,7 +25,7 @@ vglmer_control(
   debug_ELBO = FALSE,
   print_prog = NULL,
   quiet = T,
-  init = "EM"
+  init = "EM_FE"
 )
 }
 \arguments{
@@ -80,6 +80,8 @@ costless and should always be used!}
 (experimential).}
 
 \item{vi_r_val}{For fixed "r", which value?}
+
+\item{do_SQUAREM}{Accelerate method using SQUAREM}
 
 \item{debug_ELBO}{Debug ELBO trajectory.}
 
