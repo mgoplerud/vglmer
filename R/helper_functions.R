@@ -24,18 +24,32 @@
 #   return(x)
 # }
 
+safe_convert <- function(x){
+  if (isDiagonal(x)){
+    out <- diag(x)
+    lout <- seq_len(length(out)) - 1
+    out <- cbind(lout, lout, out)
+    colnames(out) <- c('i', 'j', 'x')
+    # out <- with(attributes(as(as(as.matrix(x), "sparseMatrix"), "dgTMatrix")), cbind(i, j, x))
+  }else{
+    out <- with(attributes(as(as(x, "sparseMatrix"), "dgTMatrix")), cbind(i, j, x))
+  }
+  return(out)
+}
+
 #' @import Matrix
 #' @importFrom methods as
 make_mapping_alpha <- function(sigma, px.R = FALSE) {
+  sg <<- sigma
   if (!px.R) {
     lapply(sigma, FUN = function(i) {
-      sparse_i <- with(attributes(as(as(i, "sparseMatrix"), "dgTMatrix")), cbind(i, j, x))
+      sparse_i <- safe_convert(i)
       sparse_i <- sparse_i[sparse_i[, 1] >= sparse_i[, 2], , drop = F]
       return(sparse_i)
     })
   } else {
     lapply(sigma, FUN = function(i) {
-      sparse_i <- with(attributes(as(as(i, "sparseMatrix"), "dgTMatrix")), cbind(i, j, x))
+      sparse_i <- safe_convert(i)
       return(sparse_i)
     })
   }

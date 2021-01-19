@@ -764,6 +764,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
       mapping = inv_mapping_alpha, levels_per_RE = g_j, num_REs = number_of_RE,
       variables_per_RE = d_j, running_per_RE = breaks_for_RE, cyclical = cyclical_T
     )
+
     if (!cyclical_T) {
       Tinv <- as(Tinv, "dgCMatrix")
     } else {
@@ -895,21 +896,21 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
       vi_alpha_decomp <- sparseMatrix(i = 1, j = 1, x = 0, dims = rep(p.Z, 2))
 
       #
-      # vi_alpha_mean <<- vi_alpha_mean
-      # vi_beta_mean <<- vi_beta_mean
-      # vi_alpha_decomp <<- vi_alpha_decomp
-      # X <<- X
-      # Z <<- Z
-      # fmt_names_Z <<- fmt_names_Z
-      # Tinv <<- Tinv
-      # cyclical_pos <<- cyclical_pos
-      # family_s <<- s
-      # diag_vi_pg_mean <<- diag_vi_pg_mean
-      # running_log_det_alpha_var <<- running_log_det_alpha_var
-      # number_of_RE <<- number_of_RE
-      # zero_mat <<- zero_mat
-      # p.X <<- p.X
-
+      vi_alpha_mean <<- vi_alpha_mean
+      vi_beta_mean <<- vi_beta_mean
+      vi_alpha_decomp <<- vi_alpha_decomp
+      X <<- X
+      Z <<- Z
+      fmt_names_Z <<- fmt_names_Z
+      Tinv <<- Tinv
+      cyclical_pos <<- cyclical_pos
+      family_s <<- s
+      diag_vi_pg_mean <<- diag_vi_pg_mean
+      running_log_det_alpha_var <<- running_log_det_alpha_var
+      number_of_RE <<- number_of_RE
+      zero_mat <<- zero_mat
+      p.X <<- p.X
+      g_j <<- g_j
       
       if (linpred_method == "joint") {
         if (it == 1){
@@ -918,14 +919,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
         if (do_timing) {
           tic("ux_mean")
         }
-
-        # joint.XZ <<- joint.XZ
-        # diag_vi_pg_mean <<- diag_vi_pg_mean
-        # zero_mat <<- zero_mat
-        # Tinv <<- Tinv
-        # s <<- s
-        # old_vi <<- c(vi_beta_mean, vi_alpha_mean)
-        # if (it > 1){stop()}
+        
         chol.update.joint <- solve(Matrix::Cholesky(  t(joint.XZ) %*% diag_vi_pg_mean %*% joint.XZ + bdiag(zero_mat, bdiag(Tinv))),
                          t(joint.XZ) %*% (s + vi_pg_mean * vi_r_mu) )
         vi_beta_mean <- Matrix(chol.update.joint[1:p.X,], dimnames = list(colnames(X), NULL))
@@ -1794,8 +1788,8 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
                  names(prop_squarem) <- c('L', 'U')
                  prop_squarem$P <- i$P
                  prop_squarem$Q <- i$Q
-                 if (!isTRUE(all.equal(i$second$P, i$P))){print('MISALIGNED at P')}
-                 if (!isTRUE(all.equal(i$second$Q, i$Q))){print('MISALIGNED at Q')}
+                 if (!quiet_rho){if (!isTRUE(all.equal(i$second$P, i$P))){print('MISALIGNED at P')}}
+                 if (!quiet_rho){if (!isTRUE(all.equal(i$second$Q, i$Q))){print('MISALIGNED at Q')}}
                }else if (s_str == 'list'){
                  prop_squarem <- mapply(i$first, i$second, 
                     i$r, i$v, SIMPLIFY = FALSE, FUN=function(i_1, s_1, r_1, v_1){

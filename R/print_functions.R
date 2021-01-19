@@ -19,7 +19,11 @@
 #' @rdname vglmer-class
 #' @export
 fixef.vglmer <- function(object, ...) {
-  return(as.vector(object$beta$mean))
+  out <- object$beta$mean
+  rn <- rownames(out)
+  out <- as.vector(out)
+  names(out) <- rn
+  return(out)
 }
 
 # Load fixef, ranef, sigma from lme4
@@ -81,6 +85,14 @@ ranef.vglmer <- function(object, ...) {
     }
   )
   return(vi_parsed)
+}
+
+#' @rdname vglmer-class
+#' @export
+ELBO <- function(object) UseMethod("ELBO")
+
+ELBO.vglmer <- function(object){
+  return(object$ELBO$ELBO)
 }
 
 #' @rdname vglmer-class
