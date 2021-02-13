@@ -1251,6 +1251,8 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     
     if (parameter_expansion %in% c("translation", "diagonal") & skip_translate == FALSE) {
       
+      saveRDS(mget(ls()), file = 'temp_output.RDS')
+              
       attempted_expansion <- attempted_expansion + 1
       
       prior.ELBO <- calculate_ELBO(family = family, ELBO_type = ELBO_type,
@@ -1368,6 +1370,8 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
         }else{
           vec_OSL_prior <- vec_OSL_prior[c(1:p.X, p.X + diag_rho),,drop=F]
         }
+        if (length(vec_OSL_prior) != ncol(XR)){stop('MISALIGNED DIMENSIONS')}
+        
         update_expansion_XR <- vecR_fast_ridge(X = drop0(XR), 
          omega = diag_vi_pg_mean, prior_precision = R_ridge, y = as.vector(s), 
          adjust_y = as.vector(vec_OSL_prior))
@@ -1715,9 +1719,9 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
               P <- squarem_list[[3]][[s_par]]$P
               Q <- squarem_list[[3]][[s_par]]$Q
             }else if (s_str == 'list'){
-              r <- mapply(squarem_list[[2]][[s_par]], squarem_list[[1]][[s_par]], FUN=function(i,j){i - j})
-              d2 <- mapply(squarem_list[[3]][[s_par]], squarem_list[[2]][[s_par]], FUN=function(i,j){i - j})
-              v <- mapply(d2, r, FUN=function(i,j){i - j})
+              r <- mapply(squarem_list[[2]][[s_par]], squarem_list[[1]][[s_par]], SIMPLIFY = FALSE, FUN=function(i,j){i - j})
+              d2 <- mapply(squarem_list[[3]][[s_par]], squarem_list[[2]][[s_par]], SIMPLIFY = FALSE, FUN=function(i,j){i - j})
+              v <- mapply(d2, r, SIMPLIFY = FALSE, FUN=function(i,j){i - j})
               norm_sq_r <- sum(unlist(lapply(r, as.vector))^2)
               norm_sq_v <- sum(unlist(lapply(v, as.vector))^2)
               max_d <- max(abs(sapply(d2, FUN=function(j){max(abs(j))})))
