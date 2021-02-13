@@ -1247,7 +1247,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
       if (parameter_expansion == "mean"){accept.PX <- TRUE}
     }  
     
-    quiet_rho <- TRUE
+    quiet_rho <- control$quiet_rho
     
     if (parameter_expansion %in% c("translation", "diagonal") & skip_translate == FALSE) {
       
@@ -2229,7 +2229,8 @@ vglmer_control <- function(iterations = 1000,
                            parameter_expansion = "mean", random_seed = 1, do_timing = FALSE,
                            debug_param = FALSE, return_data = FALSE, linpred_method = "joint",
                            vi_r_method = "VEM", vi_r_val = NA, do_SQUAREM = TRUE,
-                           debug_ELBO = FALSE, print_prog = NULL, quiet = T, init = "EM_FE") {
+                           debug_ELBO = FALSE, print_prog = NULL, quiet = T, quiet_rho = TRUE,
+                           init = "EM_FE") {
   # use checkmate package to verify arguments
   assert(
     check_integerish(iterations, lower = 1),
@@ -2255,7 +2256,7 @@ vglmer_control <- function(iterations = 1000,
 
   output <- namedList(
     iterations, prior_variance, factorization_method,
-    tolerance_elbo, tolerance_parameters,
+    tolerance_elbo, tolerance_parameters, quiet_rho,
     prevent_degeneracy, force_whole, verbose_time, do_SQUAREM,
     parameter_expansion, random_seed, do_timing, debug_param, return_data,
     linpred_method, vi_r_method, vi_r_val, debug_ELBO, print_prog, quiet, init
