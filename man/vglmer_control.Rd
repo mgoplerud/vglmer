@@ -25,6 +25,7 @@ vglmer_control(
   debug_ELBO = FALSE,
   print_prog = NULL,
   quiet = T,
+  quiet_rho = TRUE,
   init = "EM_FE"
 )
 }

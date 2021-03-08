@@ -385,7 +385,6 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     })
     prior_sigma_alpha_nu <- d_j
     prior_sigma_alpha_phi <- lapply(weight_kn, FUN=function(i){i * nrow(i)})
-
   } else if (prior_variance == "jeffreys") {
     prior_sigma_alpha_nu <- rep(0, number_of_RE)
     prior_sigma_alpha_phi <- lapply(d_j, FUN = function(i) {
