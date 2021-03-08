@@ -485,6 +485,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
 
   if (debug_param) {
     store_beta <- array(NA, dim = c(iterations, ncol(X)))
+    store_alpha <- array(NA, dim = c(iterations, ncol(Z)))
   }
   if (do_timing) {
     toc(quiet = verbose_time, log = TRUE)
@@ -1108,6 +1109,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     }
     if (debug_param) {
       store_beta[it, ] <- as.vector(vi_beta_mean)
+      store_alpha[it, ] <- as.vector(vi_alpha_mean)
     }
     change_all <- data.frame(change_alpha_mean, change_beta_mean, t(change_sigma_mean), change_alpha_var, change_beta_var, change_joint_var, change_vi_r_mu)
     if ((max(change_all) < tolerance_parameters) | (change_elbo$ELBO > 0 & change_elbo$ELBO < tolerance_elbo)) {
@@ -1181,7 +1183,12 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     tic_summary <- NULL
   }
   if (debug_param) {
-    output$parameter_trajectory <- list(beta = store_beta)
+    
+    store_beta <- store_beta[1:it,,drop=F]
+    store_alpha <- store_alpha[1:it,,drop=F]
+    
+    output$parameter_trajectory <- list(beta = store_beta,
+                                        alpha = store_alpha)
   }
   if (factorization_method == "weak") {
     output$joint <- vi_joint_decomp
