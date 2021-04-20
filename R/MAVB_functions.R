@@ -106,6 +106,9 @@ MAVB <- function(object, samples, verbose = FALSE, var_px = Inf) {
 
     MAVB_sims[it, ] <- c(as.vector(final_btilde), as.vector(final_atilde))
   }
+  colnames(MAVB_sims) <- c(rownames(object$beta$mean), 
+                           rownames(object$alpha$mean))
+  
   return(MAVB_sims)
 }
 
@@ -257,4 +260,64 @@ custom_glmer_samples <- function(glmer, samples, ordering) {
 
   glmer_samples <- glmer_samples[, match(ordering, colnames(glmer_samples))]
   return(glmer_samples)
+}
+
+#' Draw samples from the (non-MAVB) posterior
+#' 
+#' @param object Model fit using vglmer
+#' @param samples Samples to draw from MAVB distribution.
+#' @param verbose Print the progress of the samples.
+#' @export
+posterior_samples.vglmer <- function (object, samples, verbose = FALSE) 
+{
+  if (!inherits(object, "vglmer")) {
+    stop("Must provide object from vglmer")
+  }
+  
+  M_prime <- object$MAVB_parameters$M_prime
+  M_prime_one <- object$MAVB_parameters$M_prime_one
+  M_mu_to_beta <- object$MAVB_parameters$M_mu_to_beta
+  d_j <- object$MAVB_parameters$d_j
+  g_j <- object$MAVB_parameters$g_j
+  outer_alpha_RE_positions <- object$MAVB_parameters$outer_alpha_RE_positions
+  factorization_method <- object$control$factorization_method
+  if (factorization_method == "weak") {
+    decomp_joint <- object$joint
+    joint_mean <- rbind(object$beta$mean, object$alpha$mean)
+    p.XZ <- ncol(decomp_joint)
+    p.X <- nrow(object$beta$mean)
+  }
+  else {
+    decomp_varA <- object$alpha$decomp_var
+    decomp_varB <- object$beta$decomp_var
+    p.XZ <- ncol(decomp_varA) + ncol(decomp_varB)
+    p.X <- nrow(object$beta$mean)
+    p.Z <- nrow(object$alpha$mean)
+  }
+  post_sims <- matrix(NA, nrow = samples, ncol = p.XZ)
+  alpha_mean <- object$alpha$mean
+  beta_mean <- object$beta$mean
+  sigma_df <- object$sigma$df
+  sigma_cov <- object$sigma$cov
+  for (it in 1:samples) {
+    if (it%%1000 == 0 & verbose) {
+      message(".", appendLF = F)
+    }
+    if (factorization_method == "weak") {
+      sim_joint <- joint_mean + t(decomp_joint) %*% rnorm(p.XZ)
+      sim_beta <- sim_joint[1:p.X, , drop = F]
+      sim_a <- sim_joint[-1:-p.X, , drop = F]
+    }
+    else {
+      sim_a <- alpha_mean + t(decomp_varA) %*% rnorm(p.Z)
+      sim_beta <- beta_mean + t(decomp_varB) %*% rnorm(p.X)
+    }
+    post_sims[it, ] <- c(as.vector(sim_beta), as.vector(sim_a))
+  }
+  
+  colnames(post_sims) <- c(rownames(object$beta$mean), 
+    rownames(object$alpha$mean))
+  
+  return(post_sims)
+  
 }
