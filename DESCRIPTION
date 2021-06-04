@@ -20,6 +20,7 @@ Imports:
 	methods, 
 	rlang,
 	lmtest, 
+	splines,
 	checkmate
 Suggests: 
 	MASS,

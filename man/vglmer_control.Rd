@@ -21,6 +21,7 @@ vglmer_control(
   linpred_method = "joint",
   vi_r_method = "VEM",
   vi_r_val = NA,
+  verify_columns = FALSE,
   debug_ELBO = FALSE,
   print_prog = NULL,
   quiet = T,

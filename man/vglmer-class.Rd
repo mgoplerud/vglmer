@@ -24,7 +24,7 @@
 
 \method{summary}{vglmer}(object, display_re = TRUE, ...)
 
-\method{formula}{vglmer}(x, ...)
+\method{formula}{vglmer}(x, type = "original", ...)
 
 format_vglmer(object)
 }

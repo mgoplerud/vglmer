@@ -86,7 +86,25 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
   # (i.e. sub out the random effects, do model.frame)
   #
   nobs_init <- nrow(data)
-  data <- model.frame(subbars(formula), data)
+  
+  parse_formula <- vglmer_interpret.gam0(subbars(formula), extra.special = 'v_s')
+
+  if (any(!sapply(parse_formula$smooth.spec, inherits, what = 'vglmer_spline'))){
+    stop('gam specials are not permitted; use v_s(...) and see documentation.')
+  }
+  
+  if (control$verify_columns){
+    if (!all(parse_formula$pred.names %in% colnames(data))){
+      missing_columns <- setdiff(parse_formula$pred.names, colnames(data))
+      stop(
+        paste0('The following columns are missing from "data". Can override with vglmer_control (not usually desirable): ', 
+               paste(missing_columns, collapse =', '))
+      )
+    }
+  }
+  
+  data <- model.frame(parse_formula$fake.formula, data)
+  
   nobs_complete <- nrow(data)
   missing_obs <- nobs_init - nobs_complete
   if (length(missing_obs) == 0) {
@@ -202,77 +220,274 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     stop("Check ELBO_type")
   }
 
+  
   # Extract X (FE design matrix)
-  X <- model.matrix(nobars(formula), data = data)
-
+  fe_fmla <- vglmer_interpret.gam0(nobars(formula), extra.special = 'v_s')
+  
+  if (length(fe_fmla$smooth.spec) > 0){
+    # Add the linear spline terms to the main effect.
+    
+    fe_fmla <- update.formula(fe_fmla$pf,
+        paste0('. ~ . + 1 + ',
+        paste0(sapply(fe_fmla$smooth.spec, FUN=function(i){i$term}),
+        collapse = " + "))
+    )
+    
+    
+  }else{
+    fe_fmla <- fe_fmla$pf
+  }
+  
+  X <- model.matrix(fe_fmla, data = data)
+  
   # Extract the Z (Random Effect) design matrix.
-  mk_Z <- mkReTrms(findbars(formula), data, reorder.terms = FALSE, reorder.vars = FALSE)
-  Z <- t(mk_Z$Zt)
-
-  p.X <- ncol(X)
-  p.Z <- ncol(Z)
-
-  ####
-  # Process the REs to get various useful terms.
-  ####
-  # RE names and names of variables included for each.
-  names_of_RE <- mk_Z$cnms
-
-  number_of_RE <- length(mk_Z$Gp) - 1
-
-  if (number_of_RE < 1) {
-    stop("Need to provide at least one random effect...")
+  re_fmla <- findbars(formula)
+  
+  # If using splines by group, add random effects to
+  # the main level.
+  if (!all(sapply(parse_formula$smooth.spec, 
+      FUN=function(i){i$by}) %in% c('NA'))){
+    
+    by_splines <- parse_formula$smooth.spec[
+      which(sapply(parse_formula$smooth.spec, FUN=function(i){i$by != "NA"}))
+    ]
+    
+    character_re <- lapply(re_fmla, FUN=function(i){strsplit(deparse(i), split = ' \\| ')[[1]]})
+    character_re_group <- sapply(character_re, FUN=function(i){i[2]})
+    
+    if (any(duplicated(character_re_group))){
+      stop('Some random groups are duplicated. Reformulate initial formula.')
+    }
+    
+    for (v in sapply(character_re, FUN=function(i){i[2]})){
+      if (!(is.factor(data[[v]]) | is.character(data[[v]]))){
+        data[[v]] <- as.character(data[[v]])
+      }
+    } 
+    
+    for (b in by_splines){
+      
+      b_term <- b$term
+      b_by <- b$by
+      
+      if (!(is.factor(data[[b_by]]) | is.character(data[[b_by]]))){
+       stop('For now, all v_s spline "by" factors must be characters or factors.') 
+      }
+      
+      # If "by" grouping already used, then add to the RE
+      if (b_by %in% character_re_group){
+        
+        position_b_by <- which(b_by == character_re_group)
+        existing_re_b_by <- character_re[[position_b_by]][1]
+        new_re_b_by <- paste0(unique(c('1', strsplit(existing_re_b_by, split=' \\+ ')[[1]], b_term)), collapse = ' + ')
+        character_re[[position_b_by]][1] <- new_re_b_by
+      }else{
+        # If not, then add a new RE group with a 
+        # random intercept and random slope.
+        character_re <- c(character_re, list(c(paste0('1 + ', b_term), b_by)))
+        character_re_group <- sapply(character_re, FUN=function(i){i[2]})
+      }
+    }
+    
+    old_re <- re_fmla
+    re_fmla <- lapply(character_re, FUN=function(i){str2lang(paste0(i[1], ' | ', i[2]))})
+    
   }
-  # The position that demarcates each random effect.
-  # That is, breaks_for_RE[2] means at that position + 1 does RE2 start.
-  breaks_for_RE <- c(0, cumsum(diff(mk_Z$Gp)))
-  # Dimensionality of \alpha_{j,g}, i.e. 1 if random intercept
-  # 2 if random intercept + random slope
-  d_j <- lengths(names_of_RE)
-  # Number of GROUPs for each random effect.
-  g_j <- diff(mk_Z$Gp) / d_j
+  
+  if (!is.null(re_fmla)){
+    mk_Z <- mkReTrms(re_fmla, data, reorder.terms = FALSE, reorder.vars = FALSE)
+    Z <- t(mk_Z$Zt)
+    
+    p.X <- ncol(X)
+    p.Z <- ncol(Z)
+    
+    ####
+    # Process the REs to get various useful terms.
+    ####
+    # RE names and names of variables included for each.
+    names_of_RE <- mk_Z$cnms
+    
+    number_of_RE <- length(mk_Z$Gp) - 1
+    
+    if ( (number_of_RE < 1) & (length(parse_formula$smooth.spec) == 0) ) {
+      stop("Need to provide at least one random effect or spline...")
+    }
+    # The position that demarcates each random effect.
+    # That is, breaks_for_RE[2] means at that position + 1 does RE2 start.
+    breaks_for_RE <- c(0, cumsum(diff(mk_Z$Gp)))
+    # Dimensionality of \alpha_{j,g}, i.e. 1 if random intercept
+    # 2 if random intercept + random slope
+    d_j <- lengths(names_of_RE)
+    # Number of GROUPs for each random effect.
+    g_j <- diff(mk_Z$Gp) / d_j
+    
+    # Empty vector to build the formatted names for each random effect.
+    fmt_names_Z <- c()
+    init_Z_names <- colnames(Z)
+    for (v in 1:number_of_RE) {
+      name_of_effects_v <- names_of_RE[[v]]
+      
+      mod_name <- rep(name_of_effects_v, g_j[v])
+      
+      levels_of_re <- init_Z_names[(1 + breaks_for_RE[v]):breaks_for_RE[v + 1]]
+      
+      fmt_names_Z <- c(fmt_names_Z, paste0(names(names_of_RE)[v], " @ ", mod_name, " @ ", levels_of_re))
+    }
+    colnames(Z) <- fmt_names_Z
+    cyclical_pos <- lapply(1:number_of_RE, FUN = function(i) {
+      seq(breaks_for_RE[i] + 1, breaks_for_RE[i + 1])
+    })
+  }else{
+    
+    Z <- drop0(Matrix(nrow = nrow(X), ncol = 0))
+    p.X <- ncol(X)
+    p.Z <- 0
+    names_of_RE <- c()
+    number_of_RE <- 0
+    breaks_for_RE <- c(0)
+    d_j <- c()
+    g_j <- c()
+    fmt_names_Z <- c()
+    cyclical_pos <- list()
+    
+    if ( (length(parse_formula$smooth.spec) == 0) ) {
+      stop("Need to provide at least one random effect or spline...")
+    }
 
-  # Empty vector to build the formatted names for each random effect.
-  fmt_names_Z <- c()
-  init_Z_names <- colnames(Z)
-  for (v in 1:number_of_RE) {
-    name_of_effects_v <- names_of_RE[[v]]
-
-    mod_name <- rep(name_of_effects_v, g_j[v])
-
-    levels_of_re <- init_Z_names[(1 + breaks_for_RE[v]):breaks_for_RE[v + 1]]
-
-    fmt_names_Z <- c(fmt_names_Z, paste0(names(names_of_RE)[v], " @ ", mod_name, " @ ", levels_of_re))
   }
-  colnames(Z) <- fmt_names_Z
-  cyclical_pos <- lapply(1:number_of_RE, FUN = function(i) {
-    seq(breaks_for_RE[i] + 1, breaks_for_RE[i + 1])
-  })
-
+  
   M.names <- cbind(unlist(mapply(names_of_RE, g_j, FUN = function(i, j) {
     rep(i, j)
   })))
   M <- cbind(match(M.names[, 1], colnames(X)), rep(1 / g_j, d_j * g_j))
-  M <- sparseMatrix(i = 1:ncol(Z), j = M[, 1], x = M[, 2], dims = c(ncol(Z), ncol(X)))
+  
 
-  M_prime.names <- paste0(rep(names(names_of_RE), g_j * d_j), " @ ", M.names)
-  M_prime <- cbind(match(M_prime.names, unique(M_prime.names)), rep(1 / g_j, d_j * g_j))
-  M_prime <- sparseMatrix(i = 1:ncol(Z), j = M_prime[, 1], x = M_prime[, 2])
-  colnames(M_prime) <- unique(M_prime.names)
-
-  M_prime_one <- M_prime
-  M_prime_one@x <- rep(1, length(M_prime_one@x))
-
-  stopifnot(identical(paste0(rep(names(names_of_RE), d_j), " @ ", unlist(names_of_RE)), colnames(M_prime)))
-
-  M_mu_to_beta <- sparseMatrix(i = 1:sum(d_j), j = match(unlist(names_of_RE), colnames(X)), x = 1, dims = c(sum(d_j), p.X))
+  if (nrow(M) > 0){
+    M <- sparseMatrix(i = 1:ncol(Z), j = M[, 1], x = M[, 2], dims = c(ncol(Z), ncol(X)))
+  }else{
+    M <- drop0(matrix(0, nrow = 0, ncol = ncol(X)))
+  }
+  
+  if (!is.null(names_of_RE)){
+    any_Mprime <- TRUE
+    M_prime.names <- paste0(rep(names(names_of_RE), g_j * d_j), " @ ", M.names)
+    M_prime <- cbind(match(M_prime.names, unique(M_prime.names)), rep(1 / g_j, d_j * g_j))
+    M_prime <- sparseMatrix(i = 1:ncol(Z), j = M_prime[, 1], x = M_prime[, 2])
+    colnames(M_prime) <- unique(M_prime.names)
+    
+    M_prime_one <- M_prime
+    M_prime_one@x <- rep(1, length(M_prime_one@x))
+    
+    stopifnot(identical(paste0(rep(names(names_of_RE), d_j), " @ ", unlist(names_of_RE)), colnames(M_prime)))
+    
+    
+    M_mu_to_beta <- sparseMatrix(i = 1:sum(d_j), j = match(unlist(names_of_RE), colnames(X)), x = 1, dims = c(sum(d_j), p.X))
+    
+    
+  }else{
+    any_Mprime <- FALSE
+    M_prime_one <- M_prime <- drop0(matrix(0, nrow = 0, ncol = 0))
+    M_mu_to_beta <- drop0(matrix(0, nrow = 0, ncol = p.X))
+  }
+  
   colnames(M_mu_to_beta) <- colnames(X)
   rownames(M_mu_to_beta) <- colnames(M_prime)
+  
+  
+  # Extract the Specials
+  
+
+  if (length(parse_formula$smooth.spec) > 0){
+    
+    base_specials <- length(parse_formula$smooth.spec)
+    
+    # Number of splines + one for each "by"...
+    
+    n.specials <- base_specials +
+      sum(sapply(parse_formula$smooth.spec, FUN=function(i){i$by}) != "NA")
+    
+    Z.spline.attr <- as.list(rep(NA, base_specials))
+
+    Z.spline <- as.list(rep(NA, n.specials))
+    Z.spline.size <- rep(NA, n.specials)
+    special_counter <- 1
+    
+    
+    for (i in 1:base_specials){
+      
+      special_i <- parse_formula$smooth.spec[[i]]
+
+      all_splines_i <- vglmer_build_spline(x = data[[special_i$term]], 
+          by = data[[special_i$by]],
+          knots = special_i$knots, type = special_i$type,
+          outer_okay = special_i$outer_okay)
+      
+      Z.spline.attr[[i]] <- c(all_splines_i[[1]]$attr, 
+        list(type = special_i$type, by = special_i$by))
+      
+      spline_counter <- 1
+      for (spline_i in all_splines_i){
+        
+        stopifnot(spline_counter %in% 1:2)
+        
+        colnames(spline_i$x) <- paste0('spline @ ', special_i$term, ' @ ', colnames(spline_i$x))
+        
+        if (spline_counter > 1){
+          spline_name <- paste0('spline-',special_i$term,'-', i, '-int')
+        }else{
+          spline_name <- paste0('spline-', special_i$term, '-', i, '-base')
+        }
+        
+        Z.spline[[special_counter]] <- spline_i$x
+        Z.spline.size[special_counter] <- ncol(spline_i$x)
+        
+        names_of_RE[[spline_name]] <- spline_name
+        number_of_RE <- number_of_RE + 1
+        d_j <- setNames(c(d_j, 1), c(names(d_j), spline_name))
+        g_j <- setNames(c(g_j, ncol(spline_i$x)), c(names(g_j), spline_name))
+        breaks_for_RE <- c(breaks_for_RE, max(breaks_for_RE) + ncol(spline_i$x))
+        fmt_names_Z <- c(fmt_names_Z, colnames(spline_i$x))
+        p.Z <- p.Z + ncol(spline_i$x)
+        spline_counter <- spline_counter + 1
+        special_counter <- special_counter + 1
+      }
+    }
+    
+    cyclical_pos <- lapply(1:number_of_RE, FUN = function(i) {
+      seq(breaks_for_RE[i] + 1, breaks_for_RE[i + 1])
+    })
+    
+    Z.spline <- drop0(do.call('cbind', Z.spline))
+    
+    Z <- drop0(cbind(Z, Z.spline))
+    
+    if (ncol(M_prime) == 0){
+      M_prime <- rbind(M_prime, 
+                       drop0(matrix(0, nrow = ncol(Z.spline), ncol = 0)))
+      M_prime_one <- rbind(M_prime_one, 
+                           drop0(matrix(0, nrow = ncol(Z.spline), ncol = 0)))
+    }else{
+      M_prime <- rbind(M_prime, 
+         drop0(sparseMatrix(i = 1, j = 1, x = 0, 
+         dims = c(ncol(Z.spline), ncol(M_prime)))))
+      M_prime_one <- rbind(M_prime_one, 
+         drop0(sparseMatrix(i = 1, j = 1, x = 0, 
+         dims = c(ncol(Z.spline), ncol(M_prime_one)))))
+    }
+    
+  }else{
+    n.specials <- 0
+    Z.spline.attr <- NULL
+    Z.spline <- NULL
+    Z.spline.size <- NULL
+  }
+
   # List of Lists
   # Outer list: one for RE
   # Inner List: One for each GROUP with its row positions.
-  outer_alpha_RE_positions <- mapply(d_j, g_j, breaks_for_RE[-length(breaks_for_RE)], SIMPLIFY = FALSE, FUN = function(a, b, m) {
-    split(m + seq(1, a * b), rep(1:b, each = a))
+  outer_alpha_RE_positions <- mapply(d_j, g_j, breaks_for_RE[-length(breaks_for_RE)], 
+    SIMPLIFY = FALSE, FUN = function(a, b, m) {
+      split(m + seq(1, a * b), rep(1:b, each = a))
   })
 
   if (anyDuplicated(unlist(outer_alpha_RE_positions)) != 0 | max(unlist(outer_alpha_RE_positions)) != ncol(Z)) {
@@ -402,8 +617,13 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     vi_alpha_mean <- rep(0, ncol(Z))
 
     vi_sigma_alpha <- mapply(d_j, g_j, SIMPLIFY = FALSE, FUN = function(d, g) {
-      rWishart(n = 1, df = g, Sigma = diag(d))[, , 1]
+      if (g >= d){
+        rWishart(n = 1, df = g, Sigma = diag(d))[, , 1]
+      }else{
+        rWishart(n = 1, df = d, Sigma = diag(d))[, , 1]
+      }
     })
+    
   } else if (control$init == "zero") {
     vi_beta_mean <- rep(0, ncol(X))
 
@@ -525,6 +745,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
       vi_pg_c <- sqrt(as.vector(X %*% vi_beta_mean + Z %*% vi_alpha_mean - vi_r_mu)^2 + beta_quad + alpha_quad + vi_r_sigma)
     }
     vi_pg_mean <- vi_pg_b / (2 * vi_pg_c) * tanh(vi_pg_c / 2)
+    
     diag_vi_pg_mean <- sparseMatrix(i = 1:N, j = 1:N, x = vi_pg_mean)
     if (debug_ELBO & it != 1) {
       debug_ELBO.1 <- calculate_ELBO(
@@ -576,6 +797,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
         as(i, "dgCMatrix")
       })
     }
+    
     if (do_timing) {
       toc(quiet = verbose_time, log = T)
       tic("Update Beta")
@@ -874,12 +1096,16 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
       )
     }
 
-    if (parameter_expansion == "mean") {
+    if (parameter_expansion == "none" | any_Mprime) {
+      accept.PX <- TRUE
+    } else if (parameter_expansion == "mean") {
+      
       if (do_timing) {
         tic("Update PX")
       }
       # Do a simple mean adjusted expansion.
       # Get the mean of each random effect.
+      
       vi_mu_j <- t(M_prime) %*% vi_alpha_mean
 
       # Remove the "excess mean" mu_j from each random effect \alpha_{j,g}
@@ -897,6 +1123,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
         toc(quiet = verbose_time, log = TRUE)
       }
     } else if (parameter_expansion == "translation") {
+      
       stop("translation not yet implemented")
       # prior.ELBO <- calculate_ELBO(ELBO_type = ELBO_type,
       #   factorization_method = factorization_method,
@@ -1016,8 +1243,6 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
       #
       #
       # rownames(vi_alpha_mean) <- fmt_names_Z
-    } else if (parameter_expansion == "none") {
-      accept.PX <- TRUE
     } else {
       stop("Invalid PX method.")
     }
@@ -1065,7 +1290,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
       #   final.ELBO <- prior.ELBO
       # }
     }
-
+    
     if (do_timing) {
       toc(quiet = verbose_time, log = T)
       tic("Final Cleanup")
@@ -1196,7 +1421,13 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
   if (control$return_data) {
     output$data <- list(X = X, Z = Z, y = y, trials = trials)
   }
-  output$formula <- formula
+  
+  output$spline <- list(attr = Z.spline.attr, size = Z.spline.size)
+
+  output$formula <- list(formula = formula, 
+     re = re_fmla, fe = fe_fmla,
+     interpret_gam = parse_formula)
+  
   output$alpha$dia.var <- unlist(lapply(variance_by_alpha_jg$variance_jg, FUN = function(i) {
     as.vector(sapply(i, diag))
   }))
@@ -1224,6 +1455,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     d_j = d_j, g_j = g_j
   )
   class(output) <- "vglmer"
+  
   return(output)
 }
 
@@ -1280,13 +1512,13 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
 #' @importFrom checkmate assert check_double check_logical check_choice check_int check_integerish
 #' @export
 vglmer_control <- function(iterations = 1000,
-                           prior_variance = "mean_exists", factorization_method = "weak",
-                           tolerance_elbo = 1e-8, tolerance_parameters = 1e-5,
-                           prevent_degeneracy = FALSE, force_whole = TRUE, verbose_time = TRUE,
-                           parameter_expansion = "mean", random_seed = 1, do_timing = FALSE,
-                           debug_param = FALSE, return_data = FALSE, linpred_method = "joint",
-                           vi_r_method = "VEM", vi_r_val = NA,
-                           debug_ELBO = FALSE, print_prog = NULL, quiet = T, init = "EM") {
+   prior_variance = "mean_exists", factorization_method = "weak",
+   tolerance_elbo = 1e-8, tolerance_parameters = 1e-5,
+   prevent_degeneracy = FALSE, force_whole = TRUE, verbose_time = TRUE,
+   parameter_expansion = "mean", random_seed = 1, do_timing = FALSE,
+   debug_param = FALSE, return_data = FALSE, linpred_method = "joint",
+   vi_r_method = "VEM", vi_r_val = NA, verify_columns = FALSE,
+   debug_ELBO = FALSE, print_prog = NULL, quiet = T, init = "EM") {
   # use checkmate package to verify arguments
   assert(
     check_integerish(iterations, lower = 1),
@@ -1313,7 +1545,7 @@ vglmer_control <- function(iterations = 1000,
   output <- namedList(
     iterations, prior_variance, factorization_method,
     tolerance_elbo, tolerance_parameters,
-    prevent_degeneracy, force_whole, verbose_time,
+    prevent_degeneracy, force_whole, verbose_time, verify_columns,
     parameter_expansion, random_seed, do_timing, debug_param, return_data,
     linpred_method, vi_r_method, vi_r_val, debug_ELBO, print_prog, quiet, init
   )

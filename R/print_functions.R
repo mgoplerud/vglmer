@@ -106,7 +106,7 @@ print.vglmer <- function(x, ...) {
   J <- length(x$sigma$cov)
 
   cat(paste0("Formula: J = ", J, ", |Z| = ", p.Z, ", |X| = ", p.X, "\n\n"))
-  cat(paste(format(x$formula), collapse = "\n\n"))
+  cat(paste(format(formula(x)), collapse = "\n\n"))
   cat("\n\n")
   if (missing_obs > 0) {
     missing_info <- paste0("after ", missing_obs, " deleted because of missing data and")
@@ -185,8 +185,14 @@ summary.vglmer <- function(object, display_re = TRUE, ...) {
 
 #' @rdname vglmer-class
 #' @export
-formula.vglmer <- function(x, ...) {
-  x$formula
+formula.vglmer <- function(x, type = 'original', ...) {
+  if (type == 'original'){
+    x$formula$formula
+  }else if (type == 'fe'){
+    x$formula$fe
+  }else if (type == 're'){
+    x$formula$re
+  }else{stop('type must be "original", "fe", or "re".')}
 }
 
 #' @importFrom stats qnorm
@@ -212,4 +218,20 @@ format_vglmer <- function(object) {
   alpha.output <- data.frame(name = rownames(object$alpha$mean), mean = as.vector(object$alpha$mean), var = as.vector(object$alpha$dia.var), stringsAsFactors = F)
   output <- bind_rows(beta.output, alpha.output)
   return(output)
+}
+
+#' Get ELBO from fitted variational model
+#' 
+#' @param type Default is "final" giving ELBO at convergence. "trajectory" gives
+#'   full sequence of ELBOs at each iteration.
+#' @export
+
+ELBO <- function(x, type = 'final'){
+  if (type == 'final'){
+    x$ELBO$ELBO
+  }else if (type == 'trajectory'){
+    x$ELBO_trajectory$ELBO
+  }else{
+    stop('type must be "final" or "trajectory".')
+  }
 }
