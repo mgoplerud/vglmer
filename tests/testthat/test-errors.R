@@ -89,3 +89,28 @@ test_that('vglmer parses environment correctly', {
   
 
 })
+
+test_that("vglmer can run with 'debug' settings", {
+  N <- 1000
+  G <- 100
+  G_names <- paste(sample(letters, G, replace = T), 1:G)
+  x <- rnorm(N)
+  g <- sample(G_names, N, replace = T)
+  alpha <- rnorm(G)
+  
+  y <- rbinom(n = N, size = 1, prob = plogis(-1 + x + alpha[match(g, G_names)]))
+  
+  # Debug to collect parameters
+  est_vglmer <- vglmer(y ~ x + (1 | g), data = data.frame(y = y, x = x, g = g),
+         family = 'binomial',
+         control = vglmer_control(debug_param = TRUE))  
+  
+  expect_true(all(c('beta', 'alpha') %in% names(est_vglmer$parameter_trajectory)))
+
+  est_vglmer <- vglmer(y ~ x + (1 | g), 
+      data = data.frame(y = y, x = x, g = g),
+      family = 'binomial',
+      control = vglmer_control(debug_ELBO = TRUE))
+  expect_true(!is.null(est_vglmer$debug_ELBO))
+  
+})

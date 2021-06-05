@@ -1,6 +1,7 @@
 context("Test various update methods")
 
 test_that("Joint vs Cyclical Update", {
+  
   N <- 1000
   G <- 20
   x <- rnorm(N)
@@ -29,7 +30,10 @@ test_that("Joint vs Cyclical Update", {
     if (v == "strong") {
       ex_vglmer_normal <- vglmer(
         formula = y ~ x + (1 | g), family = "binomial",
-        data = NULL, control = vglmer_control(factorization_method = v, linpred_method = "solve_normal", init = "zero")
+        data = NULL, 
+        control = vglmer_control(factorization_method = v, 
+           do_SQUAREM = FALSE,
+          linpred_method = "solve_normal", init = "zero")
       )
 
       fmt_vglmer_normal <- format_vglmer(ex_vglmer_normal)
@@ -40,6 +44,7 @@ test_that("Joint vs Cyclical Update", {
 
 
 test_that("Compare PX vs Non-PX", {
+  
   N <- 1000
   G <- 20
   x <- rnorm(N)
@@ -88,7 +93,9 @@ test_that("Compare VI r methods", {
 
   list_output <- list()
   list_r <- list()
+  
   for (v in c("VEM", "delta", "Laplace")) {
+    
     example_vglmer <- vglmer(
       formula = y ~ x + (1 | g), data = data,
       family = "negbin",

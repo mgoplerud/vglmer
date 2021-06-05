@@ -1,6 +1,7 @@
 context("Match glmer")
 
 test_that("Compare against lmer", {
+  
   N <- 1000
   G <- 100
   x <- rnorm(N)

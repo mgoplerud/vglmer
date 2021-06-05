@@ -1,6 +1,7 @@
 context("Test Predict")
 
 test_that("Prediction Matches Manual and (nearly) glmer", {
+  
   N <- 1000
   G <- 10
   x <- rnorm(N)
@@ -19,7 +20,8 @@ test_that("Prediction Matches Manual and (nearly) glmer", {
   )
 
   glmer_predict <- predict(est_glmer)
-  def_predict <- predict(example_vglmer, newdata = data.frame(y = y, x = x, g = g))
+  def_predict <- predict(example_vglmer, 
+    newdata = data.frame(y = y, x = x, g = g, g2 = g2))
 
   expect_gt(
     cor(def_predict, glmer_predict), 0.95

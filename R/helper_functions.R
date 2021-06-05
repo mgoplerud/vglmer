@@ -40,17 +40,21 @@ safe_convert <- function(x){
 #' @import Matrix
 #' @importFrom methods as
 make_mapping_alpha <- function(sigma, px.R = FALSE) {
-  sg <<- sigma
+  
   if (!px.R) {
     lapply(sigma, FUN = function(i) {
+      
       sparse_i <- safe_convert(i)
       sparse_i <- sparse_i[sparse_i[, 1] >= sparse_i[, 2], , drop = F]
       return(sparse_i)
+      
     })
   } else {
     lapply(sigma, FUN = function(i) {
+      
       sparse_i <- safe_convert(i)
       return(sparse_i)
+      
     })
   }
 }
@@ -347,6 +351,7 @@ calculate_ELBO <- function(family, ELBO_type, factorization_method,
     entropy_3 <- sum(entropy_3)
 
   } else if (ELBO_type == "profiled") {
+    
     vi_r_var <- (exp(vi_r_sigma) - 1) * vi_r_mean^2
 
     psi <- ex_XBZA + vi_r_mu
@@ -453,6 +458,7 @@ calculate_ELBO <- function(family, ELBO_type, factorization_method,
   
   entropy <- entropy_1 + entropy_2 + entropy_3 + entropy_4
   ELBO <- entropy + logcomplete
+
   return(data.frame(
     ELBO, logcomplete, entropy, logcomplete_1,
     logcomplete_2, logcomplete_3, entropy_1, entropy_2, entropy_3, entropy_4

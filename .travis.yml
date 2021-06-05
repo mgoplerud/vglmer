@@ -4,7 +4,7 @@ cache: packages
 warnings_are_errors: false
 
 after_success:
-  - Rscript -e 'covr::codecov()'
+  - travis_wait 35 Rscript -e 'covr::codecov()'
 
 notifications:
   email:

@@ -2,7 +2,7 @@
 
 *Note this version (SQUAREM branch) is experimental and will change considerably in the coming weeks; please install the master branch*
 
-A package to estimate non-linear hierarchical models using the variational algorithms described in [Goplerud (2020)](https://j.mp/goplerud_MAVB). It also provides the option to improve an initial approximation using marginally augmented variational Bayes (MAVB) also described in the same paper. It can be installed using `devtools`
+A package to estimate non-linear hierarchical models using the variational algorithms described in [Goplerud (2020)](https://arxiv.org/abs/2007.12300). It also provides the option to improve an initial approximation using marginally augmented variational Bayes (MAVB) also described in the same paper. It can be installed using `devtools`
 ```
 library(devtools); devtools::install_github("mgoplerud/vglmer", dependencies = TRUE)
 ```

@@ -19,7 +19,7 @@ test_that("Test generic methods (fixed, ranef, coef, vcov)", {
 
   expect_equivalent(coef(example_vglmer), as.vector(example_vglmer$beta$mean))
   expect_equivalent(fixef(example_vglmer), coef(example_vglmer))
-  expect_equivalent(vcov(example_vglmer), example_vglmer$beta$var)
+  expect_equivalent(vcov(example_vglmer), as.matrix(example_vglmer$beta$var))
 
   generic_ranef <- ranef(example_vglmer)
 
@@ -48,3 +48,4 @@ test_that("Test that print and summary run", {
   save_print <- invisible(capture.output(print(example_vglmer)))
   save_summary <- invisible(capture.output(summary(example_vglmer)))
 })
+
