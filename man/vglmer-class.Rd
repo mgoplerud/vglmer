@@ -3,7 +3,9 @@
 \name{vglmer-class}
 \alias{vglmer-class}
 \alias{fixef.vglmer}
+\alias{sigma.vglmer}
 \alias{ranef.vglmer}
+\alias{ELBO}
 \alias{coef.vglmer}
 \alias{vcov.vglmer}
 \alias{print.vglmer}
@@ -14,7 +16,11 @@
 \usage{
 \method{fixef}{vglmer}(object, ...)
 
+\method{sigma}{vglmer}(object, ...)
+
 \method{ranef}{vglmer}(object, ...)
+
+ELBO(object)
 
 \method{coef}{vglmer}(object, ...)
 

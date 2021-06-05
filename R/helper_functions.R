@@ -24,19 +24,37 @@
 #   return(x)
 # }
 
+safe_convert <- function(x){
+  if (isDiagonal(x)){
+    out <- diag(x)
+    lout <- seq_len(length(out)) - 1
+    out <- cbind(lout, lout, out)
+    colnames(out) <- c('i', 'j', 'x')
+    # out <- with(attributes(as(as(as.matrix(x), "sparseMatrix"), "dgTMatrix")), cbind(i, j, x))
+  }else{
+    out <- with(attributes(as(as(x, "sparseMatrix"), "dgTMatrix")), cbind(i, j, x))
+  }
+  return(out)
+}
+
 #' @import Matrix
 #' @importFrom methods as
 make_mapping_alpha <- function(sigma, px.R = FALSE) {
+  
   if (!px.R) {
     lapply(sigma, FUN = function(i) {
-      sparse_i <- with(attributes(as(as(i, "sparseMatrix"), "dgTMatrix")), cbind(i, j, x))
+      
+      sparse_i <- safe_convert(i)
       sparse_i <- sparse_i[sparse_i[, 1] >= sparse_i[, 2], , drop = F]
       return(sparse_i)
+      
     })
   } else {
     lapply(sigma, FUN = function(i) {
-      sparse_i <- with(attributes(as(as(i, "sparseMatrix"), "dgTMatrix")), cbind(i, j, x))
+      
+      sparse_i <- safe_convert(i)
       return(sparse_i)
+      
     })
   }
 }
@@ -142,7 +160,10 @@ EM_prelim_logit <- function(X, Z, s, pg_b, iter, ridge = 2) {
     }
     EM_pg_diag <- sparseMatrix(i = 1:N, j = 1:N, x = EM_pg_mean)
 
-    EM_beta <- LinRegChol(X = jointXZ, omega = EM_pg_diag, y = s, prior_precision = EM_variance)$mean
+    EM_beta <- solve(Matrix::Cholesky(  t(jointXZ) %*% EM_pg_diag %*% jointXZ + EM_variance),
+                               t(jointXZ) %*% (s) )
+    
+    # EM_beta <- LinRegChol(X = jointXZ, omega = EM_pg_diag, y = s, prior_precision = EM_variance)$mean
   }
   output <- list(beta = EM_beta[1:ncol(X)], alpha = EM_beta[-1:-ncol(X)])
   return(output)
@@ -178,7 +199,11 @@ EM_prelim_nb <- function(X, Z, y, est_r, iter, ridge = 2) {
     }
 
     adj_out <- (y - est_r) / 2 + pg_mean * log(est_r)
-    EM_beta <- LinRegChol(X = jointXZ, omega = sparseMatrix(i = 1:N, j = 1:N, x = pg_mean), y = adj_out, prior_precision = EM_variance)$mean
+    # EM_beta <- LinRegChol(X = jointXZ, omega = sparseMatrix(i = 1:N, j = 1:N, x = pg_mean), y = adj_out, prior_precision = EM_variance)$mean
+    
+    EM_beta <- solve(Matrix::Cholesky(  t(jointXZ) %*% sparseMatrix(i = 1:N, j = 1:N, x = pg_mean) %*% jointXZ + EM_variance),
+                     t(jointXZ) %*% (adj_out) )
+    
   }
 
   output <- list(beta = EM_beta[1:ncol(X)], alpha = EM_beta[-1:-ncol(X)])
@@ -191,40 +216,60 @@ make_log_invwishart_constant <- function(nu, Phi) {
   return(output)
 }
 
-calculate_ELBO <- function(ELBO_type, factorization_method,
-                           # Fixed constants or priors
-                           d_j, g_j, prior_sigma_alpha_phi, prior_sigma_alpha_nu, iw_prior_constant, choose_term,
-                           # Data
-                           X, Z, s, y,
-                           # PolyaGamma Parameters
-                           vi_pg_b, vi_pg_mean, vi_pg_c,
-                           # Sigma Parameters
-                           vi_sigma_alpha, vi_sigma_alpha_nu, vi_sigma_outer_alpha,
-                           # Beta Parameters / Alpha Parameters
-                           vi_beta_mean, vi_beta_decomp,
-                           vi_alpha_mean, vi_alpha_decomp,
-                           log_det_beta_var, log_det_alpha_var,
-                           log_det_joint_var = NULL,
-                           vi_joint_decomp = NULL,
-                           # r Parameters
-                           vi_r_mu = NULL, vi_r_mean = NULL,
-                           vi_r_sigma = NULL) {
+calculate_ELBO <- function(family, ELBO_type, factorization_method,
+     # Fixed constants or priors
+     d_j, g_j, prior_sigma_alpha_phi, prior_sigma_alpha_nu, 
+     iw_prior_constant, choose_term,
+     # Data
+     X, Z, s, y,
+     # PolyaGamma Parameters
+     vi_pg_b, vi_pg_mean, vi_pg_c,
+     # Sigma Parameters
+     vi_sigma_alpha, vi_sigma_alpha_nu, vi_sigma_outer_alpha,
+     # Beta Parameters / Alpha Parameters
+     vi_beta_mean, vi_beta_decomp,
+     vi_alpha_mean, vi_alpha_decomp,
+     log_det_beta_var, log_det_alpha_var,
+     log_det_joint_var = NULL,
+     vi_joint_decomp = NULL,
+     # r Parameters
+     vi_r_mu = NULL, vi_r_mean = NULL,
+     vi_r_sigma = NULL,
+     #linear parameters
+     vi_sigmasq_a = NULL, vi_sigmasq_b = NULL,
+     vi_sigmasq_prior_a = NULL, vi_sigmasq_prior_b = NULL,
+     # huang_wand parameters
+     do_huangwand = NULL, vi_a_a_jp = NULL, vi_a_b_jp = NULL,
+     vi_a_nu_jp = NULL, vi_a_APRIOR_jp = NULL
+  ) {
   ####
   ## PREPARE INTERMEDIATE QUANTITES
   ###
   N <- nrow(X)
   # linear predictor: E[XB + ZA - log(r)]
-  ex_XBZA <- (X %*% vi_beta_mean + Z %*% vi_alpha_mean) - vi_r_mu
+  if (family == 'negbin'){
+    ex_XBZA <- (X %*% vi_beta_mean + Z %*% vi_alpha_mean) - vi_r_mu
+  }else{
+    ex_XBZA <- (X %*% vi_beta_mean + Z %*% vi_alpha_mean)
+  }
   # quadratic var, i.e. Var(x_i^T beta + z_i^T alpha)
   if (factorization_method == "weak") {
     if (is.null(vi_joint_decomp) | is.null(log_det_joint_var)) {
       stop("Need to provide joint decomposition for ELBO weak")
     }
-    var_XBZA <- rowSums((cbind(X, Z) %*% t(vi_joint_decomp))^2) + vi_r_sigma
+    
+    var_XBZA <- rowSums((cbind(X, Z) %*% t(vi_joint_decomp))^2)
+    
+    if (family == 'negbin'){
+      var_XBZA <- var_XBZA + vi_r_sigma
+    }
   } else {
     beta_quad <- rowSums((X %*% t(vi_beta_decomp))^2)
     alpha_quad <- rowSums((Z %*% t(vi_alpha_decomp))^2)
-    var_XBZA <- beta_quad + alpha_quad + vi_r_sigma
+    var_XBZA <- beta_quad + alpha_quad
+    if (family == 'negbin'){
+      var_XBZA <- var_XBZA + vi_r_sigma 
+    }
   }
   # Prepare vi_sigma_alpha
   moments_sigma_alpha <- mapply(vi_sigma_alpha, vi_sigma_alpha_nu, d_j, SIMPLIFY = FALSE, FUN = function(phi, nu, d) {
@@ -246,26 +291,38 @@ calculate_ELBO <- function(ELBO_type, factorization_method,
   ## GET the terms for the expectation
   ## of the log-complete data given the variational distribution.
   if (ELBO_type == "augmented") {
-    # Get the terms for the p(y, w | alpha, beta, Sigma) EXCLUDING the intractable PG.
-    logcomplete_1 <- -sum(vi_pg_b) * log(2) +
-      as.vector(t(s) %*% ex_XBZA - 1 / 2 * t(ex_XBZA) %*% Diagonal(x = vi_pg_mean) %*% ex_XBZA) +
-      -1 / 2 * sum(var_XBZA * vi_pg_mean)
+    if (family == "linear") {
+      e_ln_sigmasq <- log(vi_sigmasq_b) - digamma(vi_sigmasq_a)
+      e_inv_sigmasq <- vi_sigmasq_a/vi_sigmasq_b
+      logcomplete_1 <- sum(-1/2 * ((y - ex_XBZA)^2 + var_XBZA) * e_inv_sigmasq) +
+        -1/2 * length(y) * (log(2 * pi) + e_ln_sigmasq)
+      #Add log prior
+      logcomplete_1 <- logcomplete_1 + (-vi_sigmasq_prior_a - 1) * e_ln_sigmasq +
+        -vi_sigmasq_prior_b * e_inv_sigmasq
+    } else {
+      # Get the terms for the p(y, w | alpha, beta, Sigma) EXCLUDING the intractable PG.
+      logcomplete_1 <- -sum(vi_pg_b) * log(2) +
+        as.vector(t(s) %*% ex_XBZA - 1 / 2 * t(ex_XBZA) %*% Diagonal(x = vi_pg_mean) %*% ex_XBZA) +
+        -1 / 2 * sum(var_XBZA * vi_pg_mean)
+    }
     # Get the terms for p(alpha | Sigma)
 
-    logcomplete_2 <- sum(-d_j * g_j / 2 * log(2 * pi) - g_j / 2 * ln_det_sigma_alpha) +
-      -1 / 2 * sum(mapply(inv_sigma_alpha, vi_sigma_outer_alpha, FUN = function(a, b) {
-        sum(diag(a %*% b))
-      }))
+    if (family == 'linear'){
+      e_ln_sigmasq <- log(vi_sigmasq_b) - digamma(vi_sigmasq_a)
+      
+      logcomplete_2 <- sum(-d_j * g_j / 2 * log(2 * pi) - g_j / 2 * ln_det_sigma_alpha) +
+        -e_inv_sigmasq * 1 / 2 * sum(mapply(inv_sigma_alpha, vi_sigma_outer_alpha, FUN = function(a, b) {
+          sum(diag(a %*% b))
+        }))
+      logcomplete_2 <-  logcomplete_2 +
+        -1/2 * sum(d_j * g_j) * e_ln_sigmasq
+    }else{
+      logcomplete_2 <- sum(-d_j * g_j / 2 * log(2 * pi) - g_j / 2 * ln_det_sigma_alpha) +
+        -1 / 2 * sum(mapply(inv_sigma_alpha, vi_sigma_outer_alpha, FUN = function(a, b) {
+          sum(diag(a %*% b))
+        }))
+    }
 
-    # Get the terms for the final priors!
-    logcomplete_3 <- 0 + # flat prior on beta
-      sum(
-        iw_prior_constant +
-          -(prior_sigma_alpha_nu + d_j + 1) / 2 * ln_det_sigma_alpha +
-          -1 / 2 * mapply(prior_sigma_alpha_phi, inv_sigma_alpha, FUN = function(a, b) {
-            sum(diag(a %*% b))
-          })
-      )
     ## GET THE ENTROPY
     # Entropy for p(beta,alpha)
     if (factorization_method == "weak") {
@@ -275,8 +332,14 @@ calculate_ELBO <- function(ELBO_type, factorization_method,
       entropy_1 <- ncol(vi_beta_decomp) / 2 * log(2 * pi * exp(1)) + 1 / 2 * log_det_beta_var +
         ncol(vi_alpha_decomp) / 2 * log(2 * pi * exp(1)) + 1 / 2 * log_det_alpha_var
     }
-    # Entropy for Polya-Gamma EXCLUDING intractable term that cancels
-    entropy_2 <- sum(vi_pg_b * vi_pg_c / 4 * tanh(vi_pg_c / 2) - vi_pg_b * log(cosh(vi_pg_c / 2)))
+    #ENTROPY FOR LINK SPECIFIC PARAMETERS
+    if (family == 'linear'){
+      entropy_2 <- vi_sigmasq_a + log(vi_sigmasq_b) + lgamma(vi_sigmasq_a) + 
+        -(vi_sigmasq_a + 1) * digamma(vi_sigmasq_a)
+    }else{
+      # Entropy for Polya-Gamma EXCLUDING intractable term that cancels
+      entropy_2 <- sum(vi_pg_b * vi_pg_c / 4 * tanh(vi_pg_c / 2) - vi_pg_b * log(cosh(vi_pg_c / 2)))
+    }
     # Entropy Wisharts
     entropy_3 <- -mapply(vi_sigma_alpha_nu, vi_sigma_alpha, FUN = function(nu, Phi) {
       make_log_invwishart_constant(nu = nu, Phi = Phi)
@@ -287,9 +350,8 @@ calculate_ELBO <- function(ELBO_type, factorization_method,
       })
     entropy_3 <- sum(entropy_3)
 
-    logcomplete <- logcomplete_1 + logcomplete_2 + logcomplete_3
-    logcomplete <- logcomplete + choose_term
   } else if (ELBO_type == "profiled") {
+    
     vi_r_var <- (exp(vi_r_sigma) - 1) * vi_r_mean^2
 
     psi <- ex_XBZA + vi_r_mu
@@ -309,14 +371,6 @@ calculate_ELBO <- function(ELBO_type, factorization_method,
       -1 / 2 * sum(mapply(inv_sigma_alpha, vi_sigma_outer_alpha, FUN = function(a, b) {
         sum(diag(a %*% b))
       }))
-    logcomplete_3 <- 0 + # flat prior on beta
-      sum(
-        iw_prior_constant +
-          -(prior_sigma_alpha_nu + d_j + 1) / 2 * ln_det_sigma_alpha +
-          -1 / 2 * mapply(prior_sigma_alpha_phi, inv_sigma_alpha, FUN = function(a, b) {
-            sum(diag(a %*% b))
-          })
-      )
     if (factorization_method == "weak") {
       entropy_1 <- ncol(vi_joint_decomp) / 2 * log(2 * pi * exp(1)) +
         1 / 2 * log_det_joint_var
@@ -330,27 +384,84 @@ calculate_ELBO <- function(ELBO_type, factorization_method,
     } else {
       entropy_2 <- 1 / 2 * log(2 * pi * exp(1) * vi_r_sigma)
     }
-    # Entropy Wisharts
-    entropy_3 <- -mapply(vi_sigma_alpha_nu, vi_sigma_alpha, FUN = function(nu, Phi) {
-      make_log_invwishart_constant(nu = nu, Phi = Phi)
-    }) +
-      (vi_sigma_alpha_nu + d_j + 1) / 2 * ln_det_sigma_alpha +
-      1 / 2 * mapply(vi_sigma_alpha, inv_sigma_alpha, FUN = function(a, b) {
-        sum(diag(a %*% b))
-      })
-    entropy_3 <- sum(entropy_3)
 
-    logcomplete <- logcomplete_1 + logcomplete_2 + logcomplete_3
   } else {
     stop("ELBO must be profiled or augmented")
   }
-
-  entropy <- entropy_1 + entropy_2 + entropy_3
+  ###############
+  # Log Complete and Entropy for p(Sigma_j) or similar
+  ###############
+  if (do_huangwand){
+    E_ln_vi_a <- mapply(vi_a_a_jp, vi_a_b_jp, FUN=function(tilde.a, tilde.b){
+      sum(log(tilde.b) - digamma(tilde.a))
+    })
+    E_inv_v_a <- mapply(vi_a_a_jp, vi_a_b_jp, vi_a_nu_jp, SIMPLIFY = FALSE, FUN=function(tilde.a, tilde.b, nu){
+      2 * nu * Diagonal(x = tilde.a/tilde.b)
+    })
+    logcomplete_3 <- 0 + # flat prior on beta
+      sum(
+        iw_prior_constant +
+          - (vi_a_nu_jp + d_j - 1)/2 * (d_j * log(2 * vi_a_nu_jp) + E_ln_vi_a) +
+          -(2 * d_j + vi_a_nu_jp) / 2 * ln_det_sigma_alpha +
+          -1 / 2 * mapply(E_inv_v_a, inv_sigma_alpha, FUN = function(a, b) {
+            sum(diag(a %*% b))
+          })
+      )
+    # inv_sigma_alpha <<- inv_sigma_alpha
+    # iw_prior_constant <<- iw_prior_constant
+    # ln_det_sigma_alpha <<- ln_det_sigma_alpha
+    # d_j <<- d_j; vi_a_a_jp <<- vi_a_a_jp
+    # vi_a_b_jp <<- vi_a_b_jp
+    # E_ln_vi_a <<- E_ln_vi_a
+    # vi_a_APRIOR_jp <<- vi_a_APRIOR_jp
+    logcomplete_3_a <- mapply(d_j, vi_a_a_jp, vi_a_b_jp, E_ln_vi_a, 
+        vi_a_APRIOR_jp, 
+        FUN=function(d, tilde.a, tilde.b, E_ln_vi_a.j, APRIOR.j){
+      1/2 * sum(log(1/APRIOR.j^2)) - d * lgamma(1/2) - 3/2 * E_ln_vi_a.j +
+        sum(-1/APRIOR.j^2 * tilde.a/tilde.b)
+    })
+    logcomplete_3 <- logcomplete_3 + sum(logcomplete_3_a)
+  }else{
+    logcomplete_3 <- 0 + # flat prior on beta
+      sum(
+        iw_prior_constant +
+          -(prior_sigma_alpha_nu + d_j + 1) / 2 * ln_det_sigma_alpha +
+          -1 / 2 * mapply(prior_sigma_alpha_phi, inv_sigma_alpha, FUN = function(a, b) {
+            sum(diag(a %*% b))
+          })
+      )
+  }
+  
+  entropy_3 <- -mapply(vi_sigma_alpha_nu, vi_sigma_alpha, FUN = function(nu, Phi) {
+    make_log_invwishart_constant(nu = nu, Phi = Phi)
+  }) +
+    (vi_sigma_alpha_nu + d_j + 1) / 2 * ln_det_sigma_alpha +
+    1 / 2 * mapply(vi_sigma_alpha, inv_sigma_alpha, FUN = function(a, b) {
+      sum(diag(a %*% b))
+    })
+  entropy_3 <- sum(entropy_3)
+  #########
+  # Optional Entropy if using Huang and Wand (2013) prior
+  #########
+  if (do_huangwand){
+    entropy_4 <- sum(mapply(vi_a_a_jp, vi_a_b_jp, FUN=function(tilde.a, tilde.b){
+      sum(tilde.a + log(tilde.b) + lgamma(tilde.a) - (1 + tilde.a) * digamma(tilde.a))
+    }))
+  }else{
+    entropy_4 <- 0
+  }
+  
+  ###Combine all of the terms together
+  
+  logcomplete <- logcomplete_1 + logcomplete_2 + logcomplete_3 +
+    choose_term
+  
+  entropy <- entropy_1 + entropy_2 + entropy_3 + entropy_4
   ELBO <- entropy + logcomplete
 
   return(data.frame(
     ELBO, logcomplete, entropy, logcomplete_1,
-    logcomplete_2, logcomplete_3, entropy_1, entropy_2, entropy_3
+    logcomplete_2, logcomplete_3, entropy_1, entropy_2, entropy_3, entropy_4
   ))
 }
 
@@ -512,3 +623,22 @@ VEM.PELBO.r_hessian <- function(ln_r, y, psi, zVz) {
 
   return(deriv_normcon + deriv_lncosh + deriv_prelim)
 }
+
+#\sum_{j,g} E[tr(\alpha_{j,g}^T \Sigma_j^{-1} \alpha_{j,g})]
+expect_alpha_prior_kernel <- function(vi_sigma_alpha, vi_sigma_alpha_nu, vi_sigma_outer_alpha, d_j){
+  
+  moments_sigma_alpha <- mapply(vi_sigma_alpha, vi_sigma_alpha_nu, 
+    d_j, SIMPLIFY = FALSE, FUN = function(phi, nu, d) {
+    inv_phi <- solve(phi)
+    
+    sigma.inv <- nu * inv_phi
+    
+    return(list(sigma.inv = sigma.inv))
+  })
+  
+  inv_sigma_alpha <- lapply(moments_sigma_alpha, FUN = function(i) {i$sigma.inv})
+  
+  out <- sum(mapply(inv_sigma_alpha, vi_sigma_outer_alpha, FUN = function(a, b) {sum(diag(a %*% b))}))
+  
+  return(out)
+}	

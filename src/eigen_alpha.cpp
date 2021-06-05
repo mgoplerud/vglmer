@@ -24,16 +24,23 @@ using namespace Rcpp;
 //' @param omega Polya-Gamma weights
 //' @param prior_precision Prior Precision for Regression
 //' @param y Outcome
+//' @param save_chol
 // [[Rcpp::export]]
 List LinRegChol(
      const Eigen::MappedSparseMatrix<double> X,
      const Eigen::MappedSparseMatrix<double> omega,
      const Eigen::MappedSparseMatrix<double> prior_precision,
-     const Eigen::Map<Eigen::VectorXd> y
+     const Eigen::Map<Eigen::VectorXd> y,
+     const bool save_chol = true
   ){
   Eigen::SparseMatrix<double> adj_X = X.adjoint();
   Eigen::SimplicialLLT<Eigen::SparseMatrix<double> > Ch(adj_X * omega * X + prior_precision);
   Eigen::VectorXd mean = Ch.solve(adj_X * y);
+  if (save_chol == false){
+    return List::create(
+      Rcpp::Named("mean") = mean
+    );
+  }
   //Extract L to get the transformation of the std.normal
   //Into the correct form of N(0, Q^{-1}) and add the mean.
   Eigen::SparseMatrix<double> lower_l = Ch.matrixL();
@@ -132,5 +139,4 @@ List calculate_expected_outer_alpha(
     Rcpp::Named("mu_j") = mu_alpha
   );
 }
-
 

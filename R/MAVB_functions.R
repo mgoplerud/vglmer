@@ -130,40 +130,47 @@ predict_MAVB <- function(object, newdata, samples = 0, samples_only = FALSE,
 
 #' @import lme4
 get_RE_groups <- function(formula, data) {
-  stop("Figure out workaround for lme4:::")
-  # bars <- findbars(formula)
-  # names(bars) <- lme4:::barnames(bars)
-  # fr <- model.frame(subbars(formula), data = data)
-  # blist <- lapply(bars, simple_blist, fr, drop.unused.levels = F, reorder.vars = FALSE)
-  # blist <- lapply(blist, FUN=function(i){i[c('ff', 'mm')]})
-  #
-  # ff <- lapply(blist, FUN=function(i){i$ff})
-  # ff <- lapply(ff, FUN=function(i){match(i, levels(i))})
-  # mm <- lapply(blist, FUN=function(i){i$mm})
-  # return(list(factor = ff, design = mm))
+  
+  bars <- findbars(formula)
+  if (is.null(bars)){# Usually if only splines used, then NA.
+    return(list(factor = NA, design = NA))
+  }  
+  
+  #lme4:::barnames -> not exported so used here instead.
+  # names(bars) <- vapply(bars, function(x) paste(deparse(x, 500L)(x[[3]]), "")
+  names(bars) <- lme4:::barnames(bars)
+  
+  fr <- model.frame(subbars(formula), data = data)
+  blist <- lapply(bars, simple_blist, fr, drop.unused.levels = F, reorder.vars = FALSE)
+  blist <- lapply(blist, FUN=function(i){i[c('ff', 'mm')]})
+
+  ff <- lapply(blist, FUN=function(i){i$ff})
+  ff <- lapply(ff, FUN=function(i){match(i, levels(i))})
+  mm <- lapply(blist, FUN=function(i){i$mm})
+  return(list(factor = ff, design = mm))
 }
 
 #' @import lme4
 simple_blist <- function(x, frloc, drop.unused.levels = TRUE, reorder.vars = FALSE) {
-  stop("figure out workaround for lme4:::")
-  # frloc <- factorize(x, frloc)
-  # if (is.null(ff <- tryCatch(eval(substitute(lme4:::makeFac(fac),
-  #                                            list(fac = x[[3]])), frloc), error = function(e) NULL)))
-  #   stop("couldn't evaluate grouping factor ", deparse(x[[3]]),
-  #        " within model frame:", " try adding grouping factor to data ",
-  #        "frame explicitly if possible", call. = FALSE)
-  # if (all(is.na(ff)))
-  #   stop("Invalid grouping factor specification, ", deparse(x[[3]]),
-  #        call. = FALSE)
-  # if (drop.unused.levels)
-  #   ff <- factor(ff, exclude = NA)
-  # nl <- length(levels(ff))
-  # mm <- model.matrix(eval(substitute(~foo, list(foo = x[[2]]))),
-  #                    frloc)
-  # if (reorder.vars) {
-  #   mm <- mm[colSort(colnames(mm)), ]
-  # }
-  # list(ff = ff, nl = nl, mm = mm, cnms = colnames(mm))
+  # stop("figure out workaround for lme4:::")
+  frloc <- factorize(x, frloc)
+  if (is.null(ff <- tryCatch(eval(substitute(lme4:::makeFac(fac),
+                                             list(fac = x[[3]])), frloc), error = function(e) NULL)))
+    stop("couldn't evaluate grouping factor ", deparse(x[[3]]),
+         " within model frame:", " try adding grouping factor to data ",
+         "frame explicitly if possible", call. = FALSE)
+  if (all(is.na(ff)))
+    stop("Invalid grouping factor specification, ", deparse(x[[3]]),
+         call. = FALSE)
+  if (drop.unused.levels)
+    ff <- factor(ff, exclude = NA)
+  nl <- length(levels(ff))
+  mm <- model.matrix(eval(substitute(~foo, list(foo = x[[2]]))),
+                     frloc)
+  if (reorder.vars) {
+    mm <- mm[lme4:::colSort(colnames(mm)), ]
+  }
+  list(ff = ff, nl = nl, mm = mm, cnms = colnames(mm))
 }
 
 

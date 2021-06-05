@@ -19,14 +19,35 @@
 #' @rdname vglmer-class
 #' @export
 fixef.vglmer <- function(object, ...) {
-  return(as.vector(object$beta$mean))
+  out <- object$beta$mean
+  rn <- rownames(out)
+  out <- as.vector(out)
+  names(out) <- rn
+  return(out)
 }
 
-# Load fixef, ranef from lme4
+# Load fixef, ranef, sigma from lme4
 #' @export
 lme4::fixef
 #' @export
 lme4::ranef
+
+#' @importFrom stats sigma
+
+#' @rdname vglmer-class
+#' @export
+sigma.vglmer <- function(object, ...){
+  #{\displaystyle \frac{\sqrt{2}}{2} \left(\frac{(2m-1)\Omega}{m}\right)^{1/2}}
+  
+  if (object$family != 'linear'){
+    stop('sigma from vglmer is only defined for linear models')
+  }
+  if (length(list(...)) > 0){
+    stop('... not used for sigma.vglmer')
+  }
+  naive_sigma <- with(object$sigmasq, sqrt(b/(a+1)))
+  return(naive_sigma)
+}
 
 #' @rdname vglmer-class
 #' @export
@@ -64,6 +85,14 @@ ranef.vglmer <- function(object, ...) {
     }
   )
   return(vi_parsed)
+}
+
+#' @rdname vglmer-class
+#' @export
+ELBO <- function(object) UseMethod("ELBO")
+
+ELBO.vglmer <- function(object){
+  return(object$ELBO$ELBO)
 }
 
 #' @rdname vglmer-class
@@ -203,7 +232,7 @@ erfinv <- function(x) {
 # Internal function to tidy-up
 # inverse Wishart to extract mean
 fmt_IW_mean <- function(Phi, nu, digits = 2) {
-  mean <- solve(Phi) / (nu - nrow(Phi) - 1)
+  mean <- solve(as.matrix(Phi)) / (nu - nrow(Phi) - 1)
   if (nu - nrow(Phi) - 1 < 0) {
     return(matrix(NA, nrow = nrow(Phi), ncol = ncol(Phi)))
   } else {
@@ -226,7 +255,10 @@ format_vglmer <- function(object) {
 #'   full sequence of ELBOs at each iteration.
 #' @export
 
-ELBO <- function(x, type = 'final'){
+ELBO <- function(x, type = c('final', 'trajectory')){
+  
+  type <- match.arg(type)
+
   if (type == 'final'){
     x$ELBO$ELBO
   }else if (type == 'trajectory'){

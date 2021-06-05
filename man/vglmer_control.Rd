@@ -21,11 +21,16 @@ vglmer_control(
   linpred_method = "joint",
   vi_r_method = "VEM",
   vi_r_val = NA,
+<<<<<<< HEAD
+  do_SQUAREM = TRUE,
+=======
   verify_columns = FALSE,
+>>>>>>> splines
   debug_ELBO = FALSE,
   print_prog = NULL,
   quiet = T,
-  init = "EM"
+  quiet_rho = TRUE,
+  init = "EM_FE"
 )
 }
 \arguments{
@@ -36,6 +41,7 @@ limit, and uniform. They are defined as an Inverse Wishart with the
 following parameters where d is the dimensionality of the random effect. At
 present, all models use "mean_exists" for a well-defined proper prior.
 \itemize{
+\item kn: See Kass and Natarajan (2006)
 \item jeffreys: IW(0, 0)
 \item mcmcglmm: IW(0, I)
 \item mvD: IW(-d, I)
@@ -43,7 +49,7 @@ present, all models use "mean_exists" for a well-defined proper prior.
 \item limit: IW(d - 1, 0)
 \item uniform: IW(-[d+1], 0)
 }
-The model may fail to converge}
+The model may fail to converge if an improper prior is used.}
 
 \item{factorization_method}{The factorization method to use. Described in
 detail in the dissertation. strong, partial, and weak correspond to Schemes
@@ -79,6 +85,8 @@ costless and should always be used!}
 (experimential).}
 
 \item{vi_r_val}{For fixed "r", which value?}
+
+\item{do_SQUAREM}{Accelerate method using SQUAREM}
 
 \item{debug_ELBO}{Debug ELBO trajectory.}
 

@@ -12,15 +12,44 @@
 #' @param omega Polya-Gamma weights
 #' @param prior_precision Prior Precision for Regression
 #' @param y Outcome
-LinRegChol <- function(X, omega, prior_precision, y) {
-    .Call('_vglmer_LinRegChol', PACKAGE = 'vglmer', X, omega, prior_precision, y)
+#' @param save_chol
+LinRegChol <- function(X, omega, prior_precision, y, save_chol = TRUE) {
+    .Call('_vglmer_LinRegChol', PACKAGE = 'vglmer', X, omega, prior_precision, y, save_chol)
 }
 
 calculate_expected_outer_alpha <- function(L, alpha_mu, re_position_list) {
     .Call('_vglmer_calculate_expected_outer_alpha', PACKAGE = 'vglmer', L, alpha_mu, re_position_list)
 }
 
+unique_rows <- function(m) {
+    .Call('_vglmer_unique_rows', PACKAGE = 'vglmer', m)
+}
+
+prepare_Z_for_px <- function(Mmap) {
+    .Call('_vglmer_prepare_Z_for_px', PACKAGE = 'vglmer', Mmap)
+}
+
+chol_sparse <- function(X, omega, precision) {
+    .Call('_vglmer_chol_sparse', PACKAGE = 'vglmer', X, omega, precision)
+}
+
 cpp_zVz <- function(Z, V) {
     .Call('_vglmer_cpp_zVz', PACKAGE = 'vglmer', Z, V)
+}
+
+vecR_ridge_general <- function(L, pg_mean, Z, M, mapping_J, d, start_z, diag_only) {
+    .Call('_vglmer_vecR_ridge_general', PACKAGE = 'vglmer', L, pg_mean, Z, M, mapping_J, d, start_z, diag_only)
+}
+
+vecR_design <- function(alpha_mu, Z, M, mapping_J, d, start_z) {
+    .Call('_vglmer_vecR_design', PACKAGE = 'vglmer', alpha_mu, Z, M, mapping_J, d, start_z)
+}
+
+vecR_fast_ridge <- function(X, omega, prior_precision, y, adjust_y) {
+    .Call('_vglmer_vecR_fast_ridge', PACKAGE = 'vglmer', X, omega, prior_precision, y, adjust_y)
+}
+
+vecR_ridge_new <- function(L, pg_mean, mapping_J, d, store_id, store_re_id, store_design, diag_only) {
+    .Call('_vglmer_vecR_ridge_new', PACKAGE = 'vglmer', L, pg_mean, mapping_J, d, store_id, store_re_id, store_design, diag_only)
 }
 

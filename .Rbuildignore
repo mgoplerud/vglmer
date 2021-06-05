@@ -1,0 +1,16 @@
+^.*\.Rproj$
+^misc_files/*
+^pres_figures/*
+^\.Rproj\.user$
+^full_models/*
+^old_versions/*
+^remote_models/*
+^replicate_GG/*
+^figures/*
+^JASA_submission/*$
+^old_figures/*
+Goplerud_MAVB*
+^.*RDS$
+^\.travis\.yml$
+^codecov\.yml$
+^paper_draft/*

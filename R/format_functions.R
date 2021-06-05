@@ -45,19 +45,41 @@ format_stan <- function(object, useSigma = FALSE) {
   if (!useSigma) {
     post_stan <- post_stan[, !grepl(colnames(post_stan), pattern = "^Sigma")]
   }
-  parse_stan_names <- strsplit(x = colnames(post_stan), split = "^b\\[| |\\]", perl = T)
-
+  if (any(grepl(colnames(post_stan), pattern='^z_[0-9]+\\[[0-9,]+\\]$'))){
+    post_stan <- post_stan[, !grepl(colnames(post_stan), pattern='^z_[0-9]+\\[[0-9,]+\\]$')]
+  }
+  if (any(grepl(colnames(post_stan), pattern='^chol_[0-9]+\\['))){
+    post_stan <- post_stan[, !grepl(colnames(post_stan), pattern='^chol_[0-9]+\\[')]
+  }
+  if (any(grepl(colnames(post_stan), pattern='^(S|var)_[0-9]+\\[[0-9]+(,[0-9]+)?\\]'))){
+    post_stan <- post_stan[, !grepl(colnames(post_stan), pattern='^(S|var)_[0-9]+\\[[0-9]+(,[0-9]+)?\\]')]
+  }
+  
+  post_stan <- post_stan[, !grepl(colnames(post_stan), pattern='^lp__$|^var_[0-9]+\\[[0-9]+\\]$')]
+  post_stan <- post_stan[, !grepl(colnames(post_stan), pattern='^sd_')]
+  colnames(post_stan) <- gsub(colnames(post_stan), pattern='^b_', replacement = '')
+  
+  parse_stan_names <- strsplit(x = colnames(post_stan),
+                               split = '^r_|^b\\[| |\\[|\\]')
+  # parse_stan_names <- strsplit(x = colnames(post_stan), split = "^b\\[| |\\]", perl = T)
+  
   fmt_stan_names <- sapply(parse_stan_names, FUN = function(i) {
     if (length(i) == 1) {
       return(i)
     } else {
-      i_one <- unlist(strsplit(i[3], split = ":"))
-      return(paste(i_one[1], i[2], i_one[2], sep = " @ "))
+      i_one <- unlist(strsplit(i[3], split = ":|,"))
+      if (any(grepl(i[3], pattern=':'))){
+        return(paste(i_one[1], i[2], i_one[2], sep = " @ "))
+      }else{
+        return(paste(i[2], i_one[2], i_one[1], sep = " @ "))
+      }
     }
   })
   colnames(post_stan) <- fmt_stan_names
-  output <- data.frame(var = apply(post_stan, MARGIN = 2, var), mean = colMeans(post_stan))
-  output$name <- rownames(output)
+  colnames(post_stan) <- gsub(colnames(post_stan), pattern='(?!<=\\))Intercept(?!\\))', perl = T, replacement ='(Intercept)')
+  output <- data.frame(var = apply(post_stan, MARGIN = 2, var),
+                       mean = colMeans(post_stan))
+  output$name <- colnames(post_stan)
   rownames(output) <- NULL
   return(output)
 }

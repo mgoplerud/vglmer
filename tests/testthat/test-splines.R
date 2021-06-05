@@ -108,18 +108,21 @@ test_that("Basic spline tests (run and predict)", {
 
   # Check runs with 1
   
-  m1 <- vglmer(y ~ x + x2 + v_s(x), data = dat, family = 'binomial')
+  m1 <- vglmer(y ~ x + x2 + v_s(x), 
+               data = dat, family = 'binomial')
   expect_equal(length(coef(m1)), 3)
-  m1a <- vglmer(y ~ v_s(x) + x2, data = dat, family = 'binomial')
+  m1a <- vglmer(y ~ v_s(x) + x2, data = dat, 
+                family = 'binomial')
   
   # Check same convergence
   
-  expect_equal(ranef(m1), ranef(m1a))
+  expect_equal(ranef(m1), ranef(m1a), tol = 1e-5)
   expect_equal(coef(m1), 
-    coef(m1a)[match(names(coef(m1)), names(coef(m1a)))]
+    coef(m1a)[match(names(coef(m1)), names(coef(m1a)))],
+    tol = 1e-5
   )
   expect_equal(ELBO(m1), ELBO(m1a))
-  expect_equal(ELBO(m1, 'trajectory'), ELBO(m1a, 'trajectory'))
+  expect_equal(ELBO(m1, 'trajectory'), ELBO(m1a, 'trajectory'), tol = 1e-5)
   
   # Check runs with 2
   m2 <- vglmer(y ~ v_s(x2) + v_s(x), 

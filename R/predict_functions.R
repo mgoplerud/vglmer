@@ -62,7 +62,7 @@ predict.vglmer <- function(object, newdata,
   if (length(list(...)) > 0) {
     stop("... not used for predict.vglmer")
   }
-
+  newdata <- as.data.frame(newdata)
   rownames(newdata) <- as.character(1:nrow(newdata))
 
   parse_formula <- object$formula$interpret_gam
