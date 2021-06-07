@@ -20,7 +20,7 @@
 
 \method{ranef}{vglmer}(object, ...)
 
-ELBO(object)
+ELBO(x, type = c("final", "trajectory"))
 
 \method{coef}{vglmer}(object, ...)
 

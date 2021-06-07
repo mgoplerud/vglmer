@@ -4,7 +4,7 @@
 \alias{ELBO}
 \title{Get ELBO from fitted variational model}
 \usage{
-ELBO(x, type = "final")
+ELBO(x, type = c("final", "trajectory"))
 }
 \arguments{
 \item{type}{Default is "final" giving ELBO at convergence. "trajectory" gives

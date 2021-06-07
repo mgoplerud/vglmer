@@ -21,11 +21,8 @@ vglmer_control(
   linpred_method = "joint",
   vi_r_method = "VEM",
   vi_r_val = NA,
-<<<<<<< HEAD
   do_SQUAREM = TRUE,
-=======
   verify_columns = FALSE,
->>>>>>> splines
   debug_ELBO = FALSE,
   print_prog = NULL,
   quiet = T,

@@ -131,7 +131,11 @@ predict_MAVB <- function(object, newdata, samples = 0, samples_only = FALSE,
 #' @import lme4
 get_RE_groups <- function(formula, data) {
   
-  bars <- findbars(formula)
+  if (inherits(formula, 'formula')){
+    bars <- findbars(formula)
+  }else{
+    bars <- formula
+  }
   if (is.null(bars)){# Usually if only splines used, then NA.
     return(list(factor = NA, design = NA))
   }  
@@ -140,7 +144,7 @@ get_RE_groups <- function(formula, data) {
   # names(bars) <- vapply(bars, function(x) paste(deparse(x, 500L)(x[[3]]), "")
   names(bars) <- lme4:::barnames(bars)
   
-  fr <- model.frame(subbars(formula), data = data)
+  fr <- data
   blist <- lapply(bars, simple_blist, fr, drop.unused.levels = F, reorder.vars = FALSE)
   blist <- lapply(blist, FUN=function(i){i[c('ff', 'mm')]})
 

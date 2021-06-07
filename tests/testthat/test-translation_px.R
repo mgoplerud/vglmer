@@ -3,6 +3,12 @@ context("Translation Expansion Tests")
 warning('Do Translation Tests')
 if (FALSE){
   stop()
+  # TEHSE SHOULD AGREE
+  update_expansion_XR <- vecR_fast_ridge(X = XR, 
+                                         omega = diag_vi_pg_mean, prior_precision = R_ridge, y = as.vector(s), 
+                                         adjust_y = as.vector(vec_OSL_prior))
+  
+  solve(t(XR) %*% diag_vi_pg_mean %*% XR + R_ridge, t(XR) %*% s + vec_OSL_prior)
   
   N <- 1000
   G <- 50
