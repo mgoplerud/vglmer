@@ -1588,11 +1588,14 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
       vec_OSL_prior <- do.call('c', vec_OSL_prior)
       vec_OSL_prior <- matrix(c(rep(0, ncol(X)), rep(0, size_splines), vec_OSL_prior))
       
-
-      if (factorization_method == 'strong'){
-        R_spline_ridge <- bdiag(Tinv[spline_REs])
+      if (sum(spline_REs)){
+        if (factorization_method == 'strong'){
+          R_spline_ridge <- bdiag(Tinv[spline_REs])
+        }else{
+          R_spline_ridge <- Tinv[-nonspline_positions, -nonspline_positions]
+        }
       }else{
-        R_spline_ridge <- Tinv[-nonspline_positions, -nonspline_positions]
+        R_spline_ridge <- drop0(matrix(0, nrow = 0, ncol = 0))
       }
       #If a DIAGONAL expansion, then only update the diagonal elements
       if (parameter_expansion == "diagonal"){
