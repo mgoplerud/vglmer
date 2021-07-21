@@ -387,7 +387,6 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     
     stopifnot(identical(paste0(rep(names(names_of_RE), d_j), " @ ", unlist(names_of_RE)), colnames(M_prime)))
     
-    
     M_mu_to_beta <- sparseMatrix(i = 1:sum(d_j), j = match(unlist(names_of_RE), colnames(X)), x = 1, dims = c(sum(d_j), p.X))
     
     
@@ -688,14 +687,14 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
       rm(jointXZ)
     } else if (family == "negbin") {
       if (control$init == 'EM_FE'){
-        EM_init <- EM_prelim_nb(X = X, Z = Z, y = y, est_r = exp(vi_r_mu), iter = 15, ridge = 10^5)
+        EM_init <- EM_prelim_nb(X = X, Z = drop0(matrix(0, nrow = nrow(X), ncol = 0)), y = y, est_r = exp(vi_r_mu), iter = 15, ridge = 10^5)
         EM_init <- list('beta' = EM_init$beta, 'alpha' = rep(0, ncol(Z)))
       }else{
         EM_init <- EM_prelim_nb(X = X, Z = Z, y = y, est_r = exp(vi_r_mu), iter = 15, ridge = 4)
       }
     } else {
       if (control$init == 'EM_FE'){
-        EM_init <- EM_prelim_logit(X = X, Z = Z, s = s, pg_b = vi_pg_b, iter = 15, ridge = 10^5)
+        EM_init <- EM_prelim_logit(X = X, Z = drop0(matrix(0, nrow = nrow(X), ncol = 0)), s = s, pg_b = vi_pg_b, iter = 15, ridge = 10^5)
         EM_init <- list('beta' = EM_init$beta, 'alpha' = rep(0, ncol(Z)))
       }else{
         EM_init <- EM_prelim_logit(X = X, Z = Z, s = s, pg_b = vi_pg_b, iter = 15, ridge = 4)

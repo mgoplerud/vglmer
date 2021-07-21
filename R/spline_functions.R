@@ -66,7 +66,7 @@ vglmer_build_spline <- function(x, knots = NULL, Boundary.knots = NULL,
     # Sort user provided knots
     knots <- sort(knots)
     
-    if (any(knots > max(x)) | any(knots < min(x))){
+    if (any(knots > max(x, na.rm=T)) | any(knots < min(x, na.rm=T))){
       if (!override_warn){
         warning('self-provided knots are outside of the observed data.')
       }
@@ -75,7 +75,7 @@ vglmer_build_spline <- function(x, knots = NULL, Boundary.knots = NULL,
   }
   
   if (is.null(Boundary.knots)){
-    Boundary.knots <- range(x) 
+    Boundary.knots <- range(x, na.rm=T) 
   }else{
     stopifnot(length(Boundary.knots) == 2)
   }

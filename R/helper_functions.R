@@ -158,9 +158,9 @@ EM_prelim_logit <- function(X, Z, s, pg_b, iter, ridge = 2) {
       tiny_c <- which(abs(EM_pg_c) < 1e-10)
       EM_pg_mean[tiny_c] <- pg_b[tiny_c] / 4
     }
-    EM_pg_diag <- sparseMatrix(i = 1:N, j = 1:N, x = EM_pg_mean)
+    EM_pg_diag_sqrt <- sparseMatrix(i = 1:N, j = 1:N, x = sqrt(EM_pg_mean))
 
-    EM_beta <- solve(Matrix::Cholesky(  t(jointXZ) %*% EM_pg_diag %*% jointXZ + EM_variance),
+    EM_beta <- solve(Matrix::Cholesky( crossprod(EM_pg_diag_sqrt %*% jointXZ) + EM_variance),
                                t(jointXZ) %*% (s) )
     
     # EM_beta <- LinRegChol(X = jointXZ, omega = EM_pg_diag, y = s, prior_precision = EM_variance)$mean

@@ -191,7 +191,10 @@ predict.vglmer <- function(object, newdata,
     }
 
     Z.spline <- drop0(do.call('cbind', Z.spline))
+    rownames(Z.spline) <- rownames(newdata)
     
+    Z.spline <- Z.spline[match(rownames(Z), rownames(Z.spline)),]
+
     Z <- drop0(cbind(Z, Z.spline))
     
     if (!isTRUE(identical(object$spline$size[store_spline_type %in% 1], 
