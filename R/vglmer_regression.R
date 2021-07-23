@@ -1096,17 +1096,12 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
         vi_alpha_mean <- Matrix(vi_alpha_mean, dimnames = list(fmt_names_Z, NULL))
       } else if (linpred_method == "joint") {
         joint.XZ <- cbind(X, Z)
-        
-        # joint.XZ <<- joint.XZ
-        # diag_vi_pg_mean <<- diag_vi_pg_mean
-        # zero_mat <<- zero_mat
-        # Tinv <<- Tinv
-        # s <<- s
-        # old_vi <<- c(vi_beta_mean, vi_alpha_mean)
-        # if (it > 1){stop()}
 
-        chol.update.joint <- solve(Matrix::Cholesky(  t(joint.XZ) %*% diag_vi_pg_mean %*% joint.XZ + bdiag(zero_mat, bdiag(Tinv))),
-                                   t(joint.XZ) %*% (s + vi_pg_mean * vi_r_mu) )
+        
+        chol.update.joint <- solve(Matrix::Cholesky(  
+          crossprod(Diagonal(x = sqrt(vi_pg_mean)) %*% joint.XZ) + 
+            bdiag(zero_mat, bdiag(Tinv)) ),
+               t(joint.XZ) %*% (s + vi_pg_mean * vi_r_mu) )
         vi_beta_mean <- Matrix(chol.update.joint[1:p.X,], dimnames = list(colnames(X), NULL))
         vi_alpha_mean <- Matrix(chol.update.joint[-1:-p.X,], dimnames = list(fmt_names_Z, NULL))
         
@@ -1158,8 +1153,11 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
           tic("ux_mean")
         }
         
-        chol.update.joint <- solve(Matrix::Cholesky(  t(joint.XZ) %*% diag_vi_pg_mean %*% joint.XZ + bdiag(zero_mat, bdiag(Tinv))),
-                         t(joint.XZ) %*% (s + vi_pg_mean * vi_r_mu) )
+        chol.update.joint <- solve(Matrix::Cholesky(  
+          crossprod(Diagonal(x = sqrt(vi_pg_mean)) %*% joint.XZ) + 
+            bdiag(zero_mat, bdiag(Tinv)) ),
+          t(joint.XZ) %*% (s + vi_pg_mean * vi_r_mu) )
+        
         vi_beta_mean <- Matrix(chol.update.joint[1:p.X,], dimnames = list(colnames(X), NULL))
         vi_alpha_mean <- Matrix(chol.update.joint[-1:-p.X,], dimnames = list(fmt_names_Z, NULL))
 
