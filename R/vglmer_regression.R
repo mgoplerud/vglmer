@@ -964,6 +964,10 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
       diag_vi_pg_mean <- sparseMatrix(i = 1:N, j = 1:N, x = vi_pg_mean)
     }else{
       vi_pg_mean <- vi_pg_b / (2 * vi_pg_c) * tanh(vi_pg_c / 2)
+      fill_zero <- which(abs(vi_pg_c) < 1e-6)
+      if (length(fill_zero) > 0){
+        vi_pg_mean[fill_zero] <- vi_pg_b[fill_zero] / 4
+      }
       diag_vi_pg_mean <- sparseMatrix(i = 1:N, j = 1:N, x = vi_pg_mean)
     }
     
@@ -1145,23 +1149,6 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     } else if (factorization_method == "strong") {
       running_log_det_alpha_var <- rep(NA, number_of_RE)
       vi_alpha_decomp <- sparseMatrix(i = 1, j = 1, x = 0, dims = rep(p.Z, 2))
-
-      #
-      vi_alpha_mean <<- vi_alpha_mean
-      vi_beta_mean <<- vi_beta_mean
-      vi_alpha_decomp <<- vi_alpha_decomp
-      X <<- X
-      Z <<- Z
-      fmt_names_Z <<- fmt_names_Z
-      Tinv <<- Tinv
-      cyclical_pos <<- cyclical_pos
-      family_s <<- s
-      diag_vi_pg_mean <<- diag_vi_pg_mean
-      running_log_det_alpha_var <<- running_log_det_alpha_var
-      number_of_RE <<- number_of_RE
-      zero_mat <<- zero_mat
-      p.X <<- p.X
-      g_j <<- g_j
       
       if (linpred_method == "joint") {
         if (it == 1){
@@ -1963,6 +1950,14 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
         })
         squarem_type[squarem_type == 'cholesky'][check_tri == FALSE] <- 'lu'
         
+        if ('vi_pg_c' %in% squarem_par){
+          # Address possibility of "zero" for vi_pg_c
+          squarem_list <- lapply(squarem_list, FUN=function(i){
+            i$vi_pg_c <- ifelse(abs(i$vi_pg_c) < 1e-6, 1e-6, i$vi_pg_c)
+            return(i)
+          })
+        }
+        
         squarem_list <- lapply(squarem_list, FUN=function(i){
           
           i[squarem_par] <- mapply(squarem_par, squarem_type, 
@@ -2037,8 +2032,10 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
             alpha[which(max_d < tolerance_parameters)] <- -1.01
           }
         }else{
+          
           alpha <- -sqrt(sum(sapply(prep_SQUAREM, FUN=function(i){i$norm_sq_r}))) /
             sqrt(sum(sapply(prep_SQUAREM, FUN=function(i){i$norm_sq_v})))
+          
           if (alpha > -1){
             alpha <- -1.01
           }
@@ -2205,6 +2202,10 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
             if (family != 'binomial'){stop('check squarem for linear case')}
             
             prop_vi_pg_mean <- prop_ELBOargs$vi_pg_b / (2 * prop_ELBOargs$vi_pg_c) * tanh(prop_ELBOargs$vi_pg_c / 2)
+            fill_zero <- which(abs(prop_ELBOargs$vi_pg_c) < 1e-6)
+            if (length(fill_zero) > 0){
+              prop_vi_pg_mean[fill_zero] <- prop_ELBOargs$vi_pg_b[fill_zero]/4
+            }
             prop_ELBOargs[['vi_pg_mean']] <- prop_vi_pg_mean
             squarem_par <- c(squarem_par, 'vi_pg_mean')
             
@@ -2229,6 +2230,11 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
             }
             
             prop_vi_pg_mean <- prop_ELBOargs$vi_pg_b / (2 * prop_ELBOargs$vi_pg_c) * tanh(prop_ELBOargs$vi_pg_c / 2)
+            fill_zero <- which(abs(prop_ELBOargs$vi_pg_c) < 1e-6)
+            if (length(fill_zero) > 0){
+              prop_vi_pg_mean[fill_zero] <- prop_ELBOargs$vi_pg_b[fill_zero]/4
+            }
+            
             prop_ELBOargs[['vi_pg_mean']] <- prop_vi_pg_mean
             squarem_par <- c(squarem_par, 'vi_pg_c', 'vi_pg_mean')
             

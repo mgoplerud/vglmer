@@ -114,3 +114,23 @@ test_that("vglmer can run with 'debug' settings", {
   expect_true(!is.null(est_vglmer$debug_ELBO))
   
 })
+
+test_that("vglmer can run with exactly balanced classes", {
+  N <- 1000
+  G <- 5
+  G_names <- paste(sample(letters, G, replace = T), 1:G)
+  x <- rnorm(N)
+  g <- sample(G_names, N, replace = T)
+  alpha <- rnorm(G)
+  
+  y <- c(rep(0, N/2), rep(1, N/2))
+  
+  # Debug to collect parameters
+  est_vglmer <- vglmer(y ~ x + (1 | g), data = data.frame(y = y, x = x, g = g),
+                       family = 'binomial',
+                       control = vglmer_control(do_SQUAREM = TRUE,
+                                                factorization_method = 'strong',
+                                                parameter_expansion = 'diagonal'))  
+  
+  expect_s3_class(est_vglmer, 'vglmer')
+})
