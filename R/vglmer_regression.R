@@ -970,6 +970,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
       }
       diag_vi_pg_mean <- sparseMatrix(i = 1:N, j = 1:N, x = vi_pg_mean)
     }
+    sqrt_pg_weights <- Diagonal(x = sqrt(vi_pg_mean))
     
     if (debug_ELBO & it != 1) {
       debug_ELBO.1 <- calculate_ELBO(family = family,
@@ -1153,7 +1154,6 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
           tic("ux_mean")
         }
         
-        sqrt_pg_weights <- Diagonal(x = sqrt(vi_pg_mean))
         chol.update.joint <- solve(Matrix::Cholesky(  
           crossprod(sqrt_pg_weights %*% joint.XZ) + 
             bdiag(zero_mat, bdiag(Tinv)) ),
