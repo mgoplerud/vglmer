@@ -1153,8 +1153,9 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
           tic("ux_mean")
         }
         
+        sqrt_pg_weights <- Diagonal(x = sqrt(vi_pg_mean))
         chol.update.joint <- solve(Matrix::Cholesky(  
-          crossprod(Diagonal(x = sqrt(vi_pg_mean)) %*% joint.XZ) + 
+          crossprod(sqrt_pg_weights %*% joint.XZ) + 
             bdiag(zero_mat, bdiag(Tinv)) ),
           t(joint.XZ) %*% (s + vi_pg_mean * vi_r_mu) )
         
@@ -1196,7 +1197,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
         for (j in 1:number_of_RE) {
           index_j <- cyclical_pos[[j]]
           Z_j <- Z[, index_j, drop = F]
-          prec_j <- t(Z_j) %*% diag_vi_pg_mean %*% Z_j + Tinv[[j]]
+          prec_j <- crossprod(sqrt_pg_weights %*% Z_j) + Tinv[[j]]
 
           chol_var_j <- solve(t(chol(prec_j)))
           running_log_det_alpha_var[j] <- 2 * sum(log(diag(chol_var_j)))
@@ -1219,7 +1220,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
           index_j <- cyclical_pos[[j]]
           Z_j <- Z[, index_j, drop = F]
           Z_negj <- Z[, -index_j, drop = F]
-          prec_j <- t(Z_j) %*% diag_vi_pg_mean %*% Z_j + Tinv[[j]]
+          prec_j <- crossprod(sqrt_pg_weights %*% Z_j) + Tinv[[j]]
 
           chol_prec_j <- t(chol(prec_j))
           chol_var_j <- solve(chol_prec_j)
