@@ -4,13 +4,15 @@ prep_lu <- function(M){
  if (is.null(fact_lu$Q)){
    fact_lu$Q <- Diagonal(n = ncol(fact_lu$U))
  }
+ fact_lu$L <- drop0(fact_lu$L)
+ fact_lu$U <- drop0(fact_lu$U)
  return(fact_lu)
 }
 unprep_lu <- function(M){
   recons_M <- t(M$P) %*% M$L %*% M$U %*% M$Q
   # recons_M <- t(M$P) %*% drop0(zapsmall(M$L %*% M$U, 15)) %*% M$Q
   logdet_M <- 2 * sum(log(abs(diag(M$U))))
-  return(list(M = recons_M, logdet_M = logdet_M))
+  return(list(M = recons_M, logdet_M = logdet_M, diag_U = diag(M$U)))
 }
 
 prep_cholesky <- function(L){

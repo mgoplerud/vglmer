@@ -157,8 +157,8 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     tic.clearlog()
     tic("Prepare Model")
   }
-  if (!(factorization_method %in% c("weak", "strong", "partial"))) {
-    stop("factorization_method must be in weak, strong, or partial.")
+  if (!(factorization_method %in% c("weak", "strong", "partial", "collapsed"))) {
+    stop("factorization_method must be in weak, strong, partial or collapsed.")
   }
   if (is.null(print_prog)) {
     print_prog <- max(c(1, floor(iterations / 20)))
@@ -783,7 +783,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
   zero_mat <- sparseMatrix(i = 1, j = 1, x = 0, dims = c(ncol(X), ncol(X)))
   zero_mat <- drop0(zero_mat)
 
-  if (factorization_method == "weak") {
+  if (factorization_method %in% c("weak", "collapsed")) {
     vi_joint_decomp <- bdiag(vi_beta_decomp, vi_alpha_decomp)
     joint.XZ <- cbind(X, Z)
     log_det_beta_var <- log_det_alpha_var <- NULL
@@ -803,7 +803,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
   lagged_alpha_mean <- rep(-Inf, ncol(Z))
   lagged_beta_mean <- rep(-Inf, ncol(X))
   lagged_sigma_alpha <- vi_sigma_alpha
-  if (factorization_method == "weak") {
+  if (factorization_method %in% c("weak", "collapsed")) {
     lagged_joint_decomp <- vi_joint_decomp
   } else {
     lagged_alpha_decomp <- vi_alpha_decomp
@@ -904,7 +904,10 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     message("Begin Regression")
   }
   do_SQUAREM <- control$do_SQUAREM
-  
+  if (factorization_method == 'collapsed'){
+    warning('Turning off SQUAREM for "collapsed')
+    do_SQUAREM <- FALSE
+  }
   if (family %in% c('negbin', 'linear')){
     if (do_SQUAREM){warning('Turning off SQUAREM for negbin/linear temporarily.')}
     do_SQUAREM <- FALSE
@@ -934,7 +937,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
       tic("Update PG")
     }
 
-    if (factorization_method == "weak") {
+    if (factorization_method %in% c("weak", "collapsed")) {
       # joint_quad <- rowSums( (joint.XZ %*% t(vi_joint_decomp))^2 )
       # vi_joint_decomp <<- vi_joint_decomp
       # joint.XZ <<- joint.XZ
@@ -1014,12 +1017,16 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     )
     inv_mapping_alpha <- make_mapping_alpha(inv_mapping_alpha)
 
+    if (factorization_method == "collapsed"){
+      cyclical_T <- TRUE
+    }
+    
     Tinv <- prepare_T(
       mapping = inv_mapping_alpha, levels_per_RE = g_j, num_REs = number_of_RE,
       variables_per_RE = d_j, running_per_RE = breaks_for_RE, cyclical = cyclical_T
     )
 
-    if (!cyclical_T) {
+    if (!cyclical_T & factorization_method != "collapsed") {
       Tinv <- as(Tinv, "dgCMatrix")
     } else {
       Tinv <- lapply(Tinv, FUN = function(i) {
@@ -1055,6 +1062,61 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
         vi_joint_L_nonpermute <- vi_joint_decomp
         vi_joint_LP <- Diagonal(n = ncol(vi_joint_decomp))
       }
+    } else if (factorization_method == "collapsed") {
+      
+      if (family != 'binomial'){stop('"collapsed" not set up.')}
+      
+      beta_var <- solve(t(X) %*% diag_vi_pg_mean %*% X)
+      beta_hat <- beta_var %*% t(X) %*% s
+      
+      P <- beta_var %*% t(X) %*% diag_vi_pg_mean %*% Z
+      M <- Z - X %*% P
+      
+      vi_alpha_mean <- solve(t(M) %*% diag_vi_pg_mean %*% M + bdiag(Tinv),
+         t(M) %*% (s - diag_vi_pg_mean %*% X %*% beta_hat)
+      )
+      vi_beta_mean <- beta_hat - P %*% vi_alpha_mean
+      
+      sqrt_pg_weights <- Diagonal(x = sqrt(vi_pg_mean))
+      
+      for (j in 1:number_of_RE) {
+        index_j <- cyclical_pos[[j]]
+        M_j <- as(M[, index_j, drop = F], 'dgCMatrix')
+        prec_j <- crossprod(sqrt_pg_weights %*% M_j) + Tinv[[j]]
+        
+        chol_var_j <- solve(t(chol(prec_j)))
+        running_log_det_alpha_var[j] <- 2 * sum(log(diag(chol_var_j)))
+        
+        vi_alpha_decomp[index_j, index_j] <- as(chol_var_j, "dgTMatrix")
+      }
+      vi_alpha_L_nonpermute <- vi_alpha_decomp
+      vi_alpha_LP <- Diagonal(n = nrow(vi_alpha_L_nonpermute))
+      vi_alpha_decomp <- vi_alpha_L_nonpermute  %*% t(vi_alpha_LP)
+      vi_alpha_decomp <- drop0(vi_alpha_decomp)
+      vi_alpha_decomp <- as(vi_alpha_decomp, 'dgCMatrix')
+      
+      log_det_alpha_var <- sum(running_log_det_alpha_var)
+      
+      var_ALPHA <- t(vi_alpha_decomp) %*% vi_alpha_decomp
+      vi_joint_all <- bdiag(beta_var, var_ALPHA)
+      
+      vi_joint_all[seq_len(nrow(beta_var)), seq_len(nrow(beta_var))] <- 
+        P %*% var_ALPHA %*% t(P) + vi_joint_all[seq_len(nrow(beta_var)), seq_len(nrow(beta_var))]
+      vi_joint_all[seq_len(nrow(beta_var)),-seq_len(nrow(beta_var)), drop = F] <- - P %*% var_ALPHA
+      vi_joint_all[-seq_len(nrow(beta_var)),seq_len(nrow(beta_var)),drop=F] <- - t(P %*% var_ALPHA)
+      
+      vi_joint_decomp <- chol(vi_joint_all)
+
+      vi_beta_decomp <- vi_joint_decomp[,1:p.X,drop=F]
+      # vi_beta_decomp <- chol(beta_var)
+      # vi_beta_L_nonpermute <- vi_beta_decomp
+      # vi_beta_LP <- Diagonal(n = nrow(vi_beta_mean))
+      # vi_joint_LP <- Diagonal(n = nrow(vi_joint_decomp))
+      # vi_joint_L_nonpermute <- vi_joint_decomp
+      
+      log_det_joint_var <- NA
+      log_det_beta_var <- as.numeric(determinant(beta_var)$modulus)
+      
     } else if (factorization_method == "partial") {
       if (linpred_method == "cyclical") {
         # Do not run except as backup
@@ -1089,6 +1151,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
         vi_alpha_LP <- Pmatrix
         vi_alpha_decomp <- vi_alpha_L_nonpermute  %*% t(vi_alpha_LP)
         vi_alpha_decomp <- drop0(vi_alpha_decomp)
+        vi_alpha_decomp <- as(vi_alpha_decomp, 'dgCMatrix')
         vi_alpha_mean <- chol.update.alpha$mean
         log_det_alpha_var <- -2 * sum(log(diag(chol.update.alpha$origL)))
 
@@ -1354,6 +1417,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     ##
 
     if (!do_huangwand){#Update standard Inverse-Wishart
+      
       variance_by_alpha_jg <- calculate_expected_outer_alpha(L = vi_alpha_decomp, alpha_mu = as.vector(vi_alpha_mean), re_position_list = outer_alpha_RE_positions)
       vi_sigma_outer_alpha <- variance_by_alpha_jg$outer_alpha
       vi_sigma_alpha <- mapply(vi_sigma_outer_alpha, prior_sigma_alpha_phi, SIMPLIFY = FALSE, FUN = function(i, j) {
@@ -1835,7 +1899,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     
     if (do_SQUAREM){
       
-      if (factorization_method == 'weak'){
+      if (factorization_method %in% c('weak', 'collapsed')){
         vi_alpha_L_nonpermute <- vi_beta_L_nonpermute <- NULL
         vi_alpha_LP <- vi_beta_LP <- NULL
       }else{
@@ -1879,7 +1943,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
            vi_a_nu_jp = vi_a_nu_jp, vi_a_APRIOR_jp = vi_a_APRIOR_jp
         )
         
-        if (factorization_method == 'weak'){
+        if (factorization_method %in% c('weak', 'collapsed')){
           squarem_par <- c('vi_a_b_jp', 'vi_sigma_alpha', 'vi_pg_c',
                            'vi_alpha_mean', 'vi_beta_mean', 'vi_joint_L_nonpermute')
           squarem_type <- c('positive', 'matrix', 'positive',
@@ -2057,6 +2121,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
           if (attempt_SQUAREM > 1){
             alpha <- (alpha - 1)/2
           }
+          
           prop_squarem <- mapply(prep_SQUAREM, squarem_structure, squarem_type, alpha, SIMPLIFY = FALSE,
              FUN=function(i, s_str, s_type, s_alpha){
                if (s_type == 'lu'){
@@ -2095,7 +2160,6 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
              return(out)
            })
           
-          
           if (factorization_method == 'weak'){
             
             if (squarem_type[squarem_par == 'vi_joint_L_nonpermute'] == 'lu'){
@@ -2108,14 +2172,27 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
             prop_squarem$vi_alpha_decomp <- prop_squarem$vi_joint_decomp[, -1:-p.X, drop = F]
             prop_squarem$vi_beta_decomp <- prop_squarem$vi_joint_decomp[, 1:p.X, drop = F]
             
-            prop_ELBOargs$log_det_alpha_var <- NULL
-            prop_ELBOargs$log_det_beta_var <- NULL
+            squarem_par <- c(squarem_par, 'log_det_joint_var')
+            squarem_par <- c(squarem_par, 'vi_joint_decomp')
+            
+          }else if (factorization_method == 'collapsed'){
+            stop('Setup squarem for collapsed')
+            if (squarem_type[squarem_par == 'vi_joint_L_nonpermute'] == 'lu'){
+              prop_squarem$vi_joint_decomp <- prop_squarem$vi_joint_L_nonpermute$M              
+              prop_ELBOargs$log_det_joint_var <- prop_squarem$vi_joint_L_nonpermute$logdet_M
+            }else{
+              prop_squarem$vi_joint_decomp <- prop_squarem$vi_joint_L_nonpermute %*% t(squarem_list[[1]]$vi_joint_LP)
+              prop_ELBOargs$log_det_joint_var <- 2 * sum(log(diag(prop_squarem$vi_joint_L_nonpermute)))
+            }
+            prop_squarem$vi_alpha_decomp <- prop_squarem$vi_joint_decomp[, -1:-p.X, drop = F]
+            prop_squarem$vi_beta_decomp <- prop_squarem$vi_joint_decomp[, 1:p.X, drop = F]
             
             squarem_par <- c(squarem_par, 'log_det_joint_var')
             squarem_par <- c(squarem_par, 'vi_joint_decomp')
             
-          }else{
             
+          }else{
+
             if (squarem_type[squarem_par == 'vi_beta_L_nonpermute'] == 'lu'){
               prop_ELBOargs$log_det_beta_var <- prop_squarem$vi_beta_L_nonpermute$logdet_M
               prop_squarem$vi_beta_decomp <- prop_squarem$vi_beta_L_nonpermute$M              
@@ -2175,7 +2252,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
 
           if ('vi_alpha_mean' %in% names(prop_squarem)){
             prop_variance_by_alpha_jg <- calculate_expected_outer_alpha(
-              L = prop_squarem$vi_alpha_decomp, 
+              L = (prop_squarem$vi_alpha_decomp), 
               alpha_mu = as.vector(prop_squarem$vi_alpha_mean), 
               re_position_list = outer_alpha_RE_positions)
             prop_ELBOargs[['vi_sigma_outer_alpha']] <- prop_variance_by_alpha_jg$outer_alpha
@@ -2212,7 +2289,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
             
             if (family != 'binomial'){stop('check squarem for non-binomial case')}
             
-            if (factorization_method == "weak") {
+            if (factorization_method %in% c("weak", "collapsed")) {
               joint_quad <- cpp_zVz(Z = joint.XZ, V = as(prop_ELBOargs$vi_joint_decomp, "dgCMatrix")) 
               if (family == 'negbin'){
                 joint_quad <- joint_quad + prop_ELBOargs$vi_r_sigma
@@ -2348,7 +2425,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
       max(abs(i - j))
     })
 
-    if (factorization_method == "weak") {
+    if (factorization_method %in% c("weak", "collapsed")) {
       change_joint_var <- 0 # change_joint_var <- max(abs(vi_joint_decomp - lagged_joint_decomp))
       change_alpha_var <- change_beta_var <- 0
     } else {
@@ -2459,7 +2536,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     output$parameter_trajectory <- list(beta = store_beta,
                                         alpha = store_alpha)
   }
-  if (factorization_method == "weak") {
+  if (factorization_method %in% c("weak", "collapsed")) {
     output$joint <- vi_joint_decomp
   }
   if (control$return_data) {
@@ -2580,7 +2657,7 @@ vglmer_control <- function(iterations = 1000,
       prevent_degeneracy, force_whole, verbose_time, do_timing,
       debug_param, return_data, debug_ELBO, quiet
     ), len = 8),
-    check_choice(factorization_method, c("weak", "strong", "partial")),
+    check_choice(factorization_method, c("weak", "strong", "collapsed", "partial")),
     check_choice(prior_variance, c("kn", "hw", "mean_exists", "jeffreys", "mcmcglmm", "mvD", "limit", "uniform")),
     check_choice(linpred_method, c("joint", "cyclical", "solve_normal")),
     check_choice(vi_r_method, c("VEM", "fixed", "Laplace", "delta")),

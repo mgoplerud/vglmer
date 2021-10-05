@@ -253,11 +253,11 @@ calculate_ELBO <- function(family, ELBO_type, factorization_method,
     ex_XBZA <- (X %*% vi_beta_mean + Z %*% vi_alpha_mean)
   }
   # quadratic var, i.e. Var(x_i^T beta + z_i^T alpha)
-  if (factorization_method == "weak") {
-    if (is.null(vi_joint_decomp) | is.null(log_det_joint_var)) {
+  if (factorization_method %in% c("weak", "collapsed")) {
+    if (is.null(vi_joint_decomp)) {
       stop("Need to provide joint decomposition for ELBO weak")
     }
-    
+
     var_XBZA <- rowSums((cbind(X, Z) %*% t(vi_joint_decomp))^2)
     
     if (family == 'negbin'){
@@ -329,7 +329,7 @@ calculate_ELBO <- function(family, ELBO_type, factorization_method,
       entropy_1 <- ncol(vi_joint_decomp) / 2 * log(2 * pi * exp(1)) +
         1 / 2 * log_det_joint_var
     } else {
-      entropy_1 <- ncol(vi_beta_decomp) / 2 * log(2 * pi * exp(1)) + 1 / 2 * log_det_beta_var +
+      entropy_1 <- nrow(vi_beta_mean) / 2 * log(2 * pi * exp(1)) + 1 / 2 * log_det_beta_var +
         ncol(vi_alpha_decomp) / 2 * log(2 * pi * exp(1)) + 1 / 2 * log_det_alpha_var
     }
     #ENTROPY FOR LINK SPECIFIC PARAMETERS
