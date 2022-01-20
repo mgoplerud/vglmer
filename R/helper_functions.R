@@ -220,6 +220,7 @@ calculate_ELBO <- function(family, ELBO_type, factorization_method,
      # Fixed constants or priors
      d_j, g_j, prior_sigma_alpha_phi, prior_sigma_alpha_nu, 
      iw_prior_constant, choose_term,
+     store_assignment_Z, store_design_Z, outer_alpha_RE_positions,
      # Data
      X, Z, s, y,
      # PolyaGamma Parameters
@@ -230,8 +231,12 @@ calculate_ELBO <- function(family, ELBO_type, factorization_method,
      vi_beta_mean, vi_beta_decomp,
      vi_alpha_mean, vi_alpha_decomp,
      log_det_beta_var, log_det_alpha_var,
+     vi_alpha_var = NULL, vi_beta_var = NULL,
+     cyclical_pos = NULL,
      log_det_joint_var = NULL,
      vi_joint_decomp = NULL,
+     vi_collapsed_P = NULL,
+     vi_X_sparse = NULL,
      # r Parameters
      vi_r_mu = NULL, vi_r_mean = NULL,
      vi_r_sigma = NULL,
@@ -242,10 +247,13 @@ calculate_ELBO <- function(family, ELBO_type, factorization_method,
      do_huangwand = NULL, vi_a_a_jp = NULL, vi_a_b_jp = NULL,
      vi_a_nu_jp = NULL, vi_a_APRIOR_jp = NULL
   ) {
+  
   ####
   ## PREPARE INTERMEDIATE QUANTITES
   ###
+  
   N <- nrow(X)
+  
   # linear predictor: E[XB + ZA - log(r)]
   if (family == 'negbin'){
     ex_XBZA <- (X %*% vi_beta_mean + Z %*% vi_alpha_mean) - vi_r_mu
@@ -253,7 +261,8 @@ calculate_ELBO <- function(family, ELBO_type, factorization_method,
     ex_XBZA <- (X %*% vi_beta_mean + Z %*% vi_alpha_mean)
   }
   # quadratic var, i.e. Var(x_i^T beta + z_i^T alpha)
-  if (factorization_method %in% c("weak", "collapsed")) {
+  if (factorization_method == "weak") {
+    
     if (is.null(vi_joint_decomp)) {
       stop("Need to provide joint decomposition for ELBO weak")
     }
@@ -263,7 +272,29 @@ calculate_ELBO <- function(family, ELBO_type, factorization_method,
     if (family == 'negbin'){
       var_XBZA <- var_XBZA + vi_r_sigma
     }
+  } else if (grepl(factorization_method, pattern="collapsed")) {
+    
+    if (factorization_method == "collapsed_inv"){
+      
+      var_XBZA <- rowSums( ((- Z %*% vi_collapsed_P + X) %*% t(vi_beta_decomp))^2 )
+      var_XBZA <- var_XBZA + rowSums( (Z %*% t(vi_alpha_decomp))^2 )
+    } else if (factorization_method == "collapsed_2"){
+
+      var_XBZA <- cpp_quad_collapsed(V = vi_alpha_var, 
+         re_position_list = outer_alpha_RE_positions,
+         Z_list_raw = store_design_Z,
+         individual_assignments = store_assignment_Z,
+         vi_beta_var = as.matrix(vi_beta_var), 
+         P = vi_collapsed_P, X = X
+      )
+
+     }else {
+      var_XBZA <- rowSums( ( (- vi_X_sparse %*% vi_collapsed_P + Z) %*% t(vi_alpha_decomp) )^2 )
+      var_XBZA <- var_XBZA + rowSums( (X %*% t(vi_beta_decomp))^2 )
+    }
+
   } else {
+    
     beta_quad <- rowSums((X %*% t(vi_beta_decomp))^2)
     alpha_quad <- rowSums((Z %*% t(vi_alpha_decomp))^2)
     var_XBZA <- beta_quad + alpha_quad
@@ -330,7 +361,7 @@ calculate_ELBO <- function(family, ELBO_type, factorization_method,
         1 / 2 * log_det_joint_var
     } else {
       entropy_1 <- nrow(vi_beta_mean) / 2 * log(2 * pi * exp(1)) + 1 / 2 * log_det_beta_var +
-        ncol(vi_alpha_decomp) / 2 * log(2 * pi * exp(1)) + 1 / 2 * log_det_alpha_var
+        nrow(vi_alpha_mean) / 2 * log(2 * pi * exp(1)) + 1 / 2 * log_det_alpha_var
     }
     #ENTROPY FOR LINK SPECIFIC PARAMETERS
     if (family == 'linear'){

@@ -45,3 +45,21 @@ Eigen::VectorXd cpp_zVz(
   //   output(j) = norm_j;
   // }
 }
+
+
+// [[Rcpp::export]]
+Eigen::VectorXd cpp_zAz_nonfact(
+    const Eigen::MatrixXd Z,
+    const Eigen::MappedSparseMatrix<double> A
+){
+  
+  int N = Z.rows();
+  Eigen::VectorXd output(N);
+  
+  for (int i = 0; i < N; i++){
+    Eigen::VectorXd Z_i = Z.row(i);
+    Eigen::VectorXd intermediate_i = A * Z_i;
+    output(i) = (Z_i * intermediate_i).sum();
+  }
+  return output;
+}

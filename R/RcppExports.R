@@ -17,16 +17,34 @@ LinRegChol <- function(X, omega, prior_precision, y, save_chol = TRUE) {
     .Call('_vglmer_LinRegChol', PACKAGE = 'vglmer', X, omega, prior_precision, y, save_chol)
 }
 
-calculate_expected_outer_alpha <- function(L, alpha_mu, re_position_list) {
-    .Call('_vglmer_calculate_expected_outer_alpha', PACKAGE = 'vglmer', L, alpha_mu, re_position_list)
+decomp_calculate_expected_outer_alpha <- function(L, alpha_mu, re_position_list, tP, L_beta, do_adjustment) {
+    .Call('_vglmer_decomp_calculate_expected_outer_alpha', PACKAGE = 'vglmer', L, alpha_mu, re_position_list, tP, L_beta, do_adjustment)
 }
 
-unique_rows <- function(m) {
-    .Call('_vglmer_unique_rows', PACKAGE = 'vglmer', m)
+direct_calculate_expected_outer_alpha <- function(V, alpha_mu, re_position_list) {
+    .Call('_vglmer_direct_calculate_expected_outer_alpha', PACKAGE = 'vglmer', V, alpha_mu, re_position_list)
 }
 
-prepare_Z_for_px <- function(Mmap) {
-    .Call('_vglmer_prepare_Z_for_px', PACKAGE = 'vglmer', Mmap)
+#' Conjugate Gradient for Large VI Problems
+cg_custom <- function(X, Z, P, omega, ridge, s, old_alpha, tol, it_max = 0L, low_dimension = 5L) {
+    .Call('_vglmer_cg_custom', PACKAGE = 'vglmer', X, Z, P, omega, ridge, s, old_alpha, tol, it_max, low_dimension)
+}
+
+cpp_inv_alpha_var <- function(diag_vi_pg_mean, P, X, Tinv, vi_Z_list, beta_var_lndet) {
+    .Call('_vglmer_cpp_inv_alpha_var', PACKAGE = 'vglmer', diag_vi_pg_mean, P, X, Tinv, vi_Z_list, beta_var_lndet)
+}
+
+cpp_quad_collapsed <- function(V, re_position_list, Z_list_raw, individual_assignments, vi_beta_var, P, X) {
+    .Call('_vglmer_cpp_quad_collapsed', PACKAGE = 'vglmer', V, re_position_list, Z_list_raw, individual_assignments, vi_beta_var, P, X)
+}
+
+cpp_quad_legacy <- function(tZ, varA, tP, X, vi_beta_var) {
+    .Call('_vglmer_cpp_quad_legacy', PACKAGE = 'vglmer', tZ, varA, tP, X, vi_beta_var)
+}
+
+#' Cyclical Calculation of Variance Decomposition
+calculate_alpha_decomp_full_factor <- function(X, Z, P, omega, d_j, g_j, Tinv, re_position_list) {
+    .Call('_vglmer_calculate_alpha_decomp_full_factor', PACKAGE = 'vglmer', X, Z, P, omega, d_j, g_j, Tinv, re_position_list)
 }
 
 chol_sparse <- function(X, omega, precision) {
@@ -35,6 +53,10 @@ chol_sparse <- function(X, omega, precision) {
 
 cpp_zVz <- function(Z, V) {
     .Call('_vglmer_cpp_zVz', PACKAGE = 'vglmer', Z, V)
+}
+
+cpp_zAz_nonfact <- function(Z, A) {
+    .Call('_vglmer_cpp_zAz_nonfact', PACKAGE = 'vglmer', Z, A)
 }
 
 vecR_ridge_general <- function(L, pg_mean, Z, M, mapping_J, d, start_z, diag_only) {

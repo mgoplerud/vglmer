@@ -75,10 +75,13 @@ List LinRegChol(
 }
 
 // [[Rcpp::export]]
-List calculate_expected_outer_alpha(
+List decomp_calculate_expected_outer_alpha(
     const Eigen::MappedSparseMatrix<double> L, // L^T L = Var(alpha)
     const Eigen::Map<Eigen::VectorXd> alpha_mu, // E[alpha]
-    const Rcpp::List& re_position_list
+    const Rcpp::List& re_position_list,
+    const Eigen::MatrixXd tP,
+    const Eigen::MatrixXd L_beta,
+    const bool do_adjustment
 ){
   //Get the number of REs.
   int n_REs = re_position_list.size();
@@ -115,6 +118,10 @@ List calculate_expected_outer_alpha(
           
           double sum_i = L.col(index_i).cwiseProduct(L.col(index_i_prime)).sum();
           
+          if (do_adjustment){
+            sum_i += (L_beta * tP.col(index_i)).cwiseProduct(L_beta * tP.col(index_i_prime)).sum();
+          }
+          
           var_alpha_j_g(i, i_prime) = sum_i;
             
           summed_var_alpha(i,i_prime) = summed_var_alpha(i,i_prime) + sum_i;
@@ -123,6 +130,79 @@ List calculate_expected_outer_alpha(
         }
       }
 
+      var_alpha_j_g.triangularView<Eigen::StrictlyUpper>() = var_alpha_j_g.adjoint();
+      var_alpha_j[g] = var_alpha_j_g;
+    }
+    Eigen::MatrixXd oa_j = summed_var_alpha + summed_outer_alpha;
+    oa_j.triangularView<Eigen::StrictlyUpper>() = oa_j.adjoint();
+    outer_alpha[j] = oa_j;
+    var_alpha[j] = var_alpha_j;
+    mu_alpha[j] = summed_outer_alpha;
+  }
+  
+  return List::create(
+    Rcpp::Named("outer_alpha") = outer_alpha,
+    Rcpp::Named("variance_jg") = var_alpha,
+    Rcpp::Named("mu_j") = mu_alpha
+  );
+}
+
+
+// [[Rcpp::export]]
+List direct_calculate_expected_outer_alpha(
+    const Eigen::MappedSparseMatrix<double> V, // Var(alpha)
+    const Eigen::Map<Eigen::VectorXd> alpha_mu, // E[alpha]
+    const Rcpp::List& re_position_list
+){
+  //Get the number of REs.
+  int n_REs = re_position_list.size();
+  
+  List outer_alpha(n_REs);
+  List var_alpha(n_REs);
+  List mu_alpha(n_REs);
+  
+  Rcpp::NumericVector dim_RE = NumericVector(n_REs);
+  //For each random effect:
+  for (int j = 0; j < n_REs; ++j){
+    List re_positions_j = re_position_list[j];
+    int g_j = re_positions_j.size();
+    
+    NumericVector first_position = re_positions_j[0];
+    int size_RE_j = first_position.size();
+    
+    Eigen::MatrixXd summed_var_alpha = Eigen::MatrixXd::Zero(size_RE_j,size_RE_j);
+    Eigen::MatrixXd summed_outer_alpha = Eigen::MatrixXd::Zero(size_RE_j,size_RE_j);
+    
+    List var_alpha_j(g_j);
+    
+    // For each group g in random effect j.
+    for(int g = 0; g < g_j; ++g) {
+      //For each random effect alpha_{j,g}.
+      //Adjust for zero indexing.
+      NumericVector g_prime = re_positions_j[g];
+      
+      Eigen::MatrixXd var_alpha_j_g = Eigen::MatrixXd::Zero(size_RE_j,size_RE_j);
+      for (int i = 0; i < size_RE_j; i++){
+        
+        for (int i_prime = 0; i_prime <= i; i_prime++){
+          
+          int index_i = g_prime[i] - 1;
+          int index_i_prime = g_prime[i_prime] - 1;
+          
+          double sum_i = V.coeff(index_i, index_i_prime);
+          // double sum_i = L.col(index_i).cwiseProduct(L.col(index_i_prime)).sum();
+          // if (do_adjustment){
+          //   sum_i += (L_beta * tP.col(index_i)).cwiseProduct(L_beta * tP.col(index_i_prime)).sum();
+          // }
+          
+          var_alpha_j_g(i, i_prime) = sum_i;
+          
+          summed_var_alpha(i,i_prime) = summed_var_alpha(i,i_prime) + sum_i;
+          summed_outer_alpha(i, i_prime) = summed_outer_alpha(i, i_prime) +
+            alpha_mu(index_i) * alpha_mu(index_i_prime);
+        }
+      }
+      
       var_alpha_j_g.triangularView<Eigen::StrictlyUpper>() = var_alpha_j_g.adjoint();
       var_alpha_j[g] = var_alpha_j_g;
     }

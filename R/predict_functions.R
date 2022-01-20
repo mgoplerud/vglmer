@@ -253,6 +253,9 @@ predict.vglmer <- function(object, newdata,
   )
 
   factorization_method <- object$control$factorization_method
+  if (grepl(factorization_method, pattern="collapsed")){
+    stop('Set up predict for collapsed sampler.')
+  }
   if (is.matrix(samples)) {
     if (ncol(samples) != ncol(XZ)) {
       stop("Samples must be {m, ncol(Z) + ncol(X)}")
