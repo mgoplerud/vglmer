@@ -1329,7 +1329,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
           tic('mean_collapsed')          
         }
         
-        if (FALSE){
+        if (TRUE){
           
           M <- Z - X_sparse %*% vi_collapsed_P
           
@@ -1392,13 +1392,19 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
           Tinv = Tinv, vi_Z_list = vi_Z_list,
           beta_var_lndet = log_det_beta_var)
         
+        # fit_inv_collapsed$timing <- rev(-diff(rev(fit_inv_collapsed$timing))/10^9)
+        # fit_inv_collapsed$timing <- sort(sapply(split(fit_inv_collapsed$timing, names(fit_inv_collapsed$timing)), sum))
+        # 
+        # if (it == 1){
+        #   print(sort(fit_inv_collapsed$timing))
+        # }
 
         if (do_timing){
           toc(quiet = verbose_time, log = T)
           tic('bdiag_collapsed')
         }
         vi_alpha_var_list <- fit_inv_collapsed$variance
-        vi_alpha_var <- bdiag(fit_inv_collapsed$variance)
+        # vi_alpha_var <- bdiag(fit_inv_collapsed$variance)
         log_det_alpha_var <- sum(fit_inv_collapsed$logdet)
         if (do_timing){
           toc(quiet = verbose_time, log = T)
