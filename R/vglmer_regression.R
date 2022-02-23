@@ -902,6 +902,10 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
   if (debug_param) {
     store_beta <- array(NA, dim = c(iterations, p.X))
     store_alpha <- array(NA, dim = c(iterations, p.Z))
+    store_sigma <- array(NA, dim = c(iterations, sum(d_j^2)))
+    if (do_huangwand){
+      store_hw <- array(NA, dim = c(iterations, length(unlist(vi_a_b_jp))))
+    }
   }
   if (do_timing) {
     toc(quiet = verbose_time, log = TRUE)
@@ -1074,7 +1078,9 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
         d_j = d_j, g_j = g_j, prior_sigma_alpha_phi = prior_sigma_alpha_phi,
         prior_sigma_alpha_nu = prior_sigma_alpha_nu,
         iw_prior_constant = iw_prior_constant,
-        X = X, Z = Z, s = s, y = y,
+        store_assignment_Z = store_assignment_Z, 
+        store_design_Z = store_design_Z, 
+        X = X, Z = Z, s = s, y = y, outer_alpha_RE_positions = outer_alpha_RE_positions,
         vi_pg_b = vi_pg_b, vi_pg_mean = vi_pg_mean, vi_pg_c = vi_pg_c,
         vi_sigma_alpha = vi_sigma_alpha, vi_sigma_alpha_nu = vi_sigma_alpha_nu,
         vi_sigma_outer_alpha = vi_sigma_outer_alpha,
@@ -1329,7 +1335,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
           tic('mean_collapsed')          
         }
         
-        if (TRUE){
+        if (FALSE){
           
           M <- Z - X_sparse %*% vi_collapsed_P
           
@@ -1404,7 +1410,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
           tic('bdiag_collapsed')
         }
         vi_alpha_var_list <- fit_inv_collapsed$variance
-        # vi_alpha_var <- bdiag(fit_inv_collapsed$variance)
+        vi_alpha_var <- bdiag(fit_inv_collapsed$variance)
         log_det_alpha_var <- sum(fit_inv_collapsed$logdet)
         if (do_timing){
           toc(quiet = verbose_time, log = T)
@@ -1707,7 +1713,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     if (debug_ELBO & it != 1) {
       variance_by_alpha_jg <- calculate_expected_outer_alpha(
         factorization_method = factorization_method,
-        alpha_decom_var = vi_alpha_decomp, 
+        alpha_decomp_var = vi_alpha_decomp, 
                           alpha_mu = as.vector(vi_alpha_mean), alpha_var = vi_alpha_var,
                           re_position_list = outer_alpha_RE_positions,
                           tP = t(vi_collapsed_P), L_beta = as.matrix(vi_beta_decomp), do_adjustment = adjust_ceoa)
@@ -1719,7 +1725,9 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
         d_j = d_j, g_j = g_j, prior_sigma_alpha_phi = prior_sigma_alpha_phi,
         prior_sigma_alpha_nu = prior_sigma_alpha_nu,
         iw_prior_constant = iw_prior_constant,
-        X = X, Z = Z, s = s, y = y,
+        store_assignment_Z = store_assignment_Z, 
+        store_design_Z = store_design_Z, 
+        X = X, Z = Z, s = s, y = y, outer_alpha_RE_positions = outer_alpha_RE_positions,
         vi_pg_b = vi_pg_b, vi_pg_mean = vi_pg_mean, vi_pg_c = vi_pg_c,
         vi_sigma_alpha = vi_sigma_alpha, vi_sigma_alpha_nu = vi_sigma_alpha_nu,
         vi_sigma_outer_alpha = vi_sigma_outer_alpha,
@@ -1765,7 +1773,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
         # vi_sigma_outer_alpha <<- vi_sigma_outer_alpha
         # vi_a_a_jp <<- vi_a_a_jp
         # vi_a_b_jp <<- vi_a_b_jp
-      
+        
         variance_by_alpha_jg <- calculate_expected_outer_alpha(
           factorization_method = factorization_method,
           alpha_decomp_var = vi_alpha_decomp, 
@@ -1888,7 +1896,9 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
         d_j = d_j, g_j = g_j, prior_sigma_alpha_phi = prior_sigma_alpha_phi,
         prior_sigma_alpha_nu = prior_sigma_alpha_nu,
         iw_prior_constant = iw_prior_constant,
-        X = X, Z = Z, s = s, y = y,
+        store_assignment_Z = store_assignment_Z, 
+        store_design_Z = store_design_Z, 
+        X = X, Z = Z, s = s, y = y, outer_alpha_RE_positions = outer_alpha_RE_positions,
         vi_pg_b = vi_pg_b, vi_pg_mean = vi_pg_mean, vi_pg_c = vi_pg_c,
         vi_sigma_alpha = vi_sigma_alpha, vi_sigma_alpha_nu = vi_sigma_alpha_nu,
         vi_sigma_outer_alpha = vi_sigma_outer_alpha,
@@ -1933,7 +1943,6 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
         vi_alpha_mean <- vi_alpha_mean - M_prime_one %*% vi_mu_j
         vi_beta_mean <- vi_beta_mean + t(M_mu_to_beta) %*% vi_mu_j
       }
-      
       variance_by_alpha_jg <- calculate_expected_outer_alpha(
         factorization_method = factorization_method,
         alpha_decomp_var = vi_alpha_decomp, alpha_var = vi_alpha_var,
@@ -1957,7 +1966,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
         d_j = d_j, g_j = g_j, prior_sigma_alpha_phi = prior_sigma_alpha_phi,
         prior_sigma_alpha_nu = prior_sigma_alpha_nu,
         iw_prior_constant = iw_prior_constant,
-        X = X, Z = Z, s = s, y = y,
+        X = X, Z = Z, s = s, y = y, 
         vi_pg_b = vi_pg_b, vi_pg_mean = vi_pg_mean, vi_pg_c = vi_pg_c,
         vi_sigma_alpha = vi_sigma_alpha, vi_sigma_alpha_nu = vi_sigma_alpha_nu,
         vi_sigma_outer_alpha = vi_sigma_outer_alpha,
@@ -1977,10 +1986,10 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
 
       if (!quiet_rho){cat('r')}
 
-      raw_R <- R_ridge <- vecR_ridge_new(L = vi_alpha_decomp[,nonspline_positions], pg_mean = diag(diag_vi_pg_mean),
+      raw_R <- R_ridge <- vecR_ridge_new(L = vi_alpha_decomp, pg_mean = diag(diag_vi_pg_mean),
         mapping_J = mapping_J, d = d_j[!spline_REs],
         store_id = store_id, store_re_id = store_re_id,
-        store_design = store_design, 
+        store_design = store_design_Z, 
         diag_only = (factorization_method == 'strong'))
 
       if (factorization_method == 'weak'){
@@ -2072,6 +2081,9 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
          rownames(update_expansion_bX) <- colnames(X)
       }else{#Do the FULL update
         
+        
+        browser()
+        
         XR <- drop0(cbind(drop0(X), Z[,-nonspline_positions], drop0(R_design)))
         R_ridge <- bdiag(zeromat_beta, R_spline_ridge, R_ridge)
         
@@ -2091,14 +2103,14 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
 
       est_rho <- update_expansion_XR[-seq_len(p.X + size_splines)]
       
-      if (!quiet_rho){print(round(est_rho, 4))}
+      if (!quiet_rho){print(round(est_rho, 6))}
       if (parameter_expansion == 'diagonal'){
-        if (max(abs(est_rho - 1)) < 1e-4){
+        if (max(abs(est_rho - 1)) < 1e-6){
           if (!quiet_rho){print('No further improvements')}
           skip_translate <- TRUE
         }
       }else{
-        if (max(abs(est_rho - stationary_rho)) < 1e-4){
+        if (max(abs(est_rho - stationary_rho)) < 1e-6){
           if (!quiet_rho){print('No further improvements')}
           skip_translate <- TRUE
         }
@@ -2865,6 +2877,10 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     if (debug_param) {
       store_beta[it, ] <- as.vector(vi_beta_mean)
       store_alpha[it, ] <- as.vector(vi_alpha_mean)
+      store_sigma[it,] <- do.call('c', lapply(vi_sigma_alpha, as.vector))
+      if (do_huangwand){
+        store_hw[it,] <- do.call('c', vi_a_b_jp)
+      }
     }
     
     change_all <- data.frame(change_alpha_mean, change_beta_mean, 
@@ -2960,9 +2976,12 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     
     store_beta <- store_beta[1:it,,drop=F]
     store_alpha <- store_alpha[1:it,,drop=F]
-    
+    store_sigma <- store_sigma[1:it,,drop=F]
+    store_hw <- store_hw[1:it,,drop=F]
     output$parameter_trajectory <- list(beta = store_beta,
-                                        alpha = store_alpha)
+                                        alpha = store_alpha,
+                                        sigma = store_sigma,
+                                        hw = store_hw)
   }
   if (factorization_method == "weak") {
     output$joint <- vi_joint_decomp
