@@ -6,8 +6,8 @@
 \usage{
 vglmer_control(
   iterations = 1000,
-  prior_variance = "mean_exists",
-  factorization_method = "weak",
+  prior_variance = "hw",
+  factorization_method = "strong",
   tolerance_elbo = 1e-08,
   tolerance_parameters = 1e-05,
   prevent_degeneracy = FALSE,
@@ -27,6 +27,9 @@ vglmer_control(
   print_prog = NULL,
   quiet = T,
   quiet_rho = TRUE,
+  debug_px = FALSE,
+  px_method = "numerical",
+  px_numerical_it = 5,
   init = "EM_FE"
 )
 }

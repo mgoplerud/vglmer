@@ -225,24 +225,30 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     stop("Check ELBO_type")
   }
 
-  
   # Extract X (FE design matrix)
   fe_fmla <- vglmer_interpret.gam0(nobars(formula), extra.special = 'v_s')
   
   if (length(fe_fmla$smooth.spec) > 0){
+    
     # Add the linear spline terms to the main effect.
+    fe_update <- sapply(fe_fmla$smooth.spec, FUN=function(i){
+      if (i$by != "NA" & i$by_re == FALSE){
+        fe_i <- paste0(i$term, ' * ', i$by)
+      }else{
+        fe_i <- i$term
+      }
+    })
+    fe_update <- paste0(fe_update, collapse = ' + ')
     
     fe_fmla <- update.formula(fe_fmla$pf,
-        paste0('. ~ . + 1 + ',
-        paste0(sapply(fe_fmla$smooth.spec, FUN=function(i){i$term}),
-        collapse = " + "))
+        paste0('. ~ . + 1 + ', fe_update)
     )
-    
     
   }else{
     fe_fmla <- fe_fmla$pf
   }
   
+  # Create the FE design
   X <- model.matrix(fe_fmla, data = data)
   
   # Extract the Z (Random Effect) design matrix.
@@ -254,7 +260,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
       FUN=function(i){i$by}) %in% c('NA'))){
     
     by_splines <- parse_formula$smooth.spec[
-      which(sapply(parse_formula$smooth.spec, FUN=function(i){i$by != "NA"}))
+      which(sapply(parse_formula$smooth.spec, FUN=function(i){(i$by != "NA" & i$by_re == TRUE)}))
     ]
     
     character_re <- lapply(re_fmla, FUN=function(i){strsplit(deparse(i), split = ' \\| ')[[1]]})
@@ -300,6 +306,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     re_fmla <- lapply(character_re, FUN=function(i){str2lang(paste0(i[1], ' | ', i[2]))})
     
   }
+  
   
   if (!is.null(re_fmla)){
     mk_Z <- mkReTrms(re_fmla, data, reorder.terms = FALSE, reorder.vars = FALSE)
@@ -418,7 +425,6 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     Z.spline.size <- rep(NA, n.specials)
     special_counter <- 1
     
-    
     for (i in 1:base_specials){
       
       special_i <- parse_formula$smooth.spec[[i]]
@@ -426,7 +432,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
       all_splines_i <- vglmer_build_spline(x = data[[special_i$term]], 
           by = data[[special_i$by]],
           knots = special_i$knots, type = special_i$type,
-          outer_okay = special_i$outer_okay)
+          outer_okay = special_i$outer_okay, by_re = special_i$by_re)
       
       Z.spline.attr[[i]] <- c(all_splines_i[[1]]$attr, 
         list(type = special_i$type, by = special_i$by))
@@ -456,6 +462,8 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
         p.Z <- p.Z + ncol(spline_i$x)
         spline_counter <- spline_counter + 1
         special_counter <- special_counter + 1
+        
+        
       }
     }
     
@@ -489,6 +497,9 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
   }
 
   if (control$parameter_expansion %in% c('translation', 'diagonal')){
+    px_method <- control$px_method
+    debug_px <- control$debug_px
+    px_it <- control$px_numerical_it
     parsed_RE_groups <- get_RE_groups(formula = re_fmla, data = data)
   }
   
@@ -831,6 +842,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     size_splines <- sum((d_j * g_j)[spline_REs])
     
     stationary_rho <- do.call('c', lapply(d_j[!spline_REs], FUN=function(i){as.vector(diag(x = i))}))
+    est_rho <- stationary_rho
     diag_rho <- which(stationary_rho == 1)
     
     zeromat_beta <- drop0(Diagonal(x = rep(0, ncol(X))))
@@ -1565,29 +1577,34 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
       
       attempted_expansion <- attempted_expansion + 1
       
-      prior.ELBO <- calculate_ELBO(family = family, ELBO_type = ELBO_type,
-        factorization_method = factorization_method,
-        d_j = d_j, g_j = g_j, prior_sigma_alpha_phi = prior_sigma_alpha_phi,
-        prior_sigma_alpha_nu = prior_sigma_alpha_nu,
-        iw_prior_constant = iw_prior_constant,
-        X = X, Z = Z, s = s, y = y,
-        vi_pg_b = vi_pg_b, vi_pg_mean = vi_pg_mean, vi_pg_c = vi_pg_c,
-        vi_sigma_alpha = vi_sigma_alpha, vi_sigma_alpha_nu = vi_sigma_alpha_nu,
-        vi_sigma_outer_alpha = vi_sigma_outer_alpha,
-        vi_beta_mean = vi_beta_mean, vi_alpha_mean = vi_alpha_mean,
-        log_det_beta_var = log_det_beta_var, log_det_alpha_var = log_det_alpha_var,
-        vi_beta_decomp = vi_beta_decomp, vi_alpha_decomp = vi_alpha_decomp,
-        vi_joint_decomp = vi_joint_decomp, choose_term = choose_term,
-        vi_sigmasq_a = vi_sigmasq_a, vi_sigmasq_b = vi_sigmasq_b, 
-        vi_sigmasq_prior_a = vi_sigmasq_prior_a, vi_sigmasq_prior_b = vi_sigmasq_prior_b,
-        log_det_joint_var = log_det_joint_var, 
-        vi_r_mu = vi_r_mu, vi_r_mean = vi_r_mean, vi_r_sigma = vi_r_sigma,
-        do_huangwand = do_huangwand, vi_a_a_jp = vi_a_a_jp, vi_a_b_jp = vi_a_b_jp,
-        vi_a_nu_jp = vi_a_nu_jp, vi_a_APRIOR_jp = vi_a_APRIOR_jp
-      )
+      if (debug_px | px_method == 'OSL'){
+        prior.ELBO <- calculate_ELBO(family = family, ELBO_type = ELBO_type,
+           factorization_method = factorization_method,
+           d_j = d_j, g_j = g_j, prior_sigma_alpha_phi = prior_sigma_alpha_phi,
+           prior_sigma_alpha_nu = prior_sigma_alpha_nu,
+           iw_prior_constant = iw_prior_constant,
+           X = X, Z = Z, s = s, y = y,
+           vi_pg_b = vi_pg_b, vi_pg_mean = vi_pg_mean, vi_pg_c = vi_pg_c,
+           vi_sigma_alpha = vi_sigma_alpha, vi_sigma_alpha_nu = vi_sigma_alpha_nu,
+           vi_sigma_outer_alpha = vi_sigma_outer_alpha,
+           vi_beta_mean = vi_beta_mean, vi_alpha_mean = vi_alpha_mean,
+           log_det_beta_var = log_det_beta_var, log_det_alpha_var = log_det_alpha_var,
+           vi_beta_decomp = vi_beta_decomp, vi_alpha_decomp = vi_alpha_decomp,
+           vi_joint_decomp = vi_joint_decomp, choose_term = choose_term,
+           vi_sigmasq_a = vi_sigmasq_a, vi_sigmasq_b = vi_sigmasq_b, 
+           vi_sigmasq_prior_a = vi_sigmasq_prior_a, vi_sigmasq_prior_b = vi_sigmasq_prior_b,
+           log_det_joint_var = log_det_joint_var, 
+           vi_r_mu = vi_r_mu, vi_r_mean = vi_r_mean, vi_r_sigma = vi_r_sigma,
+           do_huangwand = do_huangwand, vi_a_a_jp = vi_a_a_jp, vi_a_b_jp = vi_a_b_jp,
+           vi_a_nu_jp = vi_a_nu_jp, vi_a_APRIOR_jp = vi_a_APRIOR_jp
+        )
+      }
 
       if (!quiet_rho){cat('r')}
-
+      
+      if (do_timing){
+        tic('px_r')
+      }
       raw_R <- R_ridge <- vecR_ridge_new(L = vi_alpha_decomp[,nonspline_positions], pg_mean = diag(diag_vi_pg_mean),
         mapping_J = mapping_J, d = d_j[!spline_REs],
         store_id = store_id, store_re_id = store_re_id,
@@ -1626,30 +1643,47 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
          })
         prior_weight <- vi_a_nu_jp + d_j - 1
       }
-      
-      diag_weight <- diag_weight[!spline_REs]
-      prior_weight <- prior_weight[!spline_REs]
-
-      vec_OSL_prior <- mapply(moments_sigma_alpha[!spline_REs], diag_weight, prior_weight, 
-        SIMPLIFY = FALSE, FUN=function(moment_j, phi_j, nu_j){
-        as.vector(moment_j$sigma.inv %*% phi_j - nu_j * Diagonal(n = nrow(phi_j)))
-      })
+      vec_OSL_prior <- mapply(moments_sigma_alpha[!spline_REs], 
+                              diag_weight[!spline_REs], 
+                              prior_weight[!spline_REs], 
+                              SIMPLIFY = FALSE, FUN=function(moment_j, phi_j, nu_j){
+                                as.vector(moment_j$sigma.inv %*% phi_j - nu_j * Diagonal(n = nrow(phi_j)))
+                              })
       vec_OSL_prior <- do.call('c', vec_OSL_prior)
-      vec_OSL_prior <- matrix(c(rep(0, ncol(X)), rep(0, size_splines), vec_OSL_prior))
-      
+
       if (sum(spline_REs)){
-        if (factorization_method == 'strong'){
-          R_spline_ridge <- bdiag(Tinv[spline_REs])
-        }else{
-          R_spline_ridge <- Tinv[-nonspline_positions, -nonspline_positions]
-        }
+        R_spline_design <- sapply(cyclical_pos[spline_REs], FUN=function(i){
+          as.vector(Z[,i] %*% vi_alpha_mean[i,])
+        })
+        
+        OSL_spline_prior <- unlist(mapply(moments_sigma_alpha[spline_REs], 
+                                diag_weight[spline_REs], 
+                                prior_weight[spline_REs], 
+                                SIMPLIFY = FALSE, FUN=function(moment_j, phi_j, nu_j){
+                                  as.vector(moment_j$sigma.inv %*% phi_j - nu_j * Diagonal(n = nrow(phi_j)))
+                                }))
+        vec_OSL_prior <- matrix(c(rep(0, ncol(X)), OSL_spline_prior, vec_OSL_prior))
+        
+        R_spline_ridge <- sapply(cyclical_pos[spline_REs], FUN=function(s){vi_alpha_decomp[,s, drop = F]})
+        R_spline_ridge <- Diagonal(x =mapply(R_spline_ridge, cyclical_pos[spline_REs], FUN=function(V, pos){
+          sum(vi_pg_mean * cpp_zVz(Z = drop0(Z[,pos,drop=F]), V = as(V, 'dgCMatrix')))
+        }))
+        R_spline_ridge <- as(R_spline_ridge, 'dgCMatrix')
       }else{
+        vec_OSL_prior <- matrix(c(rep(0, ncol(X)), vec_OSL_prior))
         R_spline_ridge <- drop0(matrix(0, nrow = 0, ncol = 0))
+        R_spline_design <- matrix(nrow = nrow(X), ncol = 0)
+      }
+      
+      
+      if (do_timing){
+        toc(quiet = verbose_time, log = TRUE)
+        tic('px_fit')
       }
       #If a DIAGONAL expansion, then only update the diagonal elements
       if (parameter_expansion == "diagonal"){
         
-        XR <- cbind(X, Z[,-nonspline_positions], R_design[, diag_rho])
+        XR <- cbind(X, R_spline_design, R_design[, diag_rho])
         R_ridge <- bdiag(zeromat_beta, R_spline_ridge, R_ridge[diag_rho, diag_rho])
         
         if (do_huangwand){
@@ -1658,9 +1692,9 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
                                                vi_a_b_jp[!spline_REs],
                                                SIMPLIFY = FALSE,
             FUN=function(i,a,b){1-2/i^2 * a/b}))
-          vec_OSL_prior <- c(rep(0, p.X + size_splines), vec_OSL_prior)
+          vec_OSL_prior <- c(rep(0, p.X), OSL_spline_prior, vec_OSL_prior)
         }else{
-          vec_OSL_prior <- vec_OSL_prior[c(seq_len(p.X + size_splines), p.X + size_splines + diag_rho),,drop=F]
+          vec_OSL_prior <- vec_OSL_prior[c(seq_len(p.X + sum(spline_REs)), p.X + sum(spline_REs) + diag_rho),,drop=F]
         }
         if (length(vec_OSL_prior) != ncol(XR)){stop('MISALIGNED DIMENSIONS')}
         
@@ -1681,42 +1715,63 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
          update_diag_R <- split(update_expansion_XR[-seq_len(p.X + size_splines)], 
                                 rep(1:(number_of_RE - sum(spline_REs)), d_j[!spline_REs]))
          rownames(update_expansion_bX) <- colnames(X)
-      }else{#Do the FULL update
+      }else{
         
-        XR <- drop0(cbind(drop0(X), Z[,-nonspline_positions], drop0(R_design)))
+        XR <- drop0(cbind(drop0(X), drop0(R_spline_design), drop0(R_design)))
         R_ridge <- bdiag(zeromat_beta, R_spline_ridge, R_ridge)
         
-        update_expansion_XR <- vecR_fast_ridge(X = XR, 
-         omega = diag_vi_pg_mean, prior_precision = R_ridge, y = as.vector(s), 
-         adjust_y = as.vector(vec_OSL_prior))
+        # update_expansion_XR <- vecR_fast_ridge(X = XR, 
+        #  omega = diag_vi_pg_mean, prior_precision = R_ridge, y = as.vector(s), 
+        #  adjust_y = as.vector(vec_OSL_prior))
+        
+        update_expansion_XR <- update_rho(
+          XR = XR, y = s, omega = diag_vi_pg_mean, 
+          prior_precision = R_ridge, vi_beta_mean = vi_beta_mean,
+          vec_OSL_prior = as.vector(vec_OSL_prior), 
+          moments_sigma_alpha = moments_sigma_alpha,
+          diag_weight = diag_weight,
+          prior_weight = prior_weight, stationary_rho = stationary_rho,
+          spline_REs = spline_REs, d_j = d_j,
+          p.X = p.X, method = px_method, px_it = px_it
+        )
         
         update_expansion_bX <- Matrix(update_expansion_XR[1:p.X])
-        update_expansion_splines <- Matrix(update_expansion_XR[-(1:p.X)][seq_len(size_splines)])
-        update_expansion_R <- mapply(split(update_expansion_XR[-1:-(p.X + size_splines)], 
+        update_expansion_splines <- as.list(update_expansion_XR[-(1:p.X)][seq_len(sum(spline_REs))])
+        update_expansion_R <- mapply(split(update_expansion_XR[-1:-(p.X + sum(spline_REs))], 
           rep(1:(number_of_RE - sum(spline_REs)), d_j[!spline_REs]^2)), d_j[!spline_REs], 
           SIMPLIFY = FALSE, FUN=function(i,d){matrix(i, nrow = d)})
         
       }
       
-      gc()
-
-      est_rho <- update_expansion_XR[-seq_len(p.X + size_splines)]
+      if (do_timing){
+        toc(quiet = verbose_time, log = TRUE)
+        tic('px_propose')
+      }
+        
+      est_rho_all <- update_expansion_XR[-(1:p.X)]
+      if (sum(spline_REs)){
+        est_rho_spline <- est_rho_all[seq_len(sum(spline_REs))]
+        est_rho <- est_rho_all[-seq_len(sum(spline_REs))]
+      }else{
+        est_rho <- est_rho_all
+        est_rho_spline <- 1
+      }
       
-      if (!quiet_rho){print(round(est_rho, 4))}
+      if (!quiet_rho){print(round(est_rho_all, 5))}
       if (parameter_expansion == 'diagonal'){
-        if (max(abs(est_rho - 1)) < 1e-4){
+        if ( (max(abs(est_rho - 1)) < 1e-6) & (max(abs(est_rho_spline - 1)) < 1e-6) ){
           if (!quiet_rho){print('No further improvements')}
           skip_translate <- TRUE
         }
       }else{
-        if (max(abs(est_rho - stationary_rho)) < 1e-4){
+        if ( (max(abs(est_rho - stationary_rho)) < 1e-6) & (max(abs(est_rho_spline - 1)) < 1e-6) ){
           if (!quiet_rho){print('No further improvements')}
           skip_translate <- TRUE
         }
       }
       
       if (sum(spline_REs) > 0){
-
+        
         if (parameter_expansion == 'diagonal'){
           old_update_diag_R <- update_diag_R
           update_diag_R <- lapply(d_j, FUN=function(i){rep(1, i)})
@@ -1726,6 +1781,8 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
         old_update_expansion_R <- update_expansion_R
         update_expansion_R <- lapply(d_j, FUN=function(i){diag(i)})
         update_expansion_R[!spline_REs] <- old_update_expansion_R
+        update_expansion_R[spline_REs] <- lapply(update_expansion_splines, FUN=function(i){matrix(i)})
+        
         rm(old_update_expansion_R)
       }
 
@@ -1797,34 +1854,48 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
       # #R Var R^T --->
       # # L %*% R^T
 
-      prop.ELBO <- calculate_ELBO(family = family,
-        ELBO_type = ELBO_type,
-        factorization_method = factorization_method,
-        d_j = d_j, g_j = g_j, prior_sigma_alpha_phi = prior_sigma_alpha_phi,
-        prior_sigma_alpha_nu = prior_sigma_alpha_nu,
-        iw_prior_constant = iw_prior_constant,
-        X = X, Z = Z, s = s, y = y,
-        vi_pg_b = vi_pg_b, vi_pg_mean = vi_pg_mean, vi_pg_c = vi_pg_c,
-        vi_sigma_alpha = prop_vi_sigma_alpha, vi_sigma_alpha_nu = vi_sigma_alpha_nu,
-        vi_sigma_outer_alpha = prop_vi_sigma_outer_alpha,
-        vi_beta_mean = prop_vi_beta_mean, vi_alpha_mean = prop_vi_alpha_mean,
-        
-        log_det_beta_var = prop_log_det_beta_var, 
-        log_det_alpha_var = prop_log_det_alpha_var,
-        log_det_joint_var = prop_log_det_joint_var,
-        
-        vi_beta_decomp = prop_vi_beta_decomp, 
-        vi_alpha_decomp = prop_vi_alpha_decomp,
-        vi_joint_decomp = prop_vi_joint_decomp,
-        
-        do_huangwand = do_huangwand, vi_a_a_jp = vi_a_a_jp, 
-        vi_a_b_jp = prop_vi_a_b_jp,
-        vi_a_nu_jp = vi_a_nu_jp, vi_a_APRIOR_jp = vi_a_APRIOR_jp,
-        choose_term
-      )
+      # if (it == 50){browser()}
+      if (debug_px | px_method == 'OSL'){
+        prop.ELBO <- calculate_ELBO(family = family,
+                                    ELBO_type = ELBO_type,
+                                    factorization_method = factorization_method,
+                                    d_j = d_j, g_j = g_j, prior_sigma_alpha_phi = prior_sigma_alpha_phi,
+                                    prior_sigma_alpha_nu = prior_sigma_alpha_nu,
+                                    iw_prior_constant = iw_prior_constant,
+                                    X = X, Z = Z, s = s, y = y,
+                                    vi_pg_b = vi_pg_b, vi_pg_mean = vi_pg_mean, vi_pg_c = vi_pg_c,
+                                    vi_sigma_alpha = prop_vi_sigma_alpha, vi_sigma_alpha_nu = vi_sigma_alpha_nu,
+                                    vi_sigma_outer_alpha = prop_vi_sigma_outer_alpha,
+                                    vi_beta_mean = prop_vi_beta_mean, vi_alpha_mean = prop_vi_alpha_mean,
+                                    
+                                    log_det_beta_var = prop_log_det_beta_var, 
+                                    log_det_alpha_var = prop_log_det_alpha_var,
+                                    log_det_joint_var = prop_log_det_joint_var,
+                                    
+                                    vi_beta_decomp = prop_vi_beta_decomp, 
+                                    vi_alpha_decomp = prop_vi_alpha_decomp,
+                                    vi_joint_decomp = prop_vi_joint_decomp,
+                                    
+                                    do_huangwand = do_huangwand, vi_a_a_jp = vi_a_a_jp, 
+                                    vi_a_b_jp = prop_vi_a_b_jp,
+                                    vi_a_nu_jp = vi_a_nu_jp, vi_a_APRIOR_jp = vi_a_APRIOR_jp,
+                                    choose_term
+        )
+      }
       if (!quiet_rho){cat('d')}
-      if (prop.ELBO$ELBO > prior.ELBO$ELBO){
-        #Accept the PX-VB adjustment (OSL).
+      
+      accept.px <- FALSE
+      if (px_method == 'OSL' | debug_px){
+        if (prop.ELBO$ELBO > prior.ELBO$ELBO){
+          accept.px <- TRUE
+        }
+      }else{
+        accept.PX <- TRUE
+      }
+      if (accept.PX){
+        
+        # Accept the PX-VB adjustment
+        
         vi_beta_mean <- prop_vi_beta_mean
         vi_alpha_mean <- prop_vi_alpha_mean
         vi_sigma_alpha <- prop_vi_sigma_alpha
@@ -1845,13 +1916,22 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
         if (do_huangwand){
           vi_a_b_jp <- prop_vi_a_b_jp
         }
-        accept.PX <- TRUE
       }else{
-        accept.PX <- FALSE
+        if (px_method == 'numerical'){stop("PX SHOULD NOT FAIL")}
       }
-      if (!quiet_rho){print(accept.PX)}
+      if (!quiet_rho){
+        print(accept.PX)
+        if (debug_px){
+          out_px <- c(prop.ELBO$ELBO, prior.ELBO$ELBO)
+          names(out_px) <- c('PX', 'prior')
+          print(out_px)
+        }
+      }
       accepted_times <- accept.PX + accepted_times
 
+      if (do_timing){
+        toc(quiet = verbose_time, log = TRUE)
+      }
       rm(prop_vi_beta_mean, prop_vi_alpha_mean, prop_vi_sigma_alpha, prop_vi_alpha_decomp,
          prop_log_det_alpha_var, prop_variance_by_alpha_jg, prop_vi_sigma_outer_alpha)
 
@@ -1884,14 +1964,14 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
       )
 
     } else {
-      # Should be no case
+      
       if (accept.PX){
         final.ELBO <- prop.ELBO
       }else{
         final.ELBO <- prior.ELBO
       }
     }
-    
+
     if (do_timing) {
       toc(quiet = verbose_time, log = TRUE)
       tic("Update Squarem")
@@ -2489,6 +2569,9 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
   if (parameter_expansion == "translation") {
     final.ELBO$accepted_PX <- accepted_times / attempted_expansion
   }
+
+  rownames(vi_beta_mean) <- colnames(X)
+  
   output <- list(
     beta = list(mean = vi_beta_mean),
     ELBO = final.ELBO, debug_ELBO = d.ELBO,
@@ -2640,13 +2723,14 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
 #' @importFrom checkmate assert check_double check_logical check_choice check_int check_integerish
 #' @export
 vglmer_control <- function(iterations = 1000,
-   prior_variance = "mean_exists", factorization_method = "weak",
+   prior_variance = "hw", factorization_method = "strong",
    tolerance_elbo = 1e-8, tolerance_parameters = 1e-5,
    prevent_degeneracy = FALSE, force_whole = TRUE, verbose_time = TRUE,
    parameter_expansion = "mean", random_seed = 1, do_timing = FALSE,
    debug_param = FALSE, return_data = FALSE, linpred_method = "joint",
    vi_r_method = "VEM", vi_r_val = NA, do_SQUAREM = TRUE, verify_columns = FALSE,
    debug_ELBO = FALSE, print_prog = NULL, quiet = T, quiet_rho = TRUE,
+   debug_px = FALSE, px_method = 'numerical', px_numerical_it = 5,
    init = "EM_FE") {
   
   # use checkmate package to verify arguments
@@ -2672,14 +2756,8 @@ vglmer_control <- function(iterations = 1000,
     stop('vi_r_val must not be NA if vi_r_method = "fixed"')
   }
 
-  output <- namedList(
-    iterations, prior_variance, factorization_method,
-    tolerance_elbo, tolerance_parameters, quiet_rho,verify_columns,
-    prevent_degeneracy, force_whole, verbose_time, do_SQUAREM,
-    parameter_expansion, random_seed, do_timing, debug_param, return_data,
-    linpred_method, vi_r_method, vi_r_val, debug_ELBO, print_prog, quiet, init
-  )
-
+  output <- mget(ls())
+  
   class(output) <- c("vglmer_control")
   return(output)
 }

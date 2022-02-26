@@ -16,7 +16,9 @@ formOmega <- function(a,b,intKnots){
 # on a spline basis
 #' @importFrom splines bs
 #' @export
-v_s <- function(..., type = 'tpf', knots = NULL, outer_okay = FALSE, by = NA){
+v_s <- function(..., type = 'tpf', knots = NULL,
+                by_re = TRUE,
+                outer_okay = FALSE, by = NA){
   if (!(type %in% c('tpf', 'o'))){stop('non tpf not set up yet...')}
   # Using mgcv's syntax for "s" to make it work with "interpret.gam"
   vars <- as.list(substitute(list(...)))[-1]
@@ -36,7 +38,8 @@ v_s <- function(..., type = 'tpf', knots = NULL, outer_okay = FALSE, by = NA){
   label <- paste0("v_s(", term[1], ")")
   
   ret <- list(term = term, outer_okay = outer_okay,
-              by = by.var, type = type, knots = knots)
+              by = by.var, type = type, knots = knots,
+              by_re = by_re)
   class(ret) <- 'vglmer_spline'
   
   return(ret)
@@ -44,7 +47,7 @@ v_s <- function(..., type = 'tpf', knots = NULL, outer_okay = FALSE, by = NA){
 
 #' @importFrom splines spline.des
 vglmer_build_spline <- function(x, knots = NULL, Boundary.knots = NULL, 
-  by, type, override_warn = FALSE, outer_okay = FALSE){
+  by, type, override_warn = FALSE, outer_okay = FALSE, by_re = NULL){
 
   if (is.null(knots)){
     ux <- length(unique(x))
@@ -113,6 +116,8 @@ vglmer_build_spline <- function(x, knots = NULL, Boundary.knots = NULL,
                         knots = intKnots, eigen_D = eD)
 
   }else{stop('splines only set up for tpf and o')}
+  
+  spline_attr$by_re <- by_re
   
   if (!is.null(by)){
     
@@ -228,9 +233,10 @@ vglmer_interpret.gam0 <- function(gf, textra = NULL, extra.special = NULL){
         st <- try(eval(parse(text = paste("vglmer::", 
                                           terms[i], sep = "")), envir = p.env), 
                   silent = TRUE)
-        if (inherits(st, "try-error")) 
+        if (inherits(st, "try-error")) {
           st <- eval(parse(text = terms[i]), enclos = p.env, 
                      envir = mgcvns)
+        }
         if (!is.null(textra)) {
           pos <- regexpr("(", st$lab, fixed = TRUE)[1]
           st$label <- paste(substr(st$label, start = 1, 

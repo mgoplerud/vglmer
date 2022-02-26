@@ -109,6 +109,7 @@ Eigen::MatrixXd vecR_design(
   
   Eigen::MatrixXd design_R(nrow_Z, size_vecR);
   
+  // Loop over each observation
   for (int i = 0; i < nrow_Z; ++i){
 
     Eigen::VectorXd z_i = Z.row(i);
