@@ -946,7 +946,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     
     if (factorization_method == "collapsed_2"){
       vi_beta_var <- t(vi_beta_decomp) %*% vi_beta_decomp
-      vi_alpha_var <- t(vi_alpha_decomp) %*% as(vi_alpha_decomp, 'dgCMatrix')
+      vi_alpha_var <- t(vi_alpha_decomp) %*% vi_alpha_decomp
       vi_alpha_var <- as(vi_alpha_var, 'dgCMatrix')
 
       vi_collapsed_P <- as.matrix(vi_collapsed_P)
