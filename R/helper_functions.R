@@ -407,13 +407,6 @@ calculate_ELBO <- function(family, ELBO_type, factorization_method,
             sum(diag(a %*% b))
           })
       )
-    # inv_sigma_alpha <<- inv_sigma_alpha
-    # iw_prior_constant <<- iw_prior_constant
-    # ln_det_sigma_alpha <<- ln_det_sigma_alpha
-    # d_j <<- d_j; vi_a_a_jp <<- vi_a_a_jp
-    # vi_a_b_jp <<- vi_a_b_jp
-    # E_ln_vi_a <<- E_ln_vi_a
-    # vi_a_APRIOR_jp <<- vi_a_APRIOR_jp
     logcomplete_3_a <- mapply(d_j, vi_a_a_jp, vi_a_b_jp, E_ln_vi_a, 
         vi_a_APRIOR_jp, 
         FUN=function(d, tilde.a, tilde.b, E_ln_vi_a.j, APRIOR.j){

@@ -88,7 +88,7 @@ predict.vglmer <- function(object, newdata,
     # Extract the Z (Random Effect) design matrix.
     
     mk_Z <- model.frame(delete.response(terms(object$formula$interpret_gam$fake.formula)), 
-          data = newdata)
+          data = newdata, drop.unused.levels = TRUE)
     rownames_Z <- rownames(mk_Z)
     mk_Z <- mkReTrms(formula(object, type = 're'), mk_Z, reorder.terms = FALSE, reorder.vars = FALSE)
     Z <- t(mk_Z$Zt)

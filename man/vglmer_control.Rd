@@ -13,7 +13,7 @@ vglmer_control(
   prevent_degeneracy = FALSE,
   force_whole = TRUE,
   verbose_time = TRUE,
-  parameter_expansion = "mean",
+  parameter_expansion = "translation",
   random_seed = 1,
   do_timing = FALSE,
   debug_param = FALSE,
@@ -28,8 +28,9 @@ vglmer_control(
   quiet = T,
   quiet_rho = TRUE,
   debug_px = FALSE,
-  px_method = "numerical",
-  px_numerical_it = 5,
+  px_method = "dynamic",
+  px_numerical_it = 10,
+  hw_INNER = 10,
   init = "EM_FE"
 )
 }
