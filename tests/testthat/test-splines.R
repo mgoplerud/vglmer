@@ -1,12 +1,12 @@
 context("test spline functionality")
 
-test_that("check mgcv", {
-  
-  test_one <- mgcv:::interpret.gam(y ~ v_s(x2) + v_s(x))
-  test_two <- vglmer_interpret.gam0(y ~ v_s(x2) + v_s(x))
-  expect_equal(test_one, test_two)  
-  
-})
+# test_that("check mgcv", {
+#   
+#   test_one <- mgcv:::interpret.gam(y ~ v_s(x2) + v_s(x))
+#   test_two <- vglmer_interpret.gam0(y ~ v_s(x2) + v_s(x))
+#   expect_equal(test_one, test_two)  
+#   
+# })
 
 test_that("fit with non-default options", {
   
@@ -106,22 +106,24 @@ test_that("Basic spline tests (run and predict)", {
   dat$y <- rbinom(100, 1, plogis(dat$x * runif(5)[match(dat$f, letters)]))
   
 
-  # Check runs with 1
-  
   m1 <- vglmer(y ~ x + x2 + v_s(x), 
-               data = dat, family = 'binomial')
+     control = vglmer_control(quiet_rho =  FALSE, iterations = 115, do_SQUAREM = TRUE,
+                              parameter_expansion = 'mean', factorization_method = 'weak',
+                              return_data = TRUE),
+     data = dat, family = 'binomial')
   expect_equal(length(coef(m1)), 3)
-  m1a <- vglmer(y ~ v_s(x) + x2, data = dat, 
-                family = 'binomial')
+  m1a <- vglmer(y ~ x2 + x + v_s(x), data = dat, 
+    control = vglmer_control(quiet_rho = FALSE, iterations = 115, do_SQUAREM = TRUE, 
+                             parameter_expansion = 'mean', factorization_method = 'weak',
+                             return_data = TRUE),
+    family = 'binomial')
   
-  # Check same convergence
-  
+  expect_equal(ELBO(m1a), ELBO(m1))
   expect_equal(ranef(m1), ranef(m1a), tol = 1e-5)
   expect_equal(coef(m1), 
     coef(m1a)[match(names(coef(m1)), names(coef(m1a)))],
     tol = 1e-5
   )
-  expect_equal(ELBO(m1), ELBO(m1a))
   expect_equal(ELBO(m1, 'trajectory'), ELBO(m1a, 'trajectory'), tol = 1e-5)
   
   # Check runs with 2

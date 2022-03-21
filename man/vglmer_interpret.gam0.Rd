@@ -2,14 +2,23 @@
 % Please edit documentation in R/spline_functions.R
 \name{vglmer_interpret.gam0}
 \alias{vglmer_interpret.gam0}
-\title{A modified version of interpret.gam0 from mgcv.
+\title{Interpret a vglmer formula
+A modified version of interpret.gam0 from mgcv,
 Copied almost verbatim but adjusted to allow custom objects
 to be parsed as arguments to "v_s"}
 \usage{
 vglmer_interpret.gam0(gf, textra = NULL, extra.special = NULL)
 }
+\arguments{
+\item{gf}{A vglmer formula}
+
+\item{textra}{Unused internal argument}
+
+\item{extra.special}{Allow extra special terms to be passed}
+}
 \description{
-A modified version of interpret.gam0 from mgcv.
+Interpret a vglmer formula
+A modified version of interpret.gam0 from mgcv,
 Copied almost verbatim but adjusted to allow custom objects
 to be parsed as arguments to "v_s"
 }

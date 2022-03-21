@@ -130,7 +130,7 @@ test_that("vglmer can run with exactly balanced classes", {
                        family = 'binomial',
                        control = vglmer_control(do_SQUAREM = TRUE,
                                                 factorization_method = 'strong',
-                                                parameter_expansion = 'diagonal'))  
+                                                parameter_expansion = 'translation'))  
   
   expect_s3_class(est_vglmer, 'vglmer')
 })

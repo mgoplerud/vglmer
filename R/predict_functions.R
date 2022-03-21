@@ -73,9 +73,9 @@ predict.vglmer <- function(object, newdata,
         paste(missing_columns, collapse =', '))
     )
   }
-  fmla <- formula(object)
+  fmla <- formula(object, form = 'original')
   # Extract X (FE design matrix)
-  X <- model.matrix(delete.response(terms(nobars(formula(object, type = 'fe')))), data = newdata)
+  X <- model.matrix(delete.response(terms(nobars(formula(object, form = 'fe')))), data = newdata)
 
   orig_X_names <- rownames(object$beta$mean)
   if (!identical(colnames(X), orig_X_names)) {
@@ -86,11 +86,10 @@ predict.vglmer <- function(object, newdata,
   if (!is.null(object$formula$re)){
     
     # Extract the Z (Random Effect) design matrix.
-    
     mk_Z <- model.frame(delete.response(terms(object$formula$interpret_gam$fake.formula)), 
           data = newdata, drop.unused.levels = TRUE)
     rownames_Z <- rownames(mk_Z)
-    mk_Z <- mkReTrms(formula(object, type = 're'), mk_Z, reorder.terms = FALSE, reorder.vars = FALSE)
+    mk_Z <- mkReTrms(formula(object, form = 're'), mk_Z, reorder.terms = FALSE, reorder.vars = FALSE)
     Z <- t(mk_Z$Zt)
     
     # RE names and names of variables included for each.

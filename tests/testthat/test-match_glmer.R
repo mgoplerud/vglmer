@@ -15,12 +15,14 @@ test_that("Compare against lmer", {
   fmt_glmer <- format_glmer(est_glmer)
   
   for (v in c("weak", "partial", "strong")) {
-    example_vglmer <- vglmer(
-      formula = y ~ x + (1 | g), data = NULL,
-      control = vglmer_control(factorization_method = v, init = "zero"),
-      family = "linear"
-    )
     
+    example_vglmer <- suppressWarnings(vglmer(
+      formula = y ~ x + (1 | g), data = NULL,
+      control = vglmer_control(prior_variance = 'jeffreys',
+        factorization_method = v, 
+        init = "zero"),
+      family = "linear"
+    ))
     expect_gte(min(diff(example_vglmer$ELBO_trajectory$ELBO)), 0)
     
     fmt_vglmer <- format_vglmer(example_vglmer)
@@ -49,11 +51,12 @@ test_that("Compare against glmer", {
   fmt_glmer <- format_glmer(est_glmer)
 
   for (v in c("weak", "partial", "strong")) {
-    example_vglmer <- vglmer(
+    
+    example_vglmer <- suppressWarnings(vglmer(
       formula = y ~ x + (1 | g), data = NULL,
       control = vglmer_control(factorization_method = v, init = "zero"),
       family = "binomial"
-    )
+    ))
 
     expect_gte(min(diff(example_vglmer$ELBO_trajectory$ELBO)), 0)
 
@@ -67,6 +70,7 @@ test_that("Compare against glmer", {
 
 
 test_that("Compare against glmer.nb", {
+  
   skip_on_cran()
 
   N <- 1000
@@ -81,13 +85,13 @@ test_that("Compare against glmer.nb", {
   fmt_glmer <- format_glmer(est_glmer)
 
   for (v in c("weak", "partial", "strong")) {
-    example_vglmer <- vglmer(
+    example_vglmer <- suppressWarnings(vglmer(
       formula = y ~ x + (1 | g), data = data,
       family = "negbin",
       control = vglmer_control(factorization_method = v)
-    )
+    ))
     # Test whether it monotonically increases
-    expect_gte(min(diff(example_vglmer$ELBO_trajectory$ELBO)), 0)
+    expect_gte(min(diff(ELBO(example_vglmer, 'traj'))), 0)
 
     fmt_vglmer <- format_vglmer(example_vglmer)
     comp_methods <- merge(fmt_glmer, fmt_vglmer, by = c("name"))
@@ -144,10 +148,10 @@ test_that("Compare against glmer (binomial)", {
   est_glmer <- suppressWarnings(lme4::glmer(cbind(y, size - y) ~ x + (1 | g), family = binomial))
   fmt_glmer <- format_glmer(est_glmer)
 
-  example_vglmer <- vglmer(
+  example_vglmer <- suppressWarnings(vglmer(
     formula = cbind(y, size - y) ~ x + (1 | g), data = NULL,
     family = "binomial"
-  )
+  ))
 
   expect_gte(min(diff(example_vglmer$ELBO_trajectory$ELBO)), 0)
 

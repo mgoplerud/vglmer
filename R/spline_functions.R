@@ -1,4 +1,9 @@
 
+#' Code from Wand and Ormerod (2008)
+#' Found here here: 10.1111/j.1467-842X.2008.00507.x
+#' @param a lower boundary
+#' @param b upper boundary
+#' @param intKnots internal knots
 formOmega <- function(a,b,intKnots){
   allKnots <- c(rep(a,4),intKnots,rep(b,4))
   K <- length(intKnots) ; L <- 3 * (K+8)
@@ -12,13 +17,26 @@ formOmega <- function(a,b,intKnots){
 }
 
 
-# Special function to impose SMOOTHING
-# on a spline basis
+#' Spline Creator
+#' 
+#' A simple function to estimate splines, similar to "s" in "mgcv". Allows for
+#' truncated (linear) splines or O'Sullivan splines.
+#' 
+#' @param ... variable name
+#' @param type Spline basis: "tpf" for truncated linear splines or "o" for
+#'   O-Sullivan (see Wand and Ormerod 2008)
+#' @param knots Provide either number of knots (evenly spaced at quantiles), a
+#'   grid of knots. Default ("NULL") uses K = min(N/4, 35) where "N" is number
+#'   of unique values.
+#' @param by Interact the spline with some covariate.
+#' @param by_re If interacted with a factor variable, should the "base"
+#'   interactions be regularized? Default is "TRUE".
+#' @param outer_okay Can values in "x" exceed the knots? Default "FALSE".
 #' @importFrom splines bs
 #' @export
-v_s <- function(..., type = 'tpf', knots = NULL,
+v_s <- function(..., type = 'tpf', knots = NULL, by = NA,
                 by_re = TRUE,
-                outer_okay = FALSE, by = NA){
+                outer_okay = FALSE){
   if (!(type %in% c('tpf', 'o'))){stop('non tpf not set up yet...')}
   # Using mgcv's syntax for "s" to make it work with "interpret.gam"
   vars <- as.list(substitute(list(...)))[-1]
@@ -153,9 +171,15 @@ print.spline_sparse <- function(x){
 }
 image.spline_sparse <- function(x){image(x$x)}
 
-#' A modified version of interpret.gam0 from mgcv.
+#' Interpret a vglmer formula
+#' A modified version of interpret.gam0 from mgcv,
 #' Copied almost verbatim but adjusted to allow custom objects
 #' to be parsed as arguments to "v_s"
+#' @param gf A vglmer formula
+#' @param textra Unused internal argument
+#' @param extra.special Allow extra special terms to be passed
+#' @importFrom stats reformulate terms.formula as.formula formula update.formula
+#'   quantile
 vglmer_interpret.gam0 <- function(gf, textra = NULL, extra.special = NULL){
   
   p.env <- environment(gf)
@@ -296,7 +320,7 @@ vglmer_interpret.gam0 <- function(gf, textra = NULL, extra.special = NULL){
     pred.formula <- as.formula(paste("~", paste(av, 
                                                 collapse = "+")))
     pav <- all.vars(pred.formula)
-    pred.formula <- reformulate(pav)
+    pred.formula <- stats::reformulate(pav)
   }
   else pred.formula <- ~1
   ret <- list(pf = as.formula(pf, p.env), pfok = pfok, smooth.spec = smooth.spec, 

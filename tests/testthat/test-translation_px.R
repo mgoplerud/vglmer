@@ -2,9 +2,8 @@ context("Translation Expansion Tests")
 
 warning('Do Translation Tests')
 if (FALSE){
-  stop()
-  # TEHSE SHOULD AGREE
-  update_expansion_XR <- vecR_fast_ridge(X = XR, 
+
+    update_expansion_XR <- vecR_fast_ridge(X = XR, 
                                          omega = diag_vi_pg_mean, prior_precision = R_ridge, y = as.vector(s), 
                                          adjust_y = as.vector(vec_OSL_prior))
   
@@ -20,22 +19,16 @@ if (FALSE){
   
   y <- rbinom(n = N, size = 1, prob = plogis(-1 + x + alpha[g]))
   
-  est_vglmer <- vglmer(y ~ x + x2 + (1 + x | g) + (1 + x2 | g2),
-                       data = NULL, 
-                       control = vglmer_control(
-                         parameter_expansion = 'translation',
-                         factorization_method = 'partial'),
+  est_vglmer <- vglmer(y ~ x + x2 + (1 + x | g) + (1 + x2 | g2), data = NULL,
                        family = 'binomial')
   
-  
-  est_vglmer_kn
-  
-  sum(
-    sapply(purrr::array_branch(combn(1:number_of_RE, 2), margin = 2),
-           FUN=function(i){
-             unique(Mmap[,c(i)]) %>% nrow
-           })
-  )
+
+  # sum(
+  #   sapply(purrr::array_branch(combn(1:number_of_RE, 2), margin = 2),
+  #          FUN=function(i){
+  #            unique(Mmap[,c(i)]) %>% nrow
+  #          })
+  # )
   J <- number_of_RE
   
   row_combinations <- list()
@@ -53,10 +46,12 @@ if (FALSE){
     row_combinations[[j]] <- combo_j
   }
   
-  unique_map_pairwise <- lapply(purrr::array_branch(combn(1:number_of_RE, 2), margin = 2),
-                                FUN=function(i){
-                                  unique(Mmap[,c(i)]) 
-                                })
+  # browser()
+  
+  # unique_map_pairwise <- lapply(purrr::array_branch(combn(1:number_of_RE, 2), margin = 2),
+  #                               FUN=function(i){
+  #                                 unique(Mmap[,c(i)]) 
+  #                               })
   
   start_base_Z
   mapping_J
@@ -117,23 +112,23 @@ if (FALSE){
                        family = 'binomial')
   
   
-  store_re_id <- store_id <- list()
-  for (j in 1:J){
-    store_re_id_j <- store_id_j <- list()
-    for (jprime in 1:j){
-      print(c(j, jprime))
-      umap <- unique(Mmap[, c(j, jprime)])
-      store_re_id_j[[jprime]] <- purrr::array_branch(umap, margin = 1)
-      id_lookup <- lapply(1:nrow(umap), FUN=function(i){
-        umap_r <- umap[i,]
-        id_r <- which( (Mmap[,j] %in% umap_r[1]) & (Mmap[,jprime] %in% umap_r[2]))
-        return(id_r)
-      })
-      store_id_j[[jprime]] <- id_lookup
-    }
-    store_id[[j]] <- store_id_j
-    store_re_id[[j]] <- store_re_id_j
-  }
+  # store_re_id <- store_id <- list()
+  # for (j in 1:J){
+  #   store_re_id_j <- store_id_j <- list()
+  #   for (jprime in 1:j){
+  #     print(c(j, jprime))
+  #     umap <- unique(Mmap[, c(j, jprime)])
+  #     store_re_id_j[[jprime]] <- purrr::array_branch(umap, margin = 1)
+  #     id_lookup <- lapply(1:nrow(umap), FUN=function(i){
+  #       umap_r <- umap[i,]
+  #       id_r <- which( (Mmap[,j] %in% umap_r[1]) & (Mmap[,jprime] %in% umap_r[2]))
+  #       return(id_r)
+  #     })
+  #     store_id_j[[jprime]] <- id_lookup
+  #   }
+  #   store_id[[j]] <- store_id_j
+  #   store_re_id[[j]] <- store_re_id_j
+  # }
   
   pg_mean <- diag(diag_vi_pg_mean)
   cumdsq <- cumsum(c(1, d_j^2))
@@ -216,16 +211,16 @@ if (FALSE){
   round(cbind(diag(R_ridge), diag(vnew)), 3)
   
   
-  microbenchmark::microbenchmark(
-    vecR_ridge_new(L = vi_alpha_decomp, pg_mean = pg_mean,
-                   mapping_J = mapping_J, d = d_j, store_id = store_id,
-                   store_re_id = store_re_id, store_design = parsed_RE_groups$design,
-                   diag_only = FALSE),
-    vecR_ridge_general(L = vi_alpha_decomp, pg_mean = pg_mean,
-                       Z = mapping_new_Z, M = Mmap, mapping_J = mapping_J,
-                       d = d_j, start_z = start_base_Z, diag_only = FALSE),
-    times = 2
-  )
+  # microbenchmark::microbenchmark(
+  #   vecR_ridge_new(L = vi_alpha_decomp, pg_mean = pg_mean,
+  #                  mapping_J = mapping_J, d = d_j, store_id = store_id,
+  #                  store_re_id = store_re_id, store_design = parsed_RE_groups$design,
+  #                  diag_only = FALSE),
+  #   vecR_ridge_general(L = vi_alpha_decomp, pg_mean = pg_mean,
+  #                      Z = mapping_new_Z, M = Mmap, mapping_J = mapping_J,
+  #                      d = d_j, start_z = start_base_Z, diag_only = FALSE),
+  #   times = 2
+  # )
   
   saveRDS(
     list(L = vi_alpha_decomp, pg_mean = diag(diag_vi_pg_mean),
@@ -257,24 +252,24 @@ if (FALSE){
                            diag_only = FALSE)
   range(unlist(store_id))
   all.equal(vn, vo)
-  microbenchmark::microbenchmark(
-    vecR_ridge_new(L = L, pg_mean = pg_mean,
-                   mapping_J = mapping_J, d = d, store_id = store_id,
-                   store_re_id = store_re_id, store_design = store_design,
-                   diag_only = TRUE),
-    vecR_ridge_general(L = L, 
-                       pg_mean = pg_mean, 
-                       Z = Z, M = M, 
-                       mapping_J = mapping_J, d = d, start_z = start_z,
-                       diag_only = TRUE),
-    vecR_ridge_new(L = L, pg_mean = pg_mean,
-                   mapping_J = mapping_J, d = d, store_id = store_id,
-                   store_re_id = store_re_id, store_design = store_design,
-                   diag_only = FALSE),
-    vecR_ridge_general(L = L, 
-                       pg_mean = pg_mean, 
-                       Z = Z, M = M, 
-                       mapping_J = mapping_J, d = d, start_z = start_z,
-                       diag_only = FALSE), times = 3)
+  # microbenchmark::microbenchmark(
+  #   vecR_ridge_new(L = L, pg_mean = pg_mean,
+  #                  mapping_J = mapping_J, d = d, store_id = store_id,
+  #                  store_re_id = store_re_id, store_design = store_design,
+  #                  diag_only = TRUE),
+  #   vecR_ridge_general(L = L, 
+  #                      pg_mean = pg_mean, 
+  #                      Z = Z, M = M, 
+  #                      mapping_J = mapping_J, d = d, start_z = start_z,
+  #                      diag_only = TRUE),
+  #   vecR_ridge_new(L = L, pg_mean = pg_mean,
+  #                  mapping_J = mapping_J, d = d, store_id = store_id,
+  #                  store_re_id = store_re_id, store_design = store_design,
+  #                  diag_only = FALSE),
+  #   vecR_ridge_general(L = L, 
+  #                      pg_mean = pg_mean, 
+  #                      Z = Z, M = M, 
+  #                      mapping_J = mapping_J, d = d, start_z = start_z,
+  #                      diag_only = FALSE), times = 3)
   
 }

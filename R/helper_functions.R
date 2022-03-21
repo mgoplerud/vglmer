@@ -1,28 +1,3 @@
-# extract_group_memberships <- function(x, fr, drop.unused.levels){
-#   frloc <- factorize(x, frloc)
-#   if (is.null(ff <- tryCatch(eval(substitute(makeFac(fac),
-#                                              list(fac = x[[3]])), frloc), error = function(e) NULL)))
-#     stop("couldn't evaluate grouping factor ", deparse(x[[3]]),
-#          " within model frame:", " try adding grouping factor to data ",
-#          "frame explicitly if possible", call. = FALSE)
-#   if (all(is.na(ff))){
-#     stop("Invalid grouping factor specification, ", deparse(x[[3]]),
-#          call. = FALSE)
-#   }
-#   if (drop.unused.levels){
-#     ff <- factor(ff, exclude = NA)
-#   }
-#   return(ff)
-# }
-#
-# make_dgC <- function(x){
-#   if (!inherits(x, 'ddiMatrix')){
-#     x <- as(x, 'dgCMatrix')
-#   }else{
-#     x <- sparseMatrix(i = 1:nrow(x), j =1:nrow(x), x = diag(x))
-#   }
-#   return(x)
-# }
 
 safe_convert <- function(x){
   if (isDiagonal(x)){

@@ -89,14 +89,6 @@ ranef.vglmer <- function(object, ...) {
 
 #' @rdname vglmer-class
 #' @export
-ELBO <- function(object) UseMethod("ELBO")
-
-ELBO.vglmer <- function(object){
-  return(object$ELBO$ELBO)
-}
-
-#' @rdname vglmer-class
-#' @export
 coef.vglmer <- function(object, ...) {
   if (length(list(...)) > 0) {
     stop("... not used for coef.vglmer")
@@ -135,7 +127,7 @@ print.vglmer <- function(x, ...) {
   J <- length(x$sigma$cov)
 
   cat(paste0("Formula: J = ", J, ", |Z| = ", p.Z, ", |X| = ", p.X, "\n\n"))
-  cat(paste(format(formula(x)), collapse = "\n\n"))
+  cat(paste(format(formula(x, form = 'original')), collapse = "\n\n"))
   cat("\n\n")
   if (missing_obs > 0) {
     missing_info <- paste0("after ", missing_obs, " deleted because of missing data and")
@@ -213,15 +205,19 @@ summary.vglmer <- function(object, display_re = TRUE, ...) {
 }
 
 #' @rdname vglmer-class
+#' @param form What type of formula to return? "original" is user provided; "fe"
+#'   is fixed effect only; "re" is random effect only.
 #' @export
-formula.vglmer <- function(x, type = 'original', ...) {
-  if (type == 'original'){
+formula.vglmer <- function(x, form, ...) {
+  
+  if (form == 'original'){
     x$formula$formula
-  }else if (type == 'fe'){
+  }else if (form == 'fe'){
     x$formula$fe
-  }else if (type == 're'){
+  }else if (form == 're'){
     x$formula$re
-  }else{stop('type must be "original", "fe", or "re".')}
+  }else{stop('form must be "original", "fe", or "re".')}
+  
 }
 
 #' @importFrom stats qnorm
@@ -249,21 +245,19 @@ format_vglmer <- function(object) {
   return(output)
 }
 
-#' Get ELBO from fitted variational model
-#' 
+#' @rdname vglmer-class
+#' @param object Object from vglmer
 #' @param type Default is "final" giving ELBO at convergence. "trajectory" gives
 #'   full sequence of ELBOs at each iteration.
 #' @export
-
-ELBO <- function(x, type = c('final', 'trajectory')){
+ELBO <- function(object, type = c('final', 'trajectory')){
   
   type <- match.arg(type)
 
   if (type == 'final'){
-    x$ELBO$ELBO
-  }else if (type == 'trajectory'){
-    x$ELBO_trajectory$ELBO
+    object$ELBO$ELBO
   }else{
-    stop('type must be "final" or "trajectory".')
+    object$ELBO_trajectory$ELBO
   }
+  
 }

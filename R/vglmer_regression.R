@@ -67,7 +67,7 @@
 #' @importFrom dplyr select group_by group_by_at summarize n lag
 #' @importFrom lme4 mkReTrms findbars subbars
 #' @importFrom stats model.response model.matrix model.frame rnorm rWishart
-#'   qlogis optim residuals lm plogis
+#'   qlogis optim residuals lm plogis setNames
 #' @importFrom rlang .data
 #' @importFrom graphics plot
 #' @importFrom checkmate assert assert_formula assert_choice
@@ -167,6 +167,14 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
   if (!(family %in% c("binomial", "negbin", "linear"))) {
     stop('family must be "linear", "binomial", "negbin".')
   }
+  
+  if (family %in% c('binomial', 'linear')){
+    if (control$prior_variance == 'hw' & control$prior_variance %in% c('diagonal', 'translation')){
+      message('hw and negative binomial or linear not yet implemented.')
+      control$parameter_expansion <- 'mean'
+    }
+  }
+  
 
   if (family == "binomial") {
     if (is.matrix(y)) {
@@ -195,6 +203,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
       trials <- rep(1, length(y))
     }
   } else if (family == 'negbin') {
+    
     if (!(class(y) %in% c("numeric", "integer"))) {
       stop("Must provide vector of numbers with negbin.")
     }
@@ -830,14 +839,16 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
   accepted_times <- NA
 
   skip_translate <- FALSE
+  
+  accepted_times <- 0
+  attempted_expansion <- 0
+  
   if (parameter_expansion %in%  c("translation", "diagonal") & any_Mprime) {
     
     if (do_timing){
       tic('Build PX R Terms')
     }
     
-    accepted_times <- 0
-    attempted_expansion <- 0
     
     spline_REs <- grepl(names(d_j), pattern='^spline-')
     
@@ -861,7 +872,8 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     mapping_J <- sapply(mapping_J, min)
 
     mapping_to_re <- parsed_RE_groups$factor
-    mapping_to_re <- purrr::array_branch(do.call('cbind', mapping_to_re), margin = 1)
+    mapping_to_re <- unlist(apply(do.call('cbind', mapping_to_re), MARGIN = 1, list), recursive = F)
+    # mapping_to_re <- purrr::array_branch(do.call('cbind', mapping_to_re), margin = 1)
     
     mapping_to_re <- lapply(mapping_to_re, FUN=function(i){
       mapply(outer_alpha_RE_positions[!spline_REs], i, SIMPLIFY = FALSE, 
@@ -938,6 +950,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
   }
 
   if (do_SQUAREM){
+    namedList <- utils::getFromNamespace('namedList', 'lme4')
     squarem_success <- c(0, 0)
     squarem_list <- list()
     squarem_counter <- 1
@@ -1647,39 +1660,39 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
       }
       #If a DIAGONAL expansion, then only update the diagonal elements
       if (parameter_expansion == "diagonal"){
-        
-        XR <- cbind(X, R_spline_design, R_design[, diag_rho])
-        R_ridge <- bdiag(zeromat_beta, R_spline_ridge, R_ridge[diag_rho, diag_rho])
-        
-        if (do_huangwand){
-          vec_OSL_prior <- do.call('c', mapply(vi_a_APRIOR_jp[!spline_REs], 
-                                               vi_a_a_jp[!spline_REs], 
-                                               vi_a_b_jp[!spline_REs],
-                                               SIMPLIFY = FALSE,
-            FUN=function(i,a,b){1-2/i^2 * a/b}))
-          vec_OSL_prior <- c(rep(0, p.X), OSL_spline_prior, vec_OSL_prior)
-        }else{
-          vec_OSL_prior <- vec_OSL_prior[c(seq_len(p.X + sum(spline_REs)), p.X + sum(spline_REs) + diag_rho),,drop=F]
-        }
-        if (length(vec_OSL_prior) != ncol(XR)){stop('MISALIGNED DIMENSIONS')}
-        
-        update_expansion_XR <- vecR_fast_ridge(X = drop0(XR), 
-         omega = diag_vi_pg_mean, prior_precision = R_ridge, y = as.vector(s), 
-         adjust_y = as.vector(vec_OSL_prior))
-        
-        update_expansion_bX <- Matrix(update_expansion_XR[1:p.X])
-        update_expansion_splines <- Matrix(update_expansion_XR[-(1:p.X)][seq_len(size_splines)])
-        
-        update_expansion_R <- mapply(split(update_expansion_XR[-seq_len(p.X + size_splines)], 
-          rep(1:(number_of_RE - sum(spline_REs)), d_j[!spline_REs])), d_j[!spline_REs], SIMPLIFY = FALSE, 
-          FUN=function(i,d){
-            dg <- diag(x = d)
-            diag(dg) <- i
-            return(dg)
-          })
-         update_diag_R <- split(update_expansion_XR[-seq_len(p.X + size_splines)], 
-                                rep(1:(number_of_RE - sum(spline_REs)), d_j[!spline_REs]))
-         rownames(update_expansion_bX) <- colnames(X)
+        stop('parameter_expansion "diagonal" turned off.')
+        # XR <- cbind(X, R_spline_design, R_design[, diag_rho])
+        # R_ridge <- bdiag(zeromat_beta, R_spline_ridge, R_ridge[diag_rho, diag_rho])
+        # 
+        # if (do_huangwand){
+        #   vec_OSL_prior <- do.call('c', mapply(vi_a_APRIOR_jp[!spline_REs], 
+        #                                        vi_a_a_jp[!spline_REs], 
+        #                                        vi_a_b_jp[!spline_REs],
+        #                                        SIMPLIFY = FALSE,
+        #     FUN=function(i,a,b){1-2/i^2 * a/b}))
+        #   vec_OSL_prior <- c(rep(0, p.X), OSL_spline_prior, vec_OSL_prior)
+        # }else{
+        #   vec_OSL_prior <- vec_OSL_prior[c(seq_len(p.X + sum(spline_REs)), p.X + sum(spline_REs) + diag_rho),,drop=F]
+        # }
+        # if (length(vec_OSL_prior) != ncol(XR)){stop('MISALIGNED DIMENSIONS')}
+        # 
+        # update_expansion_XR <- vecR_fast_ridge(X = drop0(XR), 
+        #  omega = diag_vi_pg_mean, prior_precision = R_ridge, y = as.vector(s), 
+        #  adjust_y = as.vector(vec_OSL_prior))
+        # 
+        # update_expansion_bX <- Matrix(update_expansion_XR[1:p.X])
+        # update_expansion_splines <- Matrix(update_expansion_XR[-(1:p.X)][seq_len(size_splines)])
+        # 
+        # update_expansion_R <- mapply(split(update_expansion_XR[-seq_len(p.X + size_splines)], 
+        #   rep(1:(number_of_RE - sum(spline_REs)), d_j[!spline_REs])), d_j[!spline_REs], SIMPLIFY = FALSE, 
+        #   FUN=function(i,d){
+        #     dg <- diag(x = d)
+        #     diag(dg) <- i
+        #     return(dg)
+        #   })
+        #  update_diag_R <- split(update_expansion_XR[-seq_len(p.X + size_splines)], 
+        #                         rep(1:(number_of_RE - sum(spline_REs)), d_j[!spline_REs]))
+        #  rownames(update_expansion_bX) <- colnames(X)
       }else{
         
         XR <- drop0(cbind(drop0(X), drop0(R_spline_design), drop0(R_design)))
@@ -2710,9 +2723,13 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
 #'
 #' @param parameter_expansion At moment, accepts 'mean' or 'none'. 'mean' is
 #'   costless and should always be used!
+#' @param px_method For translation expansion, how to update? "dynamic" tries
+#'   OSL and then backup numerical improvement
+#' @param px_numerical_it How many steps of L-BFGS-B are used to improve?
+#' @param hw_INNER For HW prior, how many "loops" are done?
 #' @param prevent_degeneracy Ignored for the moment.
+#' 
 #' @param force_whole Require whole numbers. Set to FALSE to allow "quasi-binomial".
-#'
 #' @param vi_r_method Type of estimate for "r"; at moment, "fixed" (provide r),
 #'   "VEM" (treat r as point estimate; default);
 #'   "Laplace" (estimate using Laplace approximation described in the Addendum on GitHub); or "delta"
@@ -2724,6 +2741,8 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
 #'
 #' @param debug_param Debug parameter convergence.
 #' @param debug_ELBO Debug ELBO trajectory.
+#' @param quiet_rho Debug parameter expansion by printing updates
+#' @param debug_px Debug parameter expansion by verifying ELBO
 #'
 #' @param linpred_method Method for updating means of beta and alpha. "joint" is best.
 #' @param print_prog Print after print_prog iterations to show progress.
@@ -2733,7 +2752,8 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
 #' @param verbose_time Print time for each step (debugging only)
 #' @param do_timing Estimate timing with tictoc
 #' @param do_SQUAREM Accelerate method using SQUAREM
-#' 
+#' @param verify_columns Verify that all columns are drawn from the data.frame itself.
+
 #' @importFrom checkmate assert check_double check_logical check_choice check_int check_integerish
 #' @export
 vglmer_control <- function(iterations = 1000,
@@ -2759,6 +2779,7 @@ vglmer_control <- function(iterations = 1000,
     check_choice(factorization_method, c("weak", "strong", "collapsed", "partial")),
     check_choice(prior_variance, c("kn", "hw", "mean_exists", "jeffreys", "mcmcglmm", "mvD", "limit", "uniform", "gamma")),
     check_choice(linpred_method, c("joint", "cyclical", "solve_normal")),
+    check_choice(parameter_expansion, c("none", "mean", "translation")),
     check_choice(vi_r_method, c("VEM", "fixed", "Laplace", "delta")),
     check_double(vi_r_val, all.missing = TRUE),
     check_int(print_prog, null.ok = TRUE),
@@ -2771,9 +2792,10 @@ vglmer_control <- function(iterations = 1000,
     message('Setting parameter_expansion to mean for non-strong factorization')
     parameter_expansion <- 'mean'
   }
-  # if (prior_variance == 'hw' & px_method == 'numerical'){
-  #   px_method <- 'numerical_hw'
-  # }
+  if (prior_variance != 'hw' & px_method != 'OSL' & parameter_expansion %in% c('diagonal', 'translation')){
+    px_method <- 'OSL'
+    message('Setting px_method to "OSL" if translation & non-HW prior.')
+  }
   if (vi_r_method == "fixed" & is.na(vi_r_val)) {
     stop('vi_r_val must not be NA if vi_r_method = "fixed"')
   }
@@ -2782,16 +2804,4 @@ vglmer_control <- function(iterations = 1000,
   
   class(output) <- c("vglmer_control")
   return(output)
-}
-
-# Simple function to create named list
-# https://stackoverflow.com/questions/16951080/can-lists-be-created-that-name-themselves-based-on-input-object-names
-# Identical to version used in lme4:::namedList, see also loo::nlist
-#' @importFrom stats setNames
-namedList <- function(...) {
-  L <- list(...)
-  snm <- sapply(substitute(list(...)), deparse)[-1]
-  if (is.null(nm <- names(L))) nm <- snm
-  if (any(nonames <- nm == "")) nm[nonames] <- snm[nonames]
-  setNames(L, nm)
 }

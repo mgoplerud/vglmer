@@ -89,11 +89,24 @@ costless and should always be used!}
 
 \item{do_SQUAREM}{Accelerate method using SQUAREM}
 
+\item{verify_columns}{Verify that all columns are drawn from the data.frame itself.}
+
 \item{debug_ELBO}{Debug ELBO trajectory.}
 
 \item{print_prog}{Print after print_prog iterations to show progress.}
 
 \item{quiet}{Don't print noisy intermediate output.}
+
+\item{quiet_rho}{Debug parameter expansion by printing updates}
+
+\item{debug_px}{Debug parameter expansion by verifying ELBO}
+
+\item{px_method}{For translation expansion, how to update? "dynamic" tries
+OSL and then backup numerical improvement}
+
+\item{px_numerical_it}{How many steps of L-BFGS-B are used to improve?}
+
+\item{hw_INNER}{For HW prior, how many "loops" are done?}
 
 \item{init}{Initialization method can be EM, zero, or random at moment.}
 }

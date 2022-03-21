@@ -140,9 +140,8 @@ get_RE_groups <- function(formula, data) {
     return(list(factor = NA, design = NA))
   }  
   
-  #lme4:::barnames -> not exported so used here instead.
-  # names(bars) <- vapply(bars, function(x) paste(deparse(x, 500L)(x[[3]]), "")
-  names(bars) <- lme4:::barnames(bars)
+  barnames <- utils::getFromNamespace('barnames', 'lme4')
+  names(bars) <- barnames(bars)
   
   fr <- data
   blist <- lapply(bars, simple_blist, fr, drop.unused.levels = F, reorder.vars = FALSE)
@@ -154,11 +153,12 @@ get_RE_groups <- function(formula, data) {
   return(list(factor = ff, design = mm))
 }
 
-#' @import lme4
+#' @import lme4 
+#' @importFrom utils getFromNamespace
 simple_blist <- function(x, frloc, drop.unused.levels = TRUE, reorder.vars = FALSE) {
-  # stop("figure out workaround for lme4:::")
   frloc <- factorize(x, frloc)
-  if (is.null(ff <- tryCatch(eval(substitute(lme4:::makeFac(fac),
+  makeFac <- utils::getFromNamespace('makeFac', 'lme4')
+  if (is.null(ff <- tryCatch(eval(substitute(makeFac(fac),
                                              list(fac = x[[3]])), frloc), error = function(e) NULL)))
     stop("couldn't evaluate grouping factor ", deparse(x[[3]]),
          " within model frame:", " try adding grouping factor to data ",
@@ -172,7 +172,9 @@ simple_blist <- function(x, frloc, drop.unused.levels = TRUE, reorder.vars = FAL
   mm <- model.matrix(eval(substitute(~foo, list(foo = x[[2]]))),
                      frloc)
   if (reorder.vars) {
-    mm <- mm[lme4:::colSort(colnames(mm)), ]
+    
+    colSort <- utils::getFromNamespace("colSort", "lme4")
+    mm <- mm[colSort(colnames(mm)), ]
   }
   list(ff = ff, nl = nl, mm = mm, cnms = colnames(mm))
 }

@@ -1,5 +1,6 @@
+#' @export
 SL.vglmer <- function(Y, X, newX, formula, family, id, obsWeights, control = vglmer_control()) {
-  if(!require('vglmer')) {stop("SL.vglmer requires the vglmer package, but it isn't available")} 
+  if(!requireNamespace('vglmer', quietly = FALSE)) {stop("SL.vglmer requires the vglmer package, but it isn't available")} 
   
   if (is.character(formula)){
     formula <- as.formula(formula)
@@ -44,8 +45,9 @@ SL.vglmer <- function(Y, X, newX, formula, family, id, obsWeights, control = vgl
   return(out)
 }
 
+#' @export
 predict.SL.vglmer <- function(object, newdata, allow_missing_levels = TRUE, ...){
-  if(!require('vglmer')) {stop("SL.vglmer requires the vglmer package, but it isn't available")} 
+  if(!requireNamespace('vglmer', quietly = FALSE)) {stop("SL.vglmer requires the vglmer package, but it isn't available")} 
   
   pred <- predict(object$object, newdata = newdata, allow_missing_levels = allow_missing_levels)
   if (object$object$family == 'binomial'){
@@ -56,9 +58,10 @@ predict.SL.vglmer <- function(object, newdata, allow_missing_levels = TRUE, ...)
   return(pred)
 }
 
-
+#' @importFrom stats predict
+#' @export
 SL.glmer <- function(Y, X, newX, formula, family, id, obsWeights, control = glmerControl()) {
-  if(!require('lme4')) {stop("SL.glmer requires the lme4 package, but it isn't available")} 
+  if(!requireNamespace('lme4', quietly = FALSE)) {stop("SL.glmer requires the lme4 package, but it isn't available")} 
   
   if (is.character(formula)){
     formula <- as.formula(formula)
@@ -83,29 +86,32 @@ SL.glmer <- function(Y, X, newX, formula, family, id, obsWeights, control = glme
   formula <- update.formula(formula, '`...Y` ~ .')
   
   fit.glmer <- lme4::glmer(formula, data = X, weights = obsWeights, family = family, control = control)
-  pred <- predict(fit.glmer, newdata = newX, allow.new.levels = TRUE, type = 'response')
+  pred <- stats::predict(fit.glmer, newdata = newX, allow.new.levels = TRUE, type = 'response')
   fit <- list(object = fit.glmer)
   out <- list(pred = pred, fit = fit)
   class(out$fit) <- c("SL.glmer")
   return(out)
 }
 
+#' @export
 predict.SL.glmer <- function(object, newdata, allow_missing_levels = TRUE, ...){
-  if(!require('lme4')) {stop("SL.glmer requires the lme4 package, but it isn't available")} 
+  if(!requireNamespace('lme4', quietly = FALSE)) {stop("SL.glmer requires the lme4 package, but it isn't available")} 
   
   pred <- predict(object$object, newdata = newdata, allow.new.levels = TRUE, type = 'response')
   return(pred)
 }
 
 add_formula_SL <- function(learner, env = parent.frame()){
-  
-  
+
   base_learner <- get(learner, envir = env)
   base_learner_predict <- get(paste0('predict.', learner), envir = env)
   # Add an argument for "formula"
   f_formals <- c(alist(formula = ), formals(base_learner, envir = env))
-  f_formals_predict <- c(alist(formula = ), formals(base_learner_predict, envir = env))
+  f_formals_predict <- c(formals(base_learner_predict, envir = env))
   # Use model.matrix formula *first*
+  
+  # Placeholder to pass CRAN
+  newdata <- X <- newX <- NULL
   
   f_learner <- function(formula, ...){
     args <- mget(ls())
@@ -113,15 +119,17 @@ add_formula_SL <- function(learner, env = parent.frame()){
     args$newX <- model.frame(as.formula(formula), newX)
     args$formula <- NULL
     out <- do.call("base_learner", args)
-    class(out) <- 'base_learner_f'
+    out$fit$SL_formula <- formula
+    class(out$fit) <- 'base_learner_f'
     return(out)
   }
   f_learner <- deparse(f_learner)
   f_learner <- eval(parse(text = paste(gsub(f_learner, pattern='base_learner', replacement = learner), collapse = '\n')))
   formals(f_learner) <- f_formals
   
-  f_learner_predict <- function(formula, ...){
-    args$newdata <- model.frame(as.formula(formula), newdata)
+  f_learner_predict <- function(...){
+    args <- mget(ls())
+    args$newdata <- model.frame(as.formula(object$SL_formula), newdata)
     args$formula <- NULL
     out <- do.call("predict.base_learner", args)
     return(out)
