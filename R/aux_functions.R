@@ -280,6 +280,7 @@ update_rho <- function(XR, y, omega, prior_precision,
     opt_rho <- OSL_rho
     opt_rho <- list(rho = opt_rho, improvement = improvement)
   }else{stop('..')}
+
   return(opt_rho)
 }
 

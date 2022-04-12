@@ -1255,6 +1255,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
           tic("ux_mean")
         }
         
+        
         chol.update.joint <- solve(Matrix::Cholesky(  
           crossprod(sqrt_pg_weights %*% joint.XZ) + 
             bdiag(zero_mat, bdiag(Tinv)) ),
@@ -1296,6 +1297,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
 
           vi_alpha_decomp[index_j, index_j] <- as(chol_var_j, "dgTMatrix")
         }
+        
         vi_alpha_L_nonpermute <- vi_alpha_decomp
         vi_alpha_LP <- Diagonal(n = nrow(vi_alpha_L_nonpermute))
         
@@ -1397,7 +1399,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     } else {
       stop("Invalid factorization method.")
     }
-    
+
     if (family == 'linear'){
       adjust_var <- 1/sqrt(vi_sigmasq_a/vi_sigmasq_b)
       vi_beta_decomp <- vi_beta_decomp * adjust_var
@@ -1488,12 +1490,12 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
         # Tinv <<- Tinv
         # vi_alpha_mean <<- vi_alpha_mean
     }
-    
+
     if (do_timing) {
       toc(quiet = verbose_time, log = T)
       tic("Update Aux")
     }
-    # print(unlist(lapply(vi_sigma_alpha, as.vector)))
+
     # Update the auxilary parameters
     if (family == "negbin") {
       vi_r_param <- update_r(
@@ -1558,7 +1560,6 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
         vi_a_nu_jp = vi_a_nu_jp, vi_a_APRIOR_jp = vi_a_APRIOR_jp
       )
     }
-
 
     if (parameter_expansion == "none" | !any_Mprime) {
       
@@ -1743,7 +1744,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
         toc(quiet = verbose_time, log = TRUE)
         tic('px_propose')
       }
-        
+      
       est_rho_all <- update_expansion_XR[-(1:p.X)]
       if (sum(spline_REs)){
         est_rho_spline <- est_rho_all[seq_len(sum(spline_REs))]
@@ -1758,6 +1759,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
         check_rho_hw <- unlist(vi_a_b_jp[c(which(spline_REs), which(!spline_REs))])
         check_rho_hw <- check_rho_hw - unlist(update_expansion_hw)
         names(check_rho_hw) <- NULL
+        
       }else{
         check_rho_hw <- 0
       }
@@ -1800,6 +1802,10 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
         FUN=function(Phi, R){R %*% Phi %*% t(R)})
       
       # cat('r')
+      # Are any of the estimated "R_j" have a negative determinant?
+      sign_detRj <- sign(sapply(update_expansion_R, det))
+      any_neg_det <- any(sign_detRj < 0)
+      
       mapping_for_R_block <- make_mapping_alpha(update_expansion_R, px.R = TRUE)
       update_expansion_Rblock <- prepare_T(mapping = mapping_for_R_block, levels_per_RE = g_j, num_REs = number_of_RE,
                         variables_per_RE = d_j, running_per_RE = breaks_for_RE, cyclical = FALSE, px.R = TRUE)
@@ -1812,10 +1818,28 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
       prop_vi_alpha_mean <- update_expansion_Rblock %*% vi_alpha_mean
       
       if (!quiet_rho){cat('r')}
-      
+
       if (factorization_method != 'weak'){
+        
         prop_log_det_joint_var <- prop_vi_joint_decomp <- NULL
-        prop_vi_alpha_decomp <- vi_alpha_decomp %*% t(update_expansion_Rblock)
+        
+        if (!any_neg_det){
+          prop_vi_alpha_decomp <- vi_alpha_decomp %*% t(update_expansion_Rblock)
+        }else{
+          warning(paste0('Manually corrected R_j with negative determinant at iteration ', it))
+          if (all(d_j == 1)){
+            if (!isDiagonal(update_expansion_Rblock)){
+              stop('Correction failed as R_j is not diagonal. Try requiring optimization of PX objective.')
+            }
+            diag(update_expansion_Rblock) <- abs(diag(update_expansion_Rblock))
+            prop_vi_alpha_decomp <- vi_alpha_decomp %*% t(update_expansion_Rblock)
+          }else{
+            prop_vi_alpha_decomp <- update_expansion_Rblock %*% t(vi_alpha_decomp) %*% 
+              vi_alpha_decomp %*% t(update_expansion_Rblock)
+            prop_vi_alpha_decomp <- Matrix::Cholesky(prop_vi_alpha_decomp)
+            prop_vi_alpha_decomp <- with(expand(prop_vi_alpha_decomp), t(L) %*% P)
+          }
+        }
         
         prop_log_det_alpha_var <- log_det_alpha_var + 2 * sum(update_expansion_R_logdet * g_j)
         prop_log_det_beta_var <- log_det_beta_var
@@ -2009,6 +2033,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
            vi_joint_L_nonpermute, vi_joint_LP,
            vi_a_a_jp, vi_a_b_jp,
            vi_r_mu, vi_r_sigma, vi_r_mean)
+      
       if (squarem_counter %% 3 == 0){
         
         # final.ELBO <<- final.ELBO

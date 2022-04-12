@@ -101,6 +101,8 @@ predict.SL.glmer <- function(object, newdata, allow_missing_levels = TRUE, ...){
   return(pred)
 }
 
+
+#' @export
 add_formula_SL <- function(learner, env = parent.frame()){
 
   base_learner <- get(learner, envir = env)
