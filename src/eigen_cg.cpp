@@ -8,12 +8,14 @@ using namespace Rcpp;
 //' Conjugate Gradient for Large VI Problems
 // [[Rcpp::export]]
 List cg_custom(
-    const Eigen::Map<Eigen::MatrixXd> X,
+    const Eigen::MappedSparseMatrix<double> X,
     const Eigen::MappedSparseMatrix<double> Z,
     const Eigen::Map<Eigen::MatrixXd> P,
     const Eigen::Map<Eigen::VectorXd> omega,
-    const Eigen::MappedSparseMatrix<double> ridge,
+    const Eigen::MappedSparseMatrix<double> ridge_Z,
+    const Eigen::MappedSparseMatrix<double> ridge_X,
     const Eigen::Map<Eigen::VectorXd> s,
+    const Eigen::Map<Eigen::VectorXd> offset_ridge_X,
     const Eigen::Map<Eigen::VectorXd> old_alpha,
     const double tol,
     const int it_max = 0,
@@ -25,10 +27,12 @@ List cg_custom(
   Eigen::VectorXd new_alpha(p_Z);
   Eigen::VectorXd sqrt_omega_k = omega.cwiseSqrt();
   Eigen::VectorXd adj_s(X.rows());
+  
+  Eigen::SparseMatrix<double> ridge = ridge_Z + P.adjoint() * ridge_X * P;
     
   adj_s = s.cwiseQuotient(sqrt_omega_k);
   Eigen::SparseMatrix<double> scaled_Z = sparse_diag(sqrt_omega_k) * Z;
-  Eigen::MatrixXd scaled_X = sparse_diag(sqrt_omega_k) * X;
+  Eigen::SparseMatrix<double> scaled_X = sparse_diag(sqrt_omega_k) * X;
   
   Eigen::VectorXd precond_diag(p_Z);
     
@@ -47,9 +51,8 @@ List cg_custom(
   double rhsNorm2 = (scaled_Z.adjoint() * adj_s - P.adjoint() * XTS).squaredNorm();
   // normal_residual = (Z - X P)^T residual = Z^T
   Eigen::VectorXd XTr = scaled_X.adjoint() * residual;
-  Eigen::VectorXd normal_residual = scaled_Z.adjoint() * residual - P.adjoint() * XTr  - ridge * alpha;
+  Eigen::VectorXd normal_residual = scaled_Z.adjoint() * residual - P.adjoint() * XTr  - ridge * alpha + offset_ridge_X;
 
-  
   Eigen::VectorXd p = normal_residual.cwiseProduct(precond_diag);
   double absNew = normal_residual.dot(p);
     
@@ -86,7 +89,7 @@ List cg_custom(
     
     // XTr = ncol(p) by 1
     Eigen::VectorXd XTr = scaled_X.adjoint() * residual;
-    Eigen::VectorXd normal_residual = scaled_Z.adjoint() * residual - P.adjoint() * XTr  - ridge * alpha;
+    Eigen::VectorXd normal_residual = scaled_Z.adjoint() * residual - P.adjoint() * XTr  - ridge * alpha + offset_ridge_X;
 
     double residualNorm2 = normal_residual.squaredNorm();
     tol_error = std::sqrt(residualNorm2 / rhsNorm2);

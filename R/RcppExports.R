@@ -26,8 +26,8 @@ direct_calculate_expected_outer_alpha <- function(V, alpha_mu, re_position_list)
 }
 
 #' Conjugate Gradient for Large VI Problems
-cg_custom <- function(X, Z, P, omega, ridge, s, old_alpha, tol, it_max = 0L, low_dimension = 5L) {
-    .Call('_vglmer_cg_custom', PACKAGE = 'vglmer', X, Z, P, omega, ridge, s, old_alpha, tol, it_max, low_dimension)
+cg_custom <- function(X, Z, P, omega, ridge_Z, ridge_X, s, offset_ridge_X, old_alpha, tol, it_max = 0L, low_dimension = 5L) {
+    .Call('_vglmer_cg_custom', PACKAGE = 'vglmer', X, Z, P, omega, ridge_Z, ridge_X, s, offset_ridge_X, old_alpha, tol, it_max, low_dimension)
 }
 
 cpp_inv_alpha_var <- function(diag_vi_pg_mean, P, X, Tinv, vi_Z_list, beta_var_lndet) {

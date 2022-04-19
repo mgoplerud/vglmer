@@ -51,22 +51,24 @@ BEGIN_RCPP
 END_RCPP
 }
 // cg_custom
-List cg_custom(const Eigen::Map<Eigen::MatrixXd> X, const Eigen::MappedSparseMatrix<double> Z, const Eigen::Map<Eigen::MatrixXd> P, const Eigen::Map<Eigen::VectorXd> omega, const Eigen::MappedSparseMatrix<double> ridge, const Eigen::Map<Eigen::VectorXd> s, const Eigen::Map<Eigen::VectorXd> old_alpha, const double tol, const int it_max, const int low_dimension);
-RcppExport SEXP _vglmer_cg_custom(SEXP XSEXP, SEXP ZSEXP, SEXP PSEXP, SEXP omegaSEXP, SEXP ridgeSEXP, SEXP sSEXP, SEXP old_alphaSEXP, SEXP tolSEXP, SEXP it_maxSEXP, SEXP low_dimensionSEXP) {
+List cg_custom(const Eigen::MappedSparseMatrix<double> X, const Eigen::MappedSparseMatrix<double> Z, const Eigen::Map<Eigen::MatrixXd> P, const Eigen::Map<Eigen::VectorXd> omega, const Eigen::MappedSparseMatrix<double> ridge_Z, const Eigen::MappedSparseMatrix<double> ridge_X, const Eigen::Map<Eigen::VectorXd> s, const Eigen::Map<Eigen::VectorXd> offset_ridge_X, const Eigen::Map<Eigen::VectorXd> old_alpha, const double tol, const int it_max, const int low_dimension);
+RcppExport SEXP _vglmer_cg_custom(SEXP XSEXP, SEXP ZSEXP, SEXP PSEXP, SEXP omegaSEXP, SEXP ridge_ZSEXP, SEXP ridge_XSEXP, SEXP sSEXP, SEXP offset_ridge_XSEXP, SEXP old_alphaSEXP, SEXP tolSEXP, SEXP it_maxSEXP, SEXP low_dimensionSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< const Eigen::Map<Eigen::MatrixXd> >::type X(XSEXP);
+    Rcpp::traits::input_parameter< const Eigen::MappedSparseMatrix<double> >::type X(XSEXP);
     Rcpp::traits::input_parameter< const Eigen::MappedSparseMatrix<double> >::type Z(ZSEXP);
     Rcpp::traits::input_parameter< const Eigen::Map<Eigen::MatrixXd> >::type P(PSEXP);
     Rcpp::traits::input_parameter< const Eigen::Map<Eigen::VectorXd> >::type omega(omegaSEXP);
-    Rcpp::traits::input_parameter< const Eigen::MappedSparseMatrix<double> >::type ridge(ridgeSEXP);
+    Rcpp::traits::input_parameter< const Eigen::MappedSparseMatrix<double> >::type ridge_Z(ridge_ZSEXP);
+    Rcpp::traits::input_parameter< const Eigen::MappedSparseMatrix<double> >::type ridge_X(ridge_XSEXP);
     Rcpp::traits::input_parameter< const Eigen::Map<Eigen::VectorXd> >::type s(sSEXP);
+    Rcpp::traits::input_parameter< const Eigen::Map<Eigen::VectorXd> >::type offset_ridge_X(offset_ridge_XSEXP);
     Rcpp::traits::input_parameter< const Eigen::Map<Eigen::VectorXd> >::type old_alpha(old_alphaSEXP);
     Rcpp::traits::input_parameter< const double >::type tol(tolSEXP);
     Rcpp::traits::input_parameter< const int >::type it_max(it_maxSEXP);
     Rcpp::traits::input_parameter< const int >::type low_dimension(low_dimensionSEXP);
-    rcpp_result_gen = Rcpp::wrap(cg_custom(X, Z, P, omega, ridge, s, old_alpha, tol, it_max, low_dimension));
+    rcpp_result_gen = Rcpp::wrap(cg_custom(X, Z, P, omega, ridge_Z, ridge_X, s, offset_ridge_X, old_alpha, tol, it_max, low_dimension));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -245,7 +247,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_vglmer_LinRegChol", (DL_FUNC) &_vglmer_LinRegChol, 5},
     {"_vglmer_decomp_calculate_expected_outer_alpha", (DL_FUNC) &_vglmer_decomp_calculate_expected_outer_alpha, 6},
     {"_vglmer_direct_calculate_expected_outer_alpha", (DL_FUNC) &_vglmer_direct_calculate_expected_outer_alpha, 3},
-    {"_vglmer_cg_custom", (DL_FUNC) &_vglmer_cg_custom, 10},
+    {"_vglmer_cg_custom", (DL_FUNC) &_vglmer_cg_custom, 12},
     {"_vglmer_cpp_inv_alpha_var", (DL_FUNC) &_vglmer_cpp_inv_alpha_var, 6},
     {"_vglmer_cpp_quad_collapsed", (DL_FUNC) &_vglmer_cpp_quad_collapsed, 7},
     {"_vglmer_cpp_quad_legacy", (DL_FUNC) &_vglmer_cpp_quad_legacy, 5},
