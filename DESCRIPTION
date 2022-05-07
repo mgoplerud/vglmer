@@ -23,14 +23,14 @@ Imports:
 	splines,
 	checkmate
 Suggests: 
+	SuperLearner,
 	glue, 
 	MASS,
 	tictoc,
-	stringr,
 	rstan,
     rstanarm, 
 	brms,
     testthat,
     covr
 LinkingTo: Rcpp, RcppEigen
-RoxygenNote: 7.1.1
+RoxygenNote: 7.1.2

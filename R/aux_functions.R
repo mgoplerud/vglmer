@@ -4,7 +4,7 @@ update_rho <- function(XR, y, omega, prior_precision,
                        moments_sigma_alpha,
                        prior_sigma_alpha_nu, prior_sigma_alpha_phi,
                        vi_a_a_jp, vi_a_b_jp, vi_a_nu_jp,
-                       vi_a_APRIOR_jp,
+                       vi_a_APRIOR_jp, 
                        spline_REs, vi_beta_mean,
                        p.X, d_j, stationary_rho,
                        do_huangwand,
@@ -30,6 +30,7 @@ update_rho <- function(XR, y, omega, prior_precision,
   sum_ysq <- sum(omega %*% y)
   tXy <- t(XR) %*% y
   tXX <- t(XR) %*% omega %*% XR
+  prior_precision <- prior_precision
   rho_idx <- d_j[spline_REs]
   rho_idx <- rho_idx * seq_len(length(rho_idx))
   rho_idx <- c(rho_idx, rep(seq_len(sum(!spline_REs)), times = d_j[!spline_REs]^2) + sum(spline_REs))
@@ -115,8 +116,8 @@ update_rho <- function(XR, y, omega, prior_precision,
        nu_prior = nu_prior)
     
     OSL_rho <- vecR_fast_ridge(X = XR, 
-                               omega = omega, prior_precision = prior_precision, y = y, 
-                               adjust_y = as.vector(vec_OSL_prior)) 
+       omega = omega, prior_precision = prior_precision, y = y, 
+       adjust_y = as.vector(vec_OSL_prior)) 
     OSL_eval <- eval_profiled_rho(rho = OSL_rho, tXy = tXy, tXX = tXX, ridge = prior_precision, rho_idx = rho_idx,
                                   nu = nu, Phi = Phi, ESigma = ESigma, dim_rho = dim_rho, p.X = p.X, hw_a, sum_d = sum_d,
                                   A_prior = A_prior, nu_prior = nu_prior)
@@ -276,6 +277,7 @@ update_rho <- function(XR, y, omega, prior_precision,
     improvement <- OSL_eval - null_eval
     if (improvement < 0){
       OSL_rho <- null_rho
+      improvement <- NA
     }
     opt_rho <- OSL_rho
     opt_rho <- list(rho = opt_rho, improvement = improvement)

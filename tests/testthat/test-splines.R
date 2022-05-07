@@ -1,13 +1,5 @@
 context("test spline functionality")
 
-# test_that("check mgcv", {
-#   
-#   test_one <- mgcv:::interpret.gam(y ~ v_s(x2) + v_s(x))
-#   test_two <- vglmer_interpret.gam0(y ~ v_s(x2) + v_s(x))
-#   expect_equal(test_one, test_two)  
-#   
-# })
-
 test_that("fit with non-default options", {
   
   dat <- data.frame(x = rnorm(100), x2 = rexp(100),
@@ -21,19 +13,13 @@ test_that("fit with non-default options", {
                       data = dat, family = 'binomial')
   
   fit_tpf <- vglmer(y ~ v_s(x, type = 'tpf'),
-                      data = dat, family = 'binomial')
+    data = dat, family = 'binomial')
   fit_o <- vglmer(y ~ v_s(x, type = 'o'),
-                    data = dat, family = 'binomial')
+    data = dat, family = 'binomial')
   
   
   expect_identical(fit_knots$spline$attr[[1]]$knots, quantile(dat$x, c(0.25, 0.6, 0.75)))
-  
-  fit_knotsa <- vglmer(y ~ v_s(x, knots = quantile(dat$x, c(0.25, 0.6, 0.75))),
-                      data = dat, family = 'binomial')
-  
-  expect_equal(ELBO(fit_knots), ELBO(fit_knotsa))
-  expect_equal(ranef(fit_knots), ranef(fit_knotsa))
-  
+
   expect_gt(min(diff(ELBO(fit_tpf, 'trajectory'))), -sqrt(.Machine$double.eps))
   expect_gt(min(diff(ELBO(fit_o, 'trajectory'))), -sqrt(.Machine$double.eps))
   expect_gt(min(diff(ELBO(fit_knots, 'trajectory'))), -sqrt(.Machine$double.eps))
@@ -82,7 +68,7 @@ test_that("Check failures of spline fitting", {
 
 
 test_that("test spline 'by' construction", {
-  
+  library(Matrix)
   x <- splines::bs(x = rnorm(500))[,]
   by_values <- sample(letters, 500, replace = T)
   u_by <- sort(unique(by_values))
@@ -107,50 +93,41 @@ test_that("Basic spline tests (run and predict)", {
   
 
   m1 <- vglmer(y ~ x + x2 + v_s(x), 
-     control = vglmer_control(quiet_rho =  FALSE, iterations = 115, do_SQUAREM = TRUE,
-                              parameter_expansion = 'mean', factorization_method = 'weak',
-                              return_data = TRUE),
      data = dat, family = 'binomial')
   expect_equal(length(coef(m1)), 3)
   m1a <- vglmer(y ~ x2 + x + v_s(x), data = dat, 
-    control = vglmer_control(quiet_rho = FALSE, iterations = 115, do_SQUAREM = TRUE, 
-                             parameter_expansion = 'mean', factorization_method = 'weak',
-                             return_data = TRUE),
     family = 'binomial')
   
   expect_equal(ELBO(m1a), ELBO(m1))
-  expect_equal(ranef(m1), ranef(m1a), tol = 1e-5)
+  expect_equal(ranef(m1), ranef(m1a), tol = 1e-4, scale = 1)
   expect_equal(coef(m1), 
     coef(m1a)[match(names(coef(m1)), names(coef(m1a)))],
-    tol = 1e-5
+    tol = 1e-4, scale = 1
   )
-  expect_equal(ELBO(m1, 'trajectory'), ELBO(m1a, 'trajectory'), tol = 1e-5)
-  
+
   # Check runs with 2
   m2 <- vglmer(y ~ v_s(x2) + v_s(x), 
-               control = vglmer_control(iterations = 20, 
-                                        factorization_method = 'partial'),
+               control = vglmer_control(
+                 iterations = 20, print_prog = 20, prior_variance = 'mean_exists'),
                data = dat, family = 'binomial')
   # Check runs with "by"
   m3 <- vglmer(y ~ v_s(x2) + v_s(x, by = f), data = dat, 
                family = 'binomial',
-               control = vglmer_control(iterations = 20))
+               control = vglmer_control(iterations = 20, print_prog = 20))
   # Check runs with RE 
   m4 <- vglmer(y ~ v_s(x, by = f) + (1 | g), 
                data = dat, family = 'binomial',
-               control = vglmer_control(iterations = 20))
+               control = vglmer_control(iterations = 20, print_prog = 20))
 
   # Check runs with double "by"
   m5 <- vglmer(y ~ v_s(x, by = f) + v_s(x, by = g), 
                data = dat, family = 'binomial',
-               control = vglmer_control(iterations = 20, 
-                                        factorization_method = 'strong'))
+               control = vglmer_control(iterations = 20, print_prog = 20))
   # Check runs with 2 "by" for single grouping
   m6 <- vglmer(y ~ v_s(x, by = f) + v_s(x2, by = f), 
                data = dat, family = 'binomial',
-               control = vglmer_control(iterations = 20, 
-                                        factorization_method = 'strong',
-                                        linpred_method = 'cyclical'))
+               control = vglmer_control(iterations = 20, print_prog = 20,
+                                        factorization_method = 'strong'))
   expect_equal(ncol(m6$sigma$cov[[1]]), 3)
   
   # Check ELBO increases
@@ -161,10 +138,10 @@ test_that("Basic spline tests (run and predict)", {
   expect_gt(min(diff(m5$ELBO_trajectory$ELBO)), -sqrt(.Machine$double.eps))
   expect_gt(min(diff(m6$ELBO_trajectory$ELBO)), -sqrt(.Machine$double.eps))
   
-  # Prediction tests
-  # check decomposition of D and then retransformation
-  # test with custom knots and prediction outside of knots/etc.
-  
 })
+
+# Prediction tests
+# check decomposition of D and then retransformation
+# test with custom knots and prediction outside of knots/etc.
 
 

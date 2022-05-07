@@ -1,3 +1,47 @@
+#' SuperLearner with (Variational) Hierarchical Models
+#' 
+#' Functions to integrate vglmer (or glmer) into SuperLearner. Additional
+#' function to add an argument for "formula" to any existing SuperLearner
+#' method. This is useful when the design should not include all covariates.
+#'
+#' @param Y The outcome in the training data set.
+#' @param X The predictor variables in the training data.
+#' @param newX The prediction variables in validation data.
+#' @param formula The formula used to fit the model using standard "lme4"
+#'   syntax.
+#' @param family Family; only linear or binomial permitted.
+#' @param id Passed from SuperLeanrer. Not used.
+#' @param obsWeights Weights for each observation.
+#' @param control Control fitting; vglmer_control for SL.vglmer and
+#'   glmer_control for SL.glmer
+#' @param object Model estimated using SL.vglmer or SL.glmer
+#' @param ... Not used
+#' @param learner Character vector of method from SuperLearner
+#' @param env Environment to look for method
+#' @name sl_vglmer
+#' 
+#' @examples
+#' 
+#' if (requireNamespace('SuperLearner', quietly = TRUE)){
+#' require(SuperLearner)
+#' sim_data <- data.frame(
+#'   x = rnorm(100),
+#'   g = sample(letters, 100, replace = TRUE)
+#' )
+#' sim_data$y <- rbinom(nrow(sim_data), 1, plogis(runif(26)[match(sim_data$g, letters)]))
+#' sim_data$g <- factor(sim_data$g)
+#' sl_vglmer <- function(...){SL.vglmer(..., formula = y ~ x + (1 | g))}
+#' SL.glm <- SuperLearner::SL.glm
+#' add_formula_SL('SL.glm')
+#' sl_glm <- function(...){SL.glm_f(..., formula = ~ x)}
+# 
+#' SuperLearner::SuperLearner(
+#'   Y = sim_data$y, family = 'binomial',
+#'   X = sim_data[, c('x', 'g')],
+#'   cvControl = list(V = 2),
+#'   SL.library = c('sl_vglmer', 'sl_glm')
+#' )
+#' }
 #' @export
 SL.vglmer <- function(Y, X, newX, formula, family, id, obsWeights, control = vglmer_control()) {
   if(!requireNamespace('vglmer', quietly = FALSE)) {stop("SL.vglmer requires the vglmer package, but it isn't available")} 
@@ -45,6 +89,9 @@ SL.vglmer <- function(Y, X, newX, formula, family, id, obsWeights, control = vgl
   return(out)
 }
 
+#' @rdname sl_vglmer
+#' @param newdata Model for predicting on test data
+#' @param allow_missing_levels Allowing missing levels not in training data.
 #' @export
 predict.SL.vglmer <- function(object, newdata, allow_missing_levels = TRUE, ...){
   if(!requireNamespace('vglmer', quietly = FALSE)) {stop("SL.vglmer requires the vglmer package, but it isn't available")} 
@@ -59,6 +106,7 @@ predict.SL.vglmer <- function(object, newdata, allow_missing_levels = TRUE, ...)
 }
 
 #' @importFrom stats predict
+#' @rdname sl_vglmer
 #' @export
 SL.glmer <- function(Y, X, newX, formula, family, id, obsWeights, control = glmerControl()) {
   if(!requireNamespace('lme4', quietly = FALSE)) {stop("SL.glmer requires the lme4 package, but it isn't available")} 
@@ -93,15 +141,17 @@ SL.glmer <- function(Y, X, newX, formula, family, id, obsWeights, control = glme
   return(out)
 }
 
+#' @rdname sl_vglmer
+#' @param allow.new.levels Allowing missing levels not in training data.
 #' @export
-predict.SL.glmer <- function(object, newdata, allow_missing_levels = TRUE, ...){
+predict.SL.glmer <- function(object, newdata, allow.new.levels = TRUE, ...){
   if(!requireNamespace('lme4', quietly = FALSE)) {stop("SL.glmer requires the lme4 package, but it isn't available")} 
   
-  pred <- predict(object$object, newdata = newdata, allow.new.levels = TRUE, type = 'response')
+  pred <- predict(object$object, newdata = newdata, allow.new.levels = allow.new.levels, type = 'response')
   return(pred)
 }
 
-
+#' @rdname sl_vglmer
 #' @export
 add_formula_SL <- function(learner, env = parent.frame()){
 
@@ -112,8 +162,8 @@ add_formula_SL <- function(learner, env = parent.frame()){
   f_formals_predict <- c(formals(base_learner_predict, envir = env))
   # Use model.matrix formula *first*
   
-  # Placeholder to pass CRAN
-  newdata <- X <- newX <- NULL
+  # Placeholder to pass CRAN checks
+  object <- newdata <- X <- newX <- NULL
   
   f_learner <- function(formula, ...){
     args <- mget(ls())

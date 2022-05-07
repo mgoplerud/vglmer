@@ -27,6 +27,7 @@ test_that("Short test of MAVB running for CRAN", {
 })
 
 test_that("Longer Test of MAVB", {
+  
   skip_on_cran()
 
   N <- 1000
@@ -50,7 +51,7 @@ test_that("Longer Test of MAVB", {
     control = vglmer_control(factorization_method = "weak")
   )
 
-  mavb_samples <- MAVB(object = example_vglmer, samples = 2000)
+  mavb_samples <- MAVB(object = example_vglmer, samples = 4000)
 
   mavb_colvar <- colVar(mavb_samples)
   mavb_colmeans <- colMeans(mavb_samples)

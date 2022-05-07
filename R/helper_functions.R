@@ -267,12 +267,14 @@ calculate_ELBO <- function(family, ELBO_type, factorization_method,
   ## of the log-complete data given the variational distribution.
   if (ELBO_type == "augmented") {
     if (family == "linear") {
+      
       e_ln_sigmasq <- log(vi_sigmasq_b) - digamma(vi_sigmasq_a)
       e_inv_sigmasq <- vi_sigmasq_a/vi_sigmasq_b
       logcomplete_1 <- sum(-1/2 * ((y - ex_XBZA)^2 + var_XBZA) * e_inv_sigmasq) +
         -1/2 * length(y) * (log(2 * pi) + e_ln_sigmasq)
       #Add log prior
-      logcomplete_1 <- logcomplete_1 + (-vi_sigmasq_prior_a - 1) * e_ln_sigmasq +
+      logcomplete_1 <- logcomplete_1 + 
+        (-vi_sigmasq_prior_a - 1) * e_ln_sigmasq +
         -vi_sigmasq_prior_b * e_inv_sigmasq
     } else {
       # Get the terms for the p(y, w | alpha, beta, Sigma) EXCLUDING the intractable PG.
@@ -290,7 +292,7 @@ calculate_ELBO <- function(family, ELBO_type, factorization_method,
           sum(diag(a %*% b))
         }))
       logcomplete_2 <-  logcomplete_2 +
-        -1/2 * sum(d_j * g_j) * e_ln_sigmasq
+        -1/2 * sum(d_j * g_j) * (e_ln_sigmasq)
     }else{
       logcomplete_2 <- sum(-d_j * g_j / 2 * log(2 * pi) - g_j / 2 * ln_det_sigma_alpha) +
         -1 / 2 * sum(mapply(inv_sigma_alpha, vi_sigma_outer_alpha, FUN = function(a, b) {
