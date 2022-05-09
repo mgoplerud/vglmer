@@ -120,6 +120,54 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// cpp_var_lp
+Eigen::VectorXd cpp_var_lp(const Eigen::SparseMatrix<double> design_C, const Eigen::SparseMatrix<double> vi_C_uncond, const Rcpp::List vi_M_var, const Rcpp::List vi_M_list, const Rcpp::List vi_P, const bool sparse_input);
+RcppExport SEXP _vglmer_cpp_var_lp(SEXP design_CSEXP, SEXP vi_C_uncondSEXP, SEXP vi_M_varSEXP, SEXP vi_M_listSEXP, SEXP vi_PSEXP, SEXP sparse_inputSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const Eigen::SparseMatrix<double> >::type design_C(design_CSEXP);
+    Rcpp::traits::input_parameter< const Eigen::SparseMatrix<double> >::type vi_C_uncond(vi_C_uncondSEXP);
+    Rcpp::traits::input_parameter< const Rcpp::List >::type vi_M_var(vi_M_varSEXP);
+    Rcpp::traits::input_parameter< const Rcpp::List >::type vi_M_list(vi_M_listSEXP);
+    Rcpp::traits::input_parameter< const Rcpp::List >::type vi_P(vi_PSEXP);
+    Rcpp::traits::input_parameter< const bool >::type sparse_input(sparse_inputSEXP);
+    rcpp_result_gen = Rcpp::wrap(cpp_var_lp(design_C, vi_C_uncond, vi_M_var, vi_M_list, vi_P, sparse_input));
+    return rcpp_result_gen;
+END_RCPP
+}
+// cpp_update_m_var
+Rcpp::List cpp_update_m_var(const Eigen::SparseMatrix<double> diag_vi_pg_mean, const Eigen::SparseMatrix<double> design_C, const Eigen::SparseMatrix<double> Tinv_C, const Rcpp::List list_Tinv_M, const Rcpp::List vi_M_list, const bool any_collapsed_C, const double lndet_C);
+RcppExport SEXP _vglmer_cpp_update_m_var(SEXP diag_vi_pg_meanSEXP, SEXP design_CSEXP, SEXP Tinv_CSEXP, SEXP list_Tinv_MSEXP, SEXP vi_M_listSEXP, SEXP any_collapsed_CSEXP, SEXP lndet_CSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const Eigen::SparseMatrix<double> >::type diag_vi_pg_mean(diag_vi_pg_meanSEXP);
+    Rcpp::traits::input_parameter< const Eigen::SparseMatrix<double> >::type design_C(design_CSEXP);
+    Rcpp::traits::input_parameter< const Eigen::SparseMatrix<double> >::type Tinv_C(Tinv_CSEXP);
+    Rcpp::traits::input_parameter< const Rcpp::List >::type list_Tinv_M(list_Tinv_MSEXP);
+    Rcpp::traits::input_parameter< const Rcpp::List >::type vi_M_list(vi_M_listSEXP);
+    Rcpp::traits::input_parameter< const bool >::type any_collapsed_C(any_collapsed_CSEXP);
+    Rcpp::traits::input_parameter< const double >::type lndet_C(lndet_CSEXP);
+    rcpp_result_gen = Rcpp::wrap(cpp_update_m_var(diag_vi_pg_mean, design_C, Tinv_C, list_Tinv_M, vi_M_list, any_collapsed_C, lndet_C));
+    return rcpp_result_gen;
+END_RCPP
+}
+// cpp_update_c_var
+Rcpp::List cpp_update_c_var(const Eigen::SparseMatrix<double> diag_vi_pg_mean, const Eigen::SparseMatrix<double> design_C, const Eigen::SparseMatrix<double> Tinv_C, const Eigen::VectorXd s, const Rcpp::List vi_M_list);
+RcppExport SEXP _vglmer_cpp_update_c_var(SEXP diag_vi_pg_meanSEXP, SEXP design_CSEXP, SEXP Tinv_CSEXP, SEXP sSEXP, SEXP vi_M_listSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const Eigen::SparseMatrix<double> >::type diag_vi_pg_mean(diag_vi_pg_meanSEXP);
+    Rcpp::traits::input_parameter< const Eigen::SparseMatrix<double> >::type design_C(design_CSEXP);
+    Rcpp::traits::input_parameter< const Eigen::SparseMatrix<double> >::type Tinv_C(Tinv_CSEXP);
+    Rcpp::traits::input_parameter< const Eigen::VectorXd >::type s(sSEXP);
+    Rcpp::traits::input_parameter< const Rcpp::List >::type vi_M_list(vi_M_listSEXP);
+    rcpp_result_gen = Rcpp::wrap(cpp_update_c_var(diag_vi_pg_mean, design_C, Tinv_C, s, vi_M_list));
+    return rcpp_result_gen;
+END_RCPP
+}
 // calculate_alpha_decomp_full_factor
 List calculate_alpha_decomp_full_factor(const Eigen::Map<Eigen::MatrixXd> X, const Eigen::MappedSparseMatrix<double> Z, const Eigen::Map<Eigen::MatrixXd> P, const Eigen::Map<Eigen::VectorXd> omega, const Eigen::Map<Eigen::ArrayXd> d_j, const Eigen::Map<Eigen::ArrayXd> g_j, const List Tinv, const Rcpp::List& re_position_list);
 RcppExport SEXP _vglmer_calculate_alpha_decomp_full_factor(SEXP XSEXP, SEXP ZSEXP, SEXP PSEXP, SEXP omegaSEXP, SEXP d_jSEXP, SEXP g_jSEXP, SEXP TinvSEXP, SEXP re_position_listSEXP) {
@@ -251,6 +299,9 @@ static const R_CallMethodDef CallEntries[] = {
     {"_vglmer_cpp_inv_alpha_var", (DL_FUNC) &_vglmer_cpp_inv_alpha_var, 6},
     {"_vglmer_cpp_quad_collapsed", (DL_FUNC) &_vglmer_cpp_quad_collapsed, 7},
     {"_vglmer_cpp_quad_legacy", (DL_FUNC) &_vglmer_cpp_quad_legacy, 5},
+    {"_vglmer_cpp_var_lp", (DL_FUNC) &_vglmer_cpp_var_lp, 6},
+    {"_vglmer_cpp_update_m_var", (DL_FUNC) &_vglmer_cpp_update_m_var, 7},
+    {"_vglmer_cpp_update_c_var", (DL_FUNC) &_vglmer_cpp_update_c_var, 5},
     {"_vglmer_calculate_alpha_decomp_full_factor", (DL_FUNC) &_vglmer_calculate_alpha_decomp_full_factor, 8},
     {"_vglmer_chol_sparse", (DL_FUNC) &_vglmer_chol_sparse, 3},
     {"_vglmer_cpp_zVz", (DL_FUNC) &_vglmer_cpp_zVz, 2},

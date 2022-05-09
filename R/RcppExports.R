@@ -42,6 +42,18 @@ cpp_quad_legacy <- function(tZ, varA, tP, X, vi_beta_var) {
     .Call('_vglmer_cpp_quad_legacy', PACKAGE = 'vglmer', tZ, varA, tP, X, vi_beta_var)
 }
 
+cpp_var_lp <- function(design_C, vi_C_uncond, vi_M_var, vi_M_list, vi_P, sparse_input) {
+    .Call('_vglmer_cpp_var_lp', PACKAGE = 'vglmer', design_C, vi_C_uncond, vi_M_var, vi_M_list, vi_P, sparse_input)
+}
+
+cpp_update_m_var <- function(diag_vi_pg_mean, design_C, Tinv_C, list_Tinv_M, vi_M_list, any_collapsed_C, lndet_C) {
+    .Call('_vglmer_cpp_update_m_var', PACKAGE = 'vglmer', diag_vi_pg_mean, design_C, Tinv_C, list_Tinv_M, vi_M_list, any_collapsed_C, lndet_C)
+}
+
+cpp_update_c_var <- function(diag_vi_pg_mean, design_C, Tinv_C, s, vi_M_list) {
+    .Call('_vglmer_cpp_update_c_var', PACKAGE = 'vglmer', diag_vi_pg_mean, design_C, Tinv_C, s, vi_M_list)
+}
+
 #' Cyclical Calculation of Variance Decomposition
 calculate_alpha_decomp_full_factor <- function(X, Z, P, omega, d_j, g_j, Tinv, re_position_list) {
     .Call('_vglmer_calculate_alpha_decomp_full_factor', PACKAGE = 'vglmer', X, Z, P, omega, d_j, g_j, Tinv, re_position_list)

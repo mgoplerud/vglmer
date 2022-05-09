@@ -14,11 +14,9 @@ Imports:
 	CholWishart,
 	mvtnorm, 
 	Matrix, 
-	dplyr, 
 	stats, 
 	graphics, 
 	methods, 
-	rlang,
 	lmtest, 
 	splines,
 	checkmate
@@ -33,4 +31,4 @@ Suggests:
     testthat,
     covr
 LinkingTo: Rcpp, RcppEigen
-RoxygenNote: 7.1.1
+RoxygenNote: 7.1.2

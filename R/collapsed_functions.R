@@ -1,8 +1,8 @@
 
-build_collapse_index <- function(X, Z, cyclical_pos, names_of_RE, k){
+build_collapse_index <- function(X, Z, cyclical_pos, weight, names_of_RE, k){
   
-  mean_nonsparse_X <- colMeans(X != 0)
-  mean_nonsparse_Z <- colMeans(Z != 0)
+  mean_nonsparse_X <- colMeans(Diagonal(x = weight) %*% (X != 0))
+  mean_nonsparse_Z <- colMeans(Diagonal(x = weight) %*% (Z != 0))
   
   if (is.character(k)){
     

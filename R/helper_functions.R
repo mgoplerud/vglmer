@@ -1,28 +1,3 @@
-# extract_group_memberships <- function(x, fr, drop.unused.levels){
-#   frloc <- factorize(x, frloc)
-#   if (is.null(ff <- tryCatch(eval(substitute(makeFac(fac),
-#                                              list(fac = x[[3]])), frloc), error = function(e) NULL)))
-#     stop("couldn't evaluate grouping factor ", deparse(x[[3]]),
-#          " within model frame:", " try adding grouping factor to data ",
-#          "frame explicitly if possible", call. = FALSE)
-#   if (all(is.na(ff))){
-#     stop("Invalid grouping factor specification, ", deparse(x[[3]]),
-#          call. = FALSE)
-#   }
-#   if (drop.unused.levels){
-#     ff <- factor(ff, exclude = NA)
-#   }
-#   return(ff)
-# }
-#
-# make_dgC <- function(x){
-#   if (!inherits(x, 'ddiMatrix')){
-#     x <- as(x, 'dgCMatrix')
-#   }else{
-#     x <- sparseMatrix(i = 1:nrow(x), j =1:nrow(x), x = diag(x))
-#   }
-#   return(x)
-# }
 
 safe_convert <- function(x){
   if (isDiagonal(x)){
@@ -283,16 +258,10 @@ calculate_ELBO <- function(family, ELBO_type, factorization_method,
     }
   } else if (factorization_method == "collapsed") {
     
-    var_XBZA <- rowSums( (design_C %*% vi_C_uncond) * design_C)
-    for (j in 1:length(vi_M_var)){
-      var_Mj <- vi_M_var[[j]]
-      data_Mj <- vi_M_list[[j]]
-      jq1 <- rowSums((data_Mj %*% var_Mj) * data_Mj)
-      jq2 <- rowSums( (data_Mj %*% t(vi_P[[j]] %*% var_Mj)) * design_C)
-      var_XBZA <- var_XBZA + jq1 - 2 * jq2
-    }
-    
-    
+    var_XBZA <- cpp_var_lp(design_C = design_C, vi_C_uncond = vi_C_uncond,
+       vi_M_var = vi_M_var, vi_M_list = vi_M_list, vi_P = vi_P,
+       sparse_input = class(vi_M_var[[1]]) == 'dgCMatrix')
+
   } else {
     
     beta_quad <- rowSums((X %*% t(vi_beta_decomp))^2)
