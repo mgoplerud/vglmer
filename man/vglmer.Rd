@@ -70,7 +70,7 @@ coef(est_vglmer); vcov(est_vglmer)
 ranef(est_vglmer); fixef(est_vglmer)
 
 #' # Run with stronger (i.e. less good) approximation
-\dontrun{
+\donttest{
 vglmer(y ~ x + (x | g),
   data = sim_data,
   control = vglmer_control(factorization_method = "strong"),

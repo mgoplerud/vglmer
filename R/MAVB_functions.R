@@ -196,64 +196,6 @@ colVar <- function(matrix) {
   apply(matrix, MARGIN = 2, var)
 }
 
-
-#' @param data Data to get predictions on.
-#' @rdname hmc_samples
-custom_HMC_linpred <- function(HMC, data) {
-  if (!requireNamespace("rstanarm", quietly = TRUE)) {
-    stop("rstanarm must be installed to analyze HMC objects.")
-  }
-  hmc_samples <- as.matrix(HMC)
-  hmc_samples <- hmc_samples[, !grepl(colnames(hmc_samples), pattern = "^Sigma")]
-
-  parse_stan_names <- strsplit(colnames(hmc_samples), split = "^b\\[| |\\]")
-
-  fmt_stan_names <- sapply(parse_stan_names, FUN = function(i) {
-    if (length(i) == 1) {
-      return(i)
-    } else {
-      i_one <- unlist(strsplit(i[3], split = ":"))
-      return(paste(i_one[1], i[2], i_one[2], sep = " @ "))
-    }
-  })
-  colnames(hmc_samples) <- fmt_stan_names
-
-  hmc.XZ <- rstanarm::posterior_linpred(HMC, data = data, XZ = TRUE)
-
-  hmc.linpred <- hmc.XZ %*% t(hmc_samples)
-
-  return(hmc.linpred)
-}
-
-#' Get HMC samples but ordered to match vector of names provided
-#' @keywords internal
-#' @name hmc_samples
-#' @param HMC Object from rstanarm
-#' @param ordering vector of names to order the posterior samples.
-#' @importFrom mvtnorm rmvnorm
-custom_HMC_samples <- function(HMC, ordering) {
-  if (!requireNamespace("rstanarm", quietly = TRUE)) {
-    stop("rstanarm must be installed to analyze HMC objects.")
-  }
-
-  hmc_samples <- as.matrix(HMC)
-  hmc_samples <- hmc_samples[, !grepl(colnames(hmc_samples), pattern = "^Sigma")]
-
-  parse_stan_names <- strsplit(colnames(hmc_samples), split = "^b\\[| |\\]")
-
-  fmt_stan_names <- sapply(parse_stan_names, FUN = function(i) {
-    if (length(i) == 1) {
-      return(i)
-    } else {
-      i_one <- unlist(strsplit(i[3], split = ":"))
-      return(paste(i_one[1], i[2], i_one[2], sep = " @ "))
-    }
-  })
-  colnames(hmc_samples) <- fmt_stan_names
-  hmc_samples <- hmc_samples[, match(ordering, colnames(hmc_samples))]
-  return(return(hmc_samples))
-}
-
 #' Get samples from GLMER
 #'
 #' Order samples from glmer to match names from vglmer.

@@ -34,10 +34,8 @@
 #' predict(est_vglmer, newdata = sim_data)
 #' # Return 10 posterior draws of the linear predictor for each observation.
 #' predict_MAVB(est_vglmer, newdata = sim_data, summary = FALSE, samples = 10)
-#' \dontrun{
-#' # Fails!
-#' predict(est_vglmer, newdata = data.frame(g = "AB", x = 0))
-#' }
+#' # The following would fail!
+#' # predict(est_vglmer, newdata = data.frame(g = "AB", x = 0))
 #' # Works
 #' predict(est_vglmer,
 #'   newdata = data.frame(g = "AB", x = 0),

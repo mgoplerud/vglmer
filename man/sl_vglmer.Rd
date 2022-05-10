@@ -80,11 +80,13 @@ sl_vglmer <- function(...){SL.vglmer(..., formula = y ~ x + (1 | g))}
 SL.glm <- SuperLearner::SL.glm
 add_formula_SL('SL.glm')
 sl_glm <- function(...){SL.glm_f(..., formula = ~ x)}
-SuperLearner::SuperLearner(
-  Y = sim_data$y, family = 'binomial',
-  X = sim_data[, c('x', 'g')],
-  cvControl = list(V = 2),
-  SL.library = c('sl_vglmer', 'sl_glm')
-)
+\donttest{
+   SuperLearner::SuperLearner(
+     Y = sim_data$y, family = 'binomial',
+     X = sim_data[, c('x', 'g')],
+     cvControl = list(V = 2),
+     SL.library = c('sl_vglmer', 'sl_glm')
+   )
+}
 }
 }

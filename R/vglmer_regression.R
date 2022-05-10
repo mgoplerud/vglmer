@@ -38,7 +38,7 @@
 #' ranef(est_vglmer); fixef(est_vglmer)
 #'
 #' #' # Run with stronger (i.e. less good) approximation
-#' \dontrun{
+#' \donttest{
 #' vglmer(y ~ x + (x | g),
 #'   data = sim_data,
 #'   control = vglmer_control(factorization_method = "strong"),
@@ -64,24 +64,27 @@
 #' \item{ELBO_trajectory}{A data.frame tracking the ELBO per iteration.}
 #'
 #' }
-#' @importFrom dplyr select group_by group_by_at summarize n lag
 #' @importFrom lme4 mkReTrms findbars subbars
 #' @importFrom stats model.response model.matrix model.frame rnorm rWishart
 #'   qlogis optim residuals lm plogis setNames
-#' @importFrom rlang .data
 #' @importFrom graphics plot
-#' @importFrom checkmate assert assert_formula assert_choice
-#'   check_data_frame
 #' @useDynLib vglmer
 #' @export
 vglmer <- function(formula, data, family, control = vglmer_control()) {
 
   # Verify integrity of parameter arguments
-  checkdf <- check_data_frame(data, null.ok = TRUE)
+  family <- match.arg(family, choices = c("negbin", "binomial", "linear"))
+  
+  checkdf <- inherits(data, 'data.frame')
+  if (is.null(data)){
+    checkdf <- TRUE
+  }
   if (checkdf != TRUE) {
     warning(paste0("data is not a data.frame? Behavior may be unexpected: ", checkdf))
   }
-  assert_formula(formula)
+  if (!inherits(formula, 'formula')){
+    stop('"formula" must be a formula.')
+  }
   # Delete the missing data
   # (i.e. sub out the random effects, do model.frame)
   #
@@ -124,7 +127,6 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
   }
   
   
-  assert_choice(family, c("negbin", "binomial", "linear"))
   if (!inherits(control, "vglmer_control")) {
     stop("control must be object from vglmer_control().")
   }
@@ -766,7 +768,6 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
         })
     }
   } else if (control$init == "random") {
-    set.seed(control$random_seed)
     vi_beta_mean <- rnorm(ncol(X))
     vi_alpha_mean <- rep(0, ncol(Z))
 
@@ -1557,11 +1558,6 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
         do_huangwand = do_huangwand, vi_a_a_jp = vi_a_a_jp, vi_a_b_jp = vi_a_b_jp,
         vi_a_nu_jp = vi_a_nu_jp, vi_a_APRIOR_jp = vi_a_APRIOR_jp
       )
-      if (it > 1){
-        if (debug_ELBO.3$ELBO < debug_ELBO.2$ELBO){
-          browser()
-        }
-      }
     }
 
     if (parameter_expansion == "none" | !any_Mprime) {
@@ -1715,11 +1711,16 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
           XR <- XR * sqrt(vi_sigmasq_a/vi_sigmasq_b)
           adj_s <- s * sqrt(vi_sigmasq_a/vi_sigmasq_b)
           R_ridge <- R_ridge * vi_sigmasq_a/vi_sigmasq_b
+          offset <- 0
         }else if (family == 'negbin'){
-          stop('translation expansion for negative binomial not yet set up.')
-        }else{
           adj_s <- s
-        }
+          offset <- vi_r_mu
+          stop('translation not set up for negative binomial.')
+        }else if (family == 'binomial'){
+          adj_s <- s
+          offset <- 0
+        }else{stop("family not set up for translation expansion.")}
+        
         update_expansion_XR <- update_rho(
           XR = XR, y = adj_s, omega = diag_vi_pg_mean, 
           prior_precision = R_ridge, vi_beta_mean = vi_beta_mean,
@@ -1729,7 +1730,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
           vi_a_APRIOR_jp = vi_a_APRIOR_jp, 
           stationary_rho = stationary_rho,
           spline_REs = spline_REs, d_j = d_j,
-          do_huangwand = do_huangwand,
+          do_huangwand = do_huangwand, offset = offset,
           p.X = p.X, method = px_method, px_it = px_it,
           init_rho = opt_prior_rho
         )
@@ -1920,6 +1921,8 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
             vi_sigmasq_a = vi_sigmasq_a, vi_sigmasq_b = vi_sigmasq_b, 
             vi_sigmasq_prior_a = vi_sigmasq_prior_a, vi_sigmasq_prior_b = vi_sigmasq_prior_b,
             
+            vi_r_mean = vi_r_mean, vi_r_sigma = vi_r_sigma, vi_r_mu = vi_r_mu,
+            
             vi_sigma_alpha = prop_vi_sigma_alpha, 
             vi_a_b_jp = prop_vi_a_b_jp,
             vi_sigma_outer_alpha = prop_vi_sigma_outer_alpha,
@@ -1947,12 +1950,12 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
         ELBO_diff <- prop.ELBO$ELBO - prior.ELBO$ELBO
         if (!is.na(px_improve)){
           if (abs(ELBO_diff - px_improve) > sqrt(.Machine$double.eps)){
-            message('PX does not agree with debug.')
-            browser()
-            stop()
+            stop('PX does not agree with debug.')
+            # browser()
+            # stop()
           }
         }else{
-          if (ELBO_diff != 0){stop('PX altered parameters when NA.')}
+          if (!isTRUE(all.equal(ELBO_diff, 0))){stop('PX altered parameters when NA.')}
         }
         debug_PX_ELBO[it] <- ELBO_diff
       }
@@ -2530,16 +2533,17 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
       if (do_SQUAREM & (it %% 3 == 0)){
         squarem.ELBO$step <- 4
         final.ELBO$step <- 5
-        update_ELBO <- bind_rows(debug_ELBO.1, debug_ELBO.2, debug_ELBO.3, squarem.ELBO, final.ELBO)
+        update_ELBO <- rbind(debug_ELBO.1, debug_ELBO.2, debug_ELBO.3, squarem.ELBO, final.ELBO)
       }else{
         final.ELBO$step <- 4
-        update_ELBO <- bind_rows(debug_ELBO.1, debug_ELBO.2, debug_ELBO.3, final.ELBO)
+        update_ELBO <- rbind(debug_ELBO.1, debug_ELBO.2, debug_ELBO.3, final.ELBO)
       }
       update_ELBO$it <- it
-      store_ELBO <- bind_rows(store_ELBO, update_ELBO)
+      store_ELBO$step <- NA
+      store_ELBO <- rbind(store_ELBO, update_ELBO)
     } else {
       final.ELBO$it <- it
-      store_ELBO <- bind_rows(store_ELBO, final.ELBO)
+      store_ELBO <- rbind(store_ELBO, final.ELBO)
     }
     
 
@@ -2628,17 +2632,6 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     message(paste0("Ended without Convergence after", it, " iterations : ELBO change of ", round(change_elbo[1], abs(floor(log(tolerance_elbo) / log(10))))))
   }
 
-  if (debug_ELBO) {
-    d.ELBO <- with(store_ELBO, ELBO - dplyr::lag(ELBO))
-    sum.ELBO <- store_ELBO
-    sum.ELBO$diff <- d.ELBO
-    sum.ELBO <- summarize(group_by_at(sum.ELBO, .vars = "step"),
-      negative = mean(.data$diff < 0, na.rm = T)
-    )
-  } else {
-    store_parameter_traj <- NULL
-    d.ELBO <- NULL
-  }
   if (parameter_expansion %in% c("translation", "diagonal")) {
     final.ELBO$accepted_PX <- accepted_times / attempted_expansion
   }
@@ -2647,7 +2640,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
   
   output <- list(
     beta = list(mean = vi_beta_mean),
-    ELBO = final.ELBO, debug_ELBO = d.ELBO,
+    ELBO = final.ELBO, 
     ELBO_trajectory = store_ELBO,
     parameter.change = change_all,
     parameter.vi = store_vi,
@@ -2674,13 +2667,15 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     tic.clear()
     tic.clearlog()
 
-    tic_summary <- summarize(
-      .data = group_by_at(.vars = "stage", tic_log),
-      .groups = "keep",
-      n = dplyr::n(), mean = mean(.data$time),
-      min = min(.data$time), max = max(.data$time),
-      total = sum(.data$time)
+    tic_summary <- lapply(split(tic_log$time, tic_log$stage),
+      FUN=function(i){
+        data.frame(n = length(i), mean = mean(i), min = min(i), max = max(i),
+                   total = sum(i))
+      }
     )
+    tic_summary <- do.call('rbind', tic_summary)
+    tic_summary$variable <- rownames(tic_summary)
+    rownames(tic_summary) <- NULL
   } else {
     tic_summary <- NULL
   }
@@ -2752,15 +2747,16 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
 #'
 #' @param iterations Number of iterations for the model.
 #' @param factorization_method The factorization method to use. Described in
-#'   detail in the dissertation. strong, partial, and weak correspond to Schemes
+#'   detail in Goplerud (2022). "strong", "partial", and "weak" correspond to Schemes
 #'   I, II, and III respectively. "weak" should have best performance but is
 #'   slowest.
-#' @param prior_variance Options are jeffreys, mcmcglmm, mvD, mean_exists,
+#' @param prior_variance Options are hw, kn, jeffreys, mcmcglmm, mvD, mean_exists,
 #'   limit, and uniform. They are defined as an Inverse Wishart with the
 #'   following parameters where d is the dimensionality of the random effect. At
 #'   present, all models use "mean_exists" for a well-defined proper prior.
 #'   \itemize{
-#'   \item kn: See Kass and Natarajan (2006)
+#'   \item hw: Huang and Wand (2013) prior.
+#'   \item kn: Kass and Natarajan (2006)
 #'   \item jeffreys: IW(0, 0)
 #'   \item mcmcglmm: IW(0, I)
 #'   \item mvD: IW(-d, I)
@@ -2787,8 +2783,11 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
 #'   (experimential).
 #' @param vi_r_val For fixed "r", which value?
 #'
-#' @param init Initialization method can be EM, zero, or random at moment.
-#' @param random_seed Set seed for initialization.
+#' @param init Initialization method can be one of four options: "EM_FE" sets
+#'   the random effects to zero, estimates the fixed effects and initializes the
+#'   model. "EM" initializes the model with a ridge regression with a guess as
+#'   to the random effect variance. "zero" initializes the variational means at
+#'   zero. "random" initializes randomly.
 #'
 #' @param debug_param Debug parameter convergence.
 #' @param debug_ELBO Debug ELBO trajectory.
@@ -2804,14 +2803,13 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
 #' @param do_timing Estimate timing with tictoc
 #' @param do_SQUAREM Accelerate method using SQUAREM
 #' @param verify_columns Verify that all columns are drawn from the data.frame itself.
-
-#' @importFrom checkmate assert check_double check_logical check_choice check_int check_integerish
 #' @export
 vglmer_control <- function(iterations = 1000,
-   prior_variance = "hw", factorization_method = "strong",
+   prior_variance = "hw",
+   factorization_method = c("strong", "partial", "weak", "collapsed"),
    tolerance_elbo = 1e-8, tolerance_parameters = 1e-5,
    prevent_degeneracy = FALSE, force_whole = TRUE, verbose_time = TRUE,
-   parameter_expansion = "translation", random_seed = 1, do_timing = FALSE,
+   parameter_expansion = "translation", do_timing = FALSE,
    debug_param = FALSE, return_data = FALSE, linpred_method = "joint",
    vi_r_method = "VEM", vi_r_val = NA, do_SQUAREM = TRUE, verify_columns = FALSE,
    debug_ELBO = FALSE, print_prog = NULL, quiet = T, quiet_rho = TRUE,
@@ -2819,26 +2817,21 @@ vglmer_control <- function(iterations = 1000,
    hw_INNER = 10,
    init = "EM_FE") {
   
-  # use checkmate package to verify arguments
-  assert(
-    check_integerish(iterations, lower = 1),
-    check_double(c(tolerance_elbo, tolerance_parameters), len = 2, lower = 0),
-    check_logical(c(
-      prevent_degeneracy, force_whole, verbose_time, do_timing,
-      debug_param, return_data, debug_ELBO, quiet
-    ), len = 8),
-    check_choice(factorization_method, c("weak", "strong", "collapsed", "partial")),
-    check_choice(prior_variance, c("kn", "hw", "mean_exists", "jeffreys", "mcmcglmm", "mvD", "limit", "uniform", "gamma")),
-    check_choice(linpred_method, c("joint", "cyclical", "solve_normal")),
-    check_choice(parameter_expansion, c("none", "mean", "translation")),
-    check_choice(vi_r_method, c("VEM", "fixed", "Laplace", "delta")),
-    check_double(vi_r_val, all.missing = TRUE),
-    check_int(print_prog, null.ok = TRUE),
-    check_choice(init, c("EM", "random", "zero", "EM_FE")),
-    check_double(random_seed),
-    combine = "and"
-  )
-
+  factorization_method <- match.arg(factorization_method)
+  prior_variance <- match.arg(prior_variance, choices = c("hw", "kn", "mean_exists", "jeffreys", "mcmcglmm", "mvD", "limit", "uniform", "gamma"))
+  linpred_method <- match.arg(linpred_method, choices = c("joint", "cyclical", "solve_normal"))    
+  parameter_expansion <- match.arg(parameter_expansion, choices = c("translation", "mean", "none"))
+  vi_r_method <- match.arg(vi_r_method, choices = c("VEM", "fixed", "Laplace", "delta"))
+  init <- match.arg(init, choices = c("EM_FE", "EM", "random", "zero"))
+  if (!is.null(print_prog)){
+    if (print_prog < 0){stop('print_prog must be non-negative integer or NULL.')}
+  }
+  
+  if (iterations < 0){stop('iterations must be positive integer')}
+  if (tolerance_elbo < 0 | tolerance_parameters < 0){
+    stop('tolerance for ELBO and parameters must be non-negative.')
+  }
+  
   if (factorization_method != "strong" & parameter_expansion != "mean"){
     message('Setting parameter_expansion to mean for non-strong factorization')
     parameter_expansion <- 'mean'

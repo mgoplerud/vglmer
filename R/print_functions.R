@@ -241,7 +241,7 @@ fmt_IW_mean <- function(Phi, nu, digits = 2) {
 format_vglmer <- function(object) {
   beta.output <- data.frame(name = rownames(object$beta$mean), mean = as.vector(object$beta$mean), var = diag(object$beta$var), stringsAsFactors = F)
   alpha.output <- data.frame(name = rownames(object$alpha$mean), mean = as.vector(object$alpha$mean), var = as.vector(object$alpha$dia.var), stringsAsFactors = F)
-  output <- bind_rows(beta.output, alpha.output)
+  output <- rbind(beta.output, alpha.output)
   return(output)
 }
 

@@ -14,23 +14,16 @@ Imports:
 	CholWishart,
 	mvtnorm, 
 	Matrix, 
-	dplyr, 
 	stats, 
 	graphics, 
 	methods, 
-	rlang,
 	lmtest, 
 	splines,
 	checkmate
 Suggests: 
 	SuperLearner,
-	glue, 
 	MASS,
 	tictoc,
-	rstan,
-    rstanarm, 
-	brms,
-    testthat,
-    covr
+  testthat
 LinkingTo: Rcpp, RcppEigen
 RoxygenNote: 7.1.2

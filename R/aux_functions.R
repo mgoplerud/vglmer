@@ -7,7 +7,7 @@ update_rho <- function(XR, y, omega, prior_precision,
                        vi_a_APRIOR_jp, 
                        spline_REs, vi_beta_mean,
                        p.X, d_j, stationary_rho,
-                       do_huangwand,
+                       do_huangwand, offset,
                        px_it = NULL, init_rho = NULL,
                        method){
   
@@ -30,6 +30,9 @@ update_rho <- function(XR, y, omega, prior_precision,
   sum_ysq <- sum(omega %*% y)
   tXy <- t(XR) %*% y
   tXX <- t(XR) %*% omega %*% XR
+  if (offset != 0){ # Negative Binomial Offset
+    tXY <- tXy + offset * matrix(colSums(omega %*% XR))
+  }
   prior_precision <- prior_precision
   rho_idx <- d_j[spline_REs]
   rho_idx <- rho_idx * seq_len(length(rho_idx))

@@ -7,14 +7,13 @@
 vglmer_control(
   iterations = 1000,
   prior_variance = "hw",
-  factorization_method = "strong",
+  factorization_method = c("strong", "partial", "weak", "collapsed"),
   tolerance_elbo = 1e-08,
   tolerance_parameters = 1e-05,
   prevent_degeneracy = FALSE,
   force_whole = TRUE,
   verbose_time = TRUE,
   parameter_expansion = "translation",
-  random_seed = 1,
   do_timing = FALSE,
   debug_param = FALSE,
   return_data = FALSE,
@@ -37,12 +36,13 @@ vglmer_control(
 \arguments{
 \item{iterations}{Number of iterations for the model.}
 
-\item{prior_variance}{Options are jeffreys, mcmcglmm, mvD, mean_exists,
+\item{prior_variance}{Options are hw, kn, jeffreys, mcmcglmm, mvD, mean_exists,
 limit, and uniform. They are defined as an Inverse Wishart with the
 following parameters where d is the dimensionality of the random effect. At
 present, all models use "mean_exists" for a well-defined proper prior.
 \itemize{
-\item kn: See Kass and Natarajan (2006)
+\item hw: Huang and Wand (2013) prior.
+\item kn: Kass and Natarajan (2006)
 \item jeffreys: IW(0, 0)
 \item mcmcglmm: IW(0, I)
 \item mvD: IW(-d, I)
@@ -53,7 +53,7 @@ present, all models use "mean_exists" for a well-defined proper prior.
 The model may fail to converge if an improper prior is used.}
 
 \item{factorization_method}{The factorization method to use. Described in
-detail in the dissertation. strong, partial, and weak correspond to Schemes
+detail in Goplerud (2022). "strong", "partial", and "weak" correspond to Schemes
 I, II, and III respectively. "weak" should have best performance but is
 slowest.}
 
@@ -69,8 +69,6 @@ slowest.}
 
 \item{parameter_expansion}{At moment, accepts 'mean' or 'none'. 'mean' is
 costless and should always be used!}
-
-\item{random_seed}{Set seed for initialization.}
 
 \item{do_timing}{Estimate timing with tictoc}
 
@@ -108,7 +106,11 @@ OSL and then backup numerical improvement}
 
 \item{hw_INNER}{For HW prior, how many "loops" are done?}
 
-\item{init}{Initialization method can be EM, zero, or random at moment.}
+\item{init}{Initialization method can be one of four options: "EM_FE" sets
+the random effects to zero, estimates the fixed effects and initializes the
+model. "EM" initializes the model with a ridge regression with a guess as
+to the random effect variance. "zero" initializes the variational means at
+zero. "random" initializes randomly.}
 }
 \description{
 Provides a set of control arguments to vglmer

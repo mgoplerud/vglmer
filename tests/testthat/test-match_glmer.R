@@ -2,6 +2,8 @@ context("Match glmer")
 
 test_that("Compare against lmer", {
   
+  skip_on_cran()
+  
   N <- 1000
   G <- 100
   x <- rnorm(N)
@@ -37,6 +39,9 @@ test_that("Compare against lmer", {
 
 
 test_that("Compare against glmer", {
+  
+  skip_on_cran()
+  
   N <- 1000
   G <- 100
   x <- rnorm(N)
@@ -119,21 +124,27 @@ test_that("EM_prelim matches glm", {
 
 
 test_that("EM_prelim matches glm.nb", {
-  quine <- MASS::quine
-  N <- nrow(quine)
-  quine.nb1 <- MASS::glm.nb(Days ~ Sex / (Age + Eth * Lrn), data = quine)
-  X <- model.matrix(quine.nb1)
-  y <- quine$Days
-
-  est_init <- EM_prelim_nb(
-    X = drop0(matrix(1, nrow = N)), Z = drop0(X[, -1]), y = y,
-    est_r = quine.nb1$theta, iter = 100, ridge = Inf
-  )
-  est_init <- c(est_init$beta, est_init$alpha)
-  expect_equal(as.vector(coef(quine.nb1)), est_init, tolerance = 1e-4)
+  
+  if (requireNamespace('MASS', quietly = TRUE)){
+    quine <- MASS::quine
+    N <- nrow(quine)
+    quine.nb1 <- MASS::glm.nb(Days ~ Sex / (Age + Eth * Lrn), data = quine)
+    X <- model.matrix(quine.nb1)
+    y <- quine$Days
+    
+    est_init <- EM_prelim_nb(
+      X = drop0(matrix(1, nrow = N)), Z = drop0(X[, -1]), y = y,
+      est_r = quine.nb1$theta, iter = 100, ridge = Inf
+    )
+    est_init <- c(est_init$beta, est_init$alpha)
+    expect_equal(as.vector(coef(quine.nb1)), est_init, tolerance = 1e-4)
+  }
 })
 
 test_that("Compare against glmer (binomial)", {
+  
+  skip_on_cran()
+  
   N <- 1000
   G <- 100
   x <- rnorm(N)
