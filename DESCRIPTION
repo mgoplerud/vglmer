@@ -18,8 +18,7 @@ Imports:
 	graphics, 
 	methods, 
 	lmtest, 
-	splines,
-	checkmate
+	splines
 Suggests: 
 	SuperLearner,
 	MASS,
