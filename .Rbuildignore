@@ -8,3 +8,4 @@
 ^codecov\.yml$
 ^paper_draft/*
 ^\.github/*
+^.*\.Rproj$
