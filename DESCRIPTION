@@ -1,7 +1,7 @@
 Package: vglmer
 Type: Package
 Title: Variational Inference for Hierarchical Non-Linear Models
-Version: 0.1.0
+Version: 1.0.0
 Author: Max Goplerud <mgoplerud@pitt.edu>
 Maintainer: Max Goplerud <mgoplerud@pitt.edu>
 Encoding: UTF-8
