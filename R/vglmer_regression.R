@@ -3164,6 +3164,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
       vi_C_uncond <- vi_C_var + vi_P %*% bdiag(vi_M_var) %*% t(vi_P)
       output$collapsed$variance <- vi_C_uncond
       output$collapsed$mean <- vi_C_mean
+      output$collapsed$names_of_collapsed <- names_of_collapsed
     }else{
       output$collapsed <- list(variance = NULL, mean = NULL, decomp = NULL)
     }

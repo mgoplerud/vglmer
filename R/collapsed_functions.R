@@ -43,9 +43,11 @@ build_collapse_index <- function(X, Z, cyclical_pos, weight, names_of_RE, k){
   names(C_j) <- names(M_j) <- c('Fixed Effect', names(names_of_RE))
   print(lengths(C_j))
   
+  names_of_collapsed <- list(FE = names(collapse_X), RE = names(collapse_Z))  
   return(
     list(C_j = C_j, 
-         M_j = M_j)
+         M_j = M_j,
+         names_of_collapsed = names_of_collapsed)
   )
 }
 
