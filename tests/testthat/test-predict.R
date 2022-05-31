@@ -63,7 +63,7 @@ test_that("Prediction Matches for New Levels in newdata", {
   mixed_data <- data.frame(x = rnorm(10), g = sample(1:25, 10, replace = T))
 
   man_beta <- as.vector(cbind(1, mixed_data$x) %*% example_vglmer$beta$mean)
-  man_alpha <- example_vglmer$alpha$mean[match(paste0("g @ (Intercept) @ ", mixed_data$g), rownames(example_vglmer$alpha$mean))]
+  man_alpha <- as.vector(example_vglmer$alpha$mean)[match(paste0("g @ (Intercept) @ ", mixed_data$g), rownames(example_vglmer$alpha$mean))]
   man_alpha[is.na(man_alpha)] <- 0
   expect_equivalent(man_beta + man_alpha, predict(example_vglmer, newdata = mixed_data, allow_missing_levels = T))
 })

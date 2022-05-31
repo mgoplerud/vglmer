@@ -27,7 +27,7 @@ test_that("Joint vs Cyclical Update", {
     fmt_vglmer_cyclic <- format_vglmer(ex_vglmer_cyclic)
     fmt_vglmer_joint <- format_vglmer(ex_vglmer_joint)
 
-    expect_equivalent(fmt_vglmer_cyclic, fmt_vglmer_joint, tolerance = 1e-5)
+    expect_equivalent(fmt_vglmer_cyclic, fmt_vglmer_joint, tolerance = 1e-4, scale = 1)
 
     if (v == "strong") {
       ex_vglmer_normal <- vglmer(
@@ -39,7 +39,7 @@ test_that("Joint vs Cyclical Update", {
       )
 
       fmt_vglmer_normal <- format_vglmer(ex_vglmer_normal)
-      expect_equivalent(fmt_vglmer_normal, fmt_vglmer_joint, tolerance = 1e-5)
+      expect_equivalent(fmt_vglmer_normal, fmt_vglmer_joint, tolerance = 1e-4, scale = 1)
     }
   }
 })

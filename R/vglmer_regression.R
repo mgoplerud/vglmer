@@ -69,6 +69,7 @@
 #' @importFrom stats model.response model.matrix model.frame rnorm rWishart
 #'   qlogis optim residuals lm plogis setNames
 #' @importFrom graphics plot
+#' @importFrom Rcpp sourceCpp
 #' 
 #' @references
 #' Goplerud, Max. 2022. "Fast and Accurate Estimation of Non-Nested Binomial
