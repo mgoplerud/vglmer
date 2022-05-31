@@ -90,8 +90,8 @@ test_that("Compare PX vs Non-PX", {
   fmt_vglmer_no <- format_vglmer(ex_vglmer_no)
   fmt_vglmer_px_t <- format_vglmer(ex_vglmer_px_t)
   
-  expect_equivalent(fmt_vglmer_px, fmt_vglmer_no, tolerance = 1e-5)
-  expect_equivalent(fmt_vglmer_px, fmt_vglmer_px_t, tolerance = 1e-5)
+  expect_equivalent(fmt_vglmer_px, fmt_vglmer_no, tolerance = 1e-4, scale = 1)
+  expect_equivalent(fmt_vglmer_px, fmt_vglmer_px_t, tolerance = 1e-4, scale = 1)
 })
 
 test_that("Compare VI r methods", {
