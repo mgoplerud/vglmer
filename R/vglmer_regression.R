@@ -2,16 +2,17 @@
 #'
 #' Estimate a hierarchical model using mean-field variational
 #' inference. Accepts standard syntax to glmer: \code{y ~ X + (1 + Z | g)}.
-#' Options are described below.
+#' Options are described below. Goplerud (2022) provides details on the
+#' variational algorithm for the binomial case.
 #'
 #' @param formula Standard glmer-style formula for random effects.
 #' @param data data.frame containing the outcome and variables.
-#' @param family Options are "binomial" or "negbin". If "binomial", outcome must
+#' @param family Options are "binomial", "negbin", or "linear". If "binomial", outcome must
 #'   be either {0,1} (binary) or cbind(success, failure) as per standard glm(er)
 #'   syntax. Non-integer values are permitted for binomial if "force_whole" is
 #'   set to FALSE in vglmer_control.
 #' @param control Control additional arguments. Must be made using
-#'   vglmer_control(); see for documentation for additional details.
+#'   \code{vglmer_control()}; see for documentation for additional details.
 #'
 #' @examples
 #'
@@ -37,11 +38,11 @@
 #' # although ranef is formatted differently.
 #' ranef(est_vglmer); fixef(est_vglmer)
 #'
-#' #' # Run with stronger (i.e. less good) approximation
+#' # Run with weaker (i.e. better) approximation
 #' \donttest{
 #' vglmer(y ~ x + (x | g),
 #'   data = sim_data,
-#'   control = vglmer_control(factorization_method = "strong"),
+#'   control = vglmer_control(factorization_method = "weak"),
 #'   family = "binomial"
 #' )
 #' }
@@ -68,6 +69,11 @@
 #' @importFrom stats model.response model.matrix model.frame rnorm rWishart
 #'   qlogis optim residuals lm plogis setNames
 #' @importFrom graphics plot
+#' 
+#' @references
+#' Goplerud, Max. 2022. "Fast and Accurate Estimation of Non-Nested Binomial
+#' Hierarchical Models Using Variational Inference." Bayesian Analysis. 17(2):
+#' 623-650.
 #' @useDynLib vglmer
 #' @export
 vglmer <- function(formula, data, family, control = vglmer_control()) {
@@ -618,22 +624,6 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     vi_a_a_jp <- mapply(d_j, vi_a_nu_jp, SIMPLIFY = FALSE, 
                         FUN=function(i,nu){1/2 * (nu + rep(i, i))})
     vi_a_b_jp <- lapply(vi_a_APRIOR_jp, FUN=function(i){1/i^2})
-  } else if (prior_variance == 'kn') {
-    
-    if (family != 'binomial'){stop('Set up kn for non-binomial.')}
-    fe_only <- EM_prelim_logit(X = drop0(X), Z = NULL, s = s, pg_b =  vi_pg_b, iter = 15)
-    weight_p <- plogis(as.vector(X %*% fe_only$beta))
-    weight_p <- weight_p * (1-weight_p) * trials
-        
-    weight_kn <- Diagonal(x = sqrt(weight_p)) %*% Z
-    weight_kn <- lapply(outer_alpha_RE_positions, FUN=function(i){
-      D_matrix <- Reduce('+', lapply(i, FUN=function(j){
-        crossprod(weight_kn[,j])
-      }))
-      D_matrix <- solve(1/length(i) * D_matrix)
-    })
-    prior_sigma_alpha_nu <- d_j
-    prior_sigma_alpha_phi <- lapply(weight_kn, FUN=function(i){i * nrow(i)})
   } else if (prior_variance == "jeffreys") {
     prior_sigma_alpha_nu <- rep(0, number_of_RE)
     prior_sigma_alpha_phi <- lapply(d_j, FUN = function(i) {
@@ -1648,7 +1638,17 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
         R_spline_ridge <- Diagonal(x =mapply(R_spline_ridge, cyclical_pos[spline_REs], FUN=function(V, pos){
           sum(vi_pg_mean * cpp_zVz(Z = drop0(Z[,pos,drop=F]), V = as(V, 'dgCMatrix')))
         }))
-        R_spline_ridge <- as(R_spline_ridge, 'dgCMatrix')
+        # Manually convert "ddiMatrix" to "dgCMatrix" so doesn't fail on
+        # old versions of "Matrix" package.
+        if (inherits(R_spline_ridge, 'ddiMatrix')){
+          R_spline_ridge <- diag(R_spline_ridge)
+          R_spline_ridge <- sparseMatrix(
+            i = seq_len(length(R_spline_ridge)),
+            j = seq_len(length(R_spline_ridge)),
+            x = R_spline_ridge)
+        }else{
+          R_spline_ridge <- as(R_spline_ridge, 'dgCMatrix')
+        }
       }else{
         R_spline_ridge <- drop0(matrix(0, nrow = 0, ncol = 0))
         R_spline_design <- matrix(nrow = nrow(X), ncol = 0)
@@ -2746,36 +2746,42 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
 #' Provides a set of control arguments to vglmer
 #'
 #' @param iterations Number of iterations for the model.
-#' @param factorization_method The factorization method to use. Described in
-#'   detail in Goplerud (2022). "strong", "partial", and "weak" correspond to Schemes
-#'   I, II, and III respectively. "weak" should have best performance but is
-#'   slowest.
-#' @param prior_variance Options are hw, kn, jeffreys, mcmcglmm, mvD, mean_exists,
-#'   limit, and uniform. They are defined as an Inverse Wishart with the
-#'   following parameters where d is the dimensionality of the random effect. At
-#'   present, all models use "mean_exists" for a well-defined proper prior.
+#' @param factorization_method The factorization method to use. Default of
+#'   \code{strong}. Described in detail in Goplerud (2022a). \code{strong},
+#'   \code{partial}, and \code{weak} correspond to Schemes I, II, and III
+#'   respectively. "weak" should
+#'   have best performance but is slowest.
+#' @param prior_variance Options are \code{hw}, \code{jeffreys},
+#'   \code{mcmcglmm}, \code{mvD}, \code{mean_exists}, limit, and uniform. The
+#'   default (\code{hw}) is the Huang-Wand (2013) prior whose hyper-parameters
+#'   are nu = 2 and A = 5.
+#'   
+#'   Otherwise, the prior is an Inverse Wishart with the
+#'   following parameters where d is the dimensionality of the random effect.
 #'   \itemize{
-#'   \item hw: Huang and Wand (2013) prior.
-#'   \item kn: Kass and Natarajan (2006)
+#'   \item hw: Huang and Wand (2013)
+#'   \item mean_exists: IW(d + 1, I)
 #'   \item jeffreys: IW(0, 0)
 #'   \item mcmcglmm: IW(0, I)
 #'   \item mvD: IW(-d, I)
-#'   \item mean_exists: IW(d + 1, I)
 #'   \item limit: IW(d - 1, 0)
 #'   \item uniform: IW(-[d+1], 0)
 #'   }
-#'   The model may fail to converge if an improper prior is used.
+#'   The model may fail to be estimable if an improper prior is used. In that
+#'   case, use either \code{hw} or \code{mean_exists}.
 #' @param tolerance_elbo Change in ELBO to stop algorithm.
-#' @param tolerance_parameters Change in value of any parameter to stop algorithm.
-#'
-#' @param parameter_expansion At moment, accepts 'mean' or 'none'. 'mean' is
-#'   costless and should always be used!
-#' @param px_method For translation expansion, how to update? "dynamic" tries
-#'   OSL and then backup numerical improvement
+#' @param tolerance_parameters Change in value of any parameter to stop
+#'   algorithm.
+#' @param parameter_expansion Default of \code{translation}  (see Goplerud 2022b).
+#'   Accepts either \code{translation}, \code{mean}, or \code{none}. \code{mean}
+#'   should be employed if \code{translation} is not enabled or is too
+#'   computationally expensive.
+#' @param px_method For \code{translation} expansion, how to update? "dynamic"
+#'   tries OSL and then backup numerical improvement via L-BFGS-B.
 #' @param px_numerical_it How many steps of L-BFGS-B are used to improve?
-#' @param hw_INNER For HW prior, how many "loops" are done?
+#' @param hw_INNER For HW prior, how many "loops" between optimizing the
+#'   Inverse-Wishart and Inverse-Gamma parameters are done at each iteration?
 #' @param prevent_degeneracy Ignored for the moment.
-#' 
 #' @param force_whole Require whole numbers. Set to FALSE to allow "quasi-binomial".
 #' @param vi_r_method Type of estimate for "r"; at moment, "fixed" (provide r),
 #'   "VEM" (treat r as point estimate; default);
@@ -2803,10 +2809,18 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
 #' @param do_timing Estimate timing with tictoc
 #' @param do_SQUAREM Accelerate method using SQUAREM
 #' @param verify_columns Verify that all columns are drawn from the data.frame itself.
+#' 
+#' @references 
+#' Goplerud, Max. 2022a. "Fast and Accurate Estimation of Non-Nested Binomial
+#' Hierarchical Models Using Variational Inference." Bayesian Analysis. 17(2):
+#' 623-650.
+#'
+#' Goplerud, Max. 2022b. "Re-Evaluating Machine Learning for MRP Given the
+#' Comparable Performance of (Deep) Hierarchical Models." Working Paper.
 #' @export
 vglmer_control <- function(iterations = 1000,
    prior_variance = "hw",
-   factorization_method = c("strong", "partial", "weak", "collapsed"),
+   factorization_method = c("strong", "partial", "weak"),
    tolerance_elbo = 1e-8, tolerance_parameters = 1e-5,
    prevent_degeneracy = FALSE, force_whole = TRUE, verbose_time = TRUE,
    parameter_expansion = "translation", do_timing = FALSE,
@@ -2818,7 +2832,8 @@ vglmer_control <- function(iterations = 1000,
    init = "EM_FE") {
   
   factorization_method <- match.arg(factorization_method)
-  prior_variance <- match.arg(prior_variance, choices = c("hw", "kn", "mean_exists", "jeffreys", "mcmcglmm", "mvD", "limit", "uniform", "gamma"))
+  prior_variance <- match.arg(prior_variance, 
+    choices = c("hw", "mean_exists", "jeffreys", "mcmcglmm", "mvD", "limit", "uniform", "gamma"))
   linpred_method <- match.arg(linpred_method, choices = c("joint", "cyclical", "solve_normal"))    
   parameter_expansion <- match.arg(parameter_expansion, choices = c("translation", "mean", "none"))
   vi_r_method <- match.arg(vi_r_method, choices = c("VEM", "fixed", "Laplace", "delta"))

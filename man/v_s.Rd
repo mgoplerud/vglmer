@@ -27,3 +27,8 @@ interactions be regularized? Default is "TRUE".}
 A simple function to estimate splines, similar to "s" in "mgcv". Allows for
 truncated (linear) splines or O'Sullivan splines.
 }
+\references{
+Wand, Matt P. and Ormerod, John T. 2008. On semiparametric regression with
+O'Sullivan penalized splines. Australian & New Zealand Journal of Statistics.
+50(2): 179-198.
+}

@@ -33,6 +33,10 @@ formOmega <- function(a,b,intKnots){
 #'   interactions be regularized? Default is "TRUE".
 #' @param outer_okay Can values in "x" exceed the knots? Default "FALSE".
 #' @importFrom splines bs
+#' @references 
+#' Wand, Matt P. and Ormerod, John T. 2008. On semiparametric regression with
+#' O'Sullivan penalized splines. Australian & New Zealand Journal of Statistics.
+#' 50(2): 179-198.
 #' @export
 v_s <- function(..., type = 'tpf', knots = NULL, by = NA,
                 by_re = TRUE,

@@ -11,13 +11,13 @@ vglmer(formula, data, family, control = vglmer_control())
 
 \item{data}{data.frame containing the outcome and variables.}
 
-\item{family}{Options are "binomial" or "negbin". If "binomial", outcome must
+\item{family}{Options are "binomial", "negbin", or "linear". If "binomial", outcome must
 be either {0,1} (binary) or cbind(success, failure) as per standard glm(er)
 syntax. Non-integer values are permitted for binomial if "force_whole" is
 set to FALSE in vglmer_control.}
 
 \item{control}{Control additional arguments. Must be made using
-vglmer_control(); see for documentation for additional details.}
+\code{vglmer_control()}; see for documentation for additional details.}
 }
 \value{
 Returns an object of class vglmer: See the available methods (e.g.
@@ -43,7 +43,8 @@ variance.}
 \description{
 Estimate a hierarchical model using mean-field variational
 inference. Accepts standard syntax to glmer: \code{y ~ X + (1 + Z | g)}.
-Options are described below.
+Options are described below. Goplerud (2022) provides details on the
+variational algorithm for the binomial case.
 }
 \examples{
 
@@ -69,12 +70,17 @@ coef(est_vglmer); vcov(est_vglmer)
 # although ranef is formatted differently.
 ranef(est_vglmer); fixef(est_vglmer)
 
-#' # Run with stronger (i.e. less good) approximation
+# Run with weaker (i.e. better) approximation
 \donttest{
 vglmer(y ~ x + (x | g),
   data = sim_data,
-  control = vglmer_control(factorization_method = "strong"),
+  control = vglmer_control(factorization_method = "weak"),
   family = "binomial"
 )
 }
+}
+\references{
+Goplerud, Max. 2022. "Fast and Accurate Estimation of Non-Nested Binomial
+Hierarchical Models Using Variational Inference." Bayesian Analysis. 17(2):
+623-650.
 }

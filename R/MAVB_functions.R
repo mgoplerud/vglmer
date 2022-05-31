@@ -1,7 +1,7 @@
 #' Perform MAVB after fitting vglmer
 #'
 #' Given a model from vglmer, perform marginally augmented variational Bayes
-#' (MAVB) to improve approximation quality; Goplerud (2020) provides details. At
+#' (MAVB) to improve approximation quality; Goplerud (2022) provides details. At
 #' present, it is only enabled for binomial models.
 #'
 #' This should only be used if the parameters of the model are of interest; to
@@ -14,6 +14,11 @@
 #' @param verbose Show progress of MAVB.
 #' @import CholWishart
 #' @importFrom mvtnorm rmvnorm
+#' 
+#' @references 
+#' Goplerud, Max. 2022. "Fast and Accurate Estimation of Non-Nested Binomial
+#' Hierarchical Models Using Variational Inference." Bayesian Analysis. 17(2):
+#' 623-650.
 #' @export
 MAVB <- function(object, samples, verbose = FALSE, var_px = Inf) {
   if (!inherits(object, "vglmer")) {
