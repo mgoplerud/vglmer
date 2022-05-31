@@ -1,8 +1,8 @@
-.Ruserdata
 .Rproj.user
 .Rhistory
 .RData
-.Rbuildignore
+.Ruserdata
 src/*.o
 src/*.so
 src/*.dll
+vglmer.Rproj

@@ -18,10 +18,15 @@ diffuse and thus likely better.}
 }
 \description{
 Given a model from vglmer, perform marginally augmented variational Bayes
-(MAVB) to improve approximation quality; Goplerud (2020) provides details. At
+(MAVB) to improve approximation quality; Goplerud (2022) provides details. At
 present, it is only enabled for binomial models.
 }
 \details{
 This should only be used if the parameters of the model are of interest; to
 use MAVB to improve prediction accuracy, use predict_MAVB.
+}
+\references{
+Goplerud, Max. 2022. "Fast and Accurate Estimation of Non-Nested Binomial
+Hierarchical Models Using Variational Inference." Bayesian Analysis. 17(2):
+623-650.
 }

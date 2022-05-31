@@ -3,18 +3,13 @@
 \name{format_obj}
 \alias{format_obj}
 \alias{format_glmer}
-\alias{format_stan}
 \title{Format Existing Objects}
 \usage{
 format_glmer(object)
-
-format_stan(object, useSigma = FALSE)
 }
 \arguments{
 \item{object}{Object from glmer, vglmer, or stan to the respective "format_"
 function}
-
-\item{useSigma}{Return variance component parameters from STAN? Default "FALSE".}
 }
 \description{
 Takes a regression output from glmer, stan, or vglmer and extracts the fixed

@@ -1,7 +1,7 @@
 #' Perform MAVB after fitting vglmer
 #'
 #' Given a model from vglmer, perform marginally augmented variational Bayes
-#' (MAVB) to improve approximation quality; Goplerud (2020) provides details. At
+#' (MAVB) to improve approximation quality; Goplerud (2022) provides details. At
 #' present, it is only enabled for binomial models.
 #'
 #' This should only be used if the parameters of the model are of interest; to
@@ -14,6 +14,11 @@
 #' @param verbose Show progress of MAVB.
 #' @import CholWishart
 #' @importFrom mvtnorm rmvnorm
+#' 
+#' @references 
+#' Goplerud, Max. 2022. "Fast and Accurate Estimation of Non-Nested Binomial
+#' Hierarchical Models Using Variational Inference." Bayesian Analysis. 17(2):
+#' 623-650.
 #' @export
 MAVB <- function(object, samples, verbose = FALSE, var_px = Inf) {
   if (!inherits(object, "vglmer")) {
@@ -130,40 +135,53 @@ predict_MAVB <- function(object, newdata, samples = 0, samples_only = FALSE,
 
 #' @import lme4
 get_RE_groups <- function(formula, data) {
-  stop("Figure out workaround for lme4:::")
-  # bars <- findbars(formula)
-  # names(bars) <- lme4:::barnames(bars)
-  # fr <- model.frame(subbars(formula), data = data)
-  # blist <- lapply(bars, simple_blist, fr, drop.unused.levels = F, reorder.vars = FALSE)
-  # blist <- lapply(blist, FUN=function(i){i[c('ff', 'mm')]})
-  #
-  # ff <- lapply(blist, FUN=function(i){i$ff})
-  # ff <- lapply(ff, FUN=function(i){match(i, levels(i))})
-  # mm <- lapply(blist, FUN=function(i){i$mm})
-  # return(list(factor = ff, design = mm))
+  
+  if (inherits(formula, 'formula')){
+    bars <- findbars(formula)
+  }else{
+    bars <- formula
+  }
+  if (is.null(bars)){# Usually if only splines used, then NA.
+    return(list(factor = NA, design = NA))
+  }  
+  
+  barnames <- utils::getFromNamespace('barnames', 'lme4')
+  names(bars) <- barnames(bars)
+  
+  fr <- data
+  blist <- lapply(bars, simple_blist, fr, drop.unused.levels = F, reorder.vars = FALSE)
+  blist <- lapply(blist, FUN=function(i){i[c('ff', 'mm')]})
+
+  ff <- lapply(blist, FUN=function(i){i$ff})
+  ff <- lapply(ff, FUN=function(i){match(i, levels(i))})
+  mm <- lapply(blist, FUN=function(i){i$mm})
+  return(list(factor = ff, design = mm))
 }
 
-#' @import lme4
+#' @import lme4 
+#' @importFrom utils getFromNamespace
 simple_blist <- function(x, frloc, drop.unused.levels = TRUE, reorder.vars = FALSE) {
-  stop("figure out workaround for lme4:::")
-  # frloc <- factorize(x, frloc)
-  # if (is.null(ff <- tryCatch(eval(substitute(lme4:::makeFac(fac),
-  #                                            list(fac = x[[3]])), frloc), error = function(e) NULL)))
-  #   stop("couldn't evaluate grouping factor ", deparse(x[[3]]),
-  #        " within model frame:", " try adding grouping factor to data ",
-  #        "frame explicitly if possible", call. = FALSE)
-  # if (all(is.na(ff)))
-  #   stop("Invalid grouping factor specification, ", deparse(x[[3]]),
-  #        call. = FALSE)
-  # if (drop.unused.levels)
-  #   ff <- factor(ff, exclude = NA)
-  # nl <- length(levels(ff))
-  # mm <- model.matrix(eval(substitute(~foo, list(foo = x[[2]]))),
-  #                    frloc)
-  # if (reorder.vars) {
-  #   mm <- mm[colSort(colnames(mm)), ]
-  # }
-  # list(ff = ff, nl = nl, mm = mm, cnms = colnames(mm))
+  frloc <- factorize(x, frloc)
+  makeFac <- utils::getFromNamespace('makeFac', 'lme4')
+  if (is.null(ff <- tryCatch(eval(substitute(makeFac(fac),
+                                             list(fac = x[[3]])), frloc), error = function(e) NULL)))
+    stop("couldn't evaluate grouping factor ", deparse(x[[3]]),
+         " within model frame:", " try adding grouping factor to data ",
+         "frame explicitly if possible", call. = FALSE)
+  if (all(is.na(ff)))
+    stop("Invalid grouping factor specification, ", deparse(x[[3]]),
+         call. = FALSE)
+  if (drop.unused.levels)
+    ff <- factor(ff, exclude = NA)
+  nl <- length(levels(ff))
+  mm <- model.matrix(eval(substitute(~foo, list(foo = x[[2]]))),
+                     frloc)
+  if (reorder.vars) {
+    
+    colSort <- utils::getFromNamespace("colSort", "lme4")
+    mm <- mm[colSort(colnames(mm)), ]
+  }
+  list(ff = ff, nl = nl, mm = mm, cnms = colnames(mm))
 }
 
 
@@ -181,64 +199,6 @@ rowVar <- function(matrix) {
 #' @rdname var_mat
 colVar <- function(matrix) {
   apply(matrix, MARGIN = 2, var)
-}
-
-
-#' @param data Data to get predictions on.
-#' @rdname hmc_samples
-custom_HMC_linpred <- function(HMC, data) {
-  if (!requireNamespace("rstanarm", quietly = TRUE)) {
-    stop("rstanarm must be installed to analyze HMC objects.")
-  }
-  hmc_samples <- as.matrix(HMC)
-  hmc_samples <- hmc_samples[, !grepl(colnames(hmc_samples), pattern = "^Sigma")]
-
-  parse_stan_names <- strsplit(colnames(hmc_samples), split = "^b\\[| |\\]")
-
-  fmt_stan_names <- sapply(parse_stan_names, FUN = function(i) {
-    if (length(i) == 1) {
-      return(i)
-    } else {
-      i_one <- unlist(strsplit(i[3], split = ":"))
-      return(paste(i_one[1], i[2], i_one[2], sep = " @ "))
-    }
-  })
-  colnames(hmc_samples) <- fmt_stan_names
-
-  hmc.XZ <- rstanarm::posterior_linpred(HMC, data = data, XZ = TRUE)
-
-  hmc.linpred <- hmc.XZ %*% t(hmc_samples)
-
-  return(hmc.linpred)
-}
-
-#' Get HMC samples but ordered to match vector of names provided
-#' @keywords internal
-#' @name hmc_samples
-#' @param HMC Object from rstanarm
-#' @param ordering vector of names to order the posterior samples.
-#' @importFrom mvtnorm rmvnorm
-custom_HMC_samples <- function(HMC, ordering) {
-  if (!requireNamespace("rstanarm", quietly = TRUE)) {
-    stop("rstanarm must be installed to analyze HMC objects.")
-  }
-
-  hmc_samples <- as.matrix(HMC)
-  hmc_samples <- hmc_samples[, !grepl(colnames(hmc_samples), pattern = "^Sigma")]
-
-  parse_stan_names <- strsplit(colnames(hmc_samples), split = "^b\\[| |\\]")
-
-  fmt_stan_names <- sapply(parse_stan_names, FUN = function(i) {
-    if (length(i) == 1) {
-      return(i)
-    } else {
-      i_one <- unlist(strsplit(i[3], split = ":"))
-      return(paste(i_one[1], i[2], i_one[2], sep = " @ "))
-    }
-  })
-  colnames(hmc_samples) <- fmt_stan_names
-  hmc_samples <- hmc_samples[, match(ordering, colnames(hmc_samples))]
-  return(return(hmc_samples))
 }
 
 #' Get samples from GLMER

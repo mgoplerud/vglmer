@@ -3,6 +3,7 @@
 \name{vglmer-class}
 \alias{vglmer-class}
 \alias{fixef.vglmer}
+\alias{sigma.vglmer}
 \alias{ranef.vglmer}
 \alias{coef.vglmer}
 \alias{vcov.vglmer}
@@ -10,9 +11,12 @@
 \alias{summary.vglmer}
 \alias{formula.vglmer}
 \alias{format_vglmer}
+\alias{ELBO}
 \title{Generic Functions after Running vglmer}
 \usage{
 \method{fixef}{vglmer}(object, ...)
+
+\method{sigma}{vglmer}(object, ...)
 
 \method{ranef}{vglmer}(object, ...)
 
@@ -24,18 +28,26 @@
 
 \method{summary}{vglmer}(object, display_re = TRUE, ...)
 
-\method{formula}{vglmer}(x, ...)
+\method{formula}{vglmer}(x, form, ...)
 
 format_vglmer(object)
+
+ELBO(object, type = c("final", "trajectory"))
 }
 \arguments{
-\item{object}{Model fit using vglmer}
+\item{object}{Object from vglmer}
 
 \item{...}{Not used.}
 
 \item{x}{Model fit using vglmer}
 
 \item{display_re}{Print summary of random effects. Default is TRUE}
+
+\item{form}{What type of formula to return? "original" is user provided; "fe"
+is fixed effect only; "re" is random effect only.}
+
+\item{type}{Default is "final" giving ELBO at convergence. "trajectory" gives
+full sequence of ELBOs at each iteration.}
 }
 \value{
 \code{coef} and \code{vcov} return the mean and variance of the fixed

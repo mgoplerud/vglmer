@@ -6,52 +6,65 @@
 \usage{
 vglmer_control(
   iterations = 1000,
-  prior_variance = "mean_exists",
-  factorization_method = "weak",
+  prior_variance = "hw",
+  factorization_method = c("strong", "partial", "weak"),
   tolerance_elbo = 1e-08,
   tolerance_parameters = 1e-05,
   prevent_degeneracy = FALSE,
   force_whole = TRUE,
   verbose_time = TRUE,
-  parameter_expansion = "mean",
-  random_seed = 1,
+  parameter_expansion = "translation",
   do_timing = FALSE,
   debug_param = FALSE,
   return_data = FALSE,
   linpred_method = "joint",
   vi_r_method = "VEM",
   vi_r_val = NA,
+  do_SQUAREM = TRUE,
+  verify_columns = FALSE,
   debug_ELBO = FALSE,
   print_prog = NULL,
   quiet = T,
-  init = "EM"
+  quiet_rho = TRUE,
+  debug_px = FALSE,
+  px_method = "dynamic",
+  px_numerical_it = 10,
+  hw_INNER = 10,
+  init = "EM_FE"
 )
 }
 \arguments{
 \item{iterations}{Number of iterations for the model.}
 
-\item{prior_variance}{Options are jeffreys, mcmcglmm, mvD, mean_exists,
-limit, and uniform. They are defined as an Inverse Wishart with the
-following parameters where d is the dimensionality of the random effect. At
-present, all models use "mean_exists" for a well-defined proper prior.
+\item{prior_variance}{Options are \code{hw}, \code{jeffreys},
+\code{mcmcglmm}, \code{mvD}, \code{mean_exists}, limit, and uniform. The
+default (\code{hw}) is the Huang-Wand (2013) prior whose hyper-parameters
+are nu = 2 and A = 5.
+
+Otherwise, the prior is an Inverse Wishart with the
+following parameters where d is the dimensionality of the random effect.
 \itemize{
+\item hw: Huang and Wand (2013)
+\item mean_exists: IW(d + 1, I)
 \item jeffreys: IW(0, 0)
 \item mcmcglmm: IW(0, I)
 \item mvD: IW(-d, I)
-\item mean_exists: IW(d + 1, I)
 \item limit: IW(d - 1, 0)
 \item uniform: IW(-[d+1], 0)
 }
-The model may fail to converge}
+The model may fail to be estimable if an improper prior is used. In that
+case, use either \code{hw} or \code{mean_exists}.}
 
-\item{factorization_method}{The factorization method to use. Described in
-detail in the dissertation. strong, partial, and weak correspond to Schemes
-I, II, and III respectively. "weak" should have best performance but is
-slowest.}
+\item{factorization_method}{The factorization method to use. Default of
+\code{strong}. Described in detail in Goplerud (2022a). \code{strong},
+\code{partial}, and \code{weak} correspond to Schemes I, II, and III
+respectively. "weak" should
+have best performance but is slowest.}
 
 \item{tolerance_elbo}{Change in ELBO to stop algorithm.}
 
-\item{tolerance_parameters}{Change in value of any parameter to stop algorithm.}
+\item{tolerance_parameters}{Change in value of any parameter to stop
+algorithm.}
 
 \item{prevent_degeneracy}{Ignored for the moment.}
 
@@ -59,10 +72,10 @@ slowest.}
 
 \item{verbose_time}{Print time for each step (debugging only)}
 
-\item{parameter_expansion}{At moment, accepts 'mean' or 'none'. 'mean' is
-costless and should always be used!}
-
-\item{random_seed}{Set seed for initialization.}
+\item{parameter_expansion}{Default of \code{translation}  (see Goplerud 2022b).
+Accepts either \code{translation}, \code{mean}, or \code{none}. \code{mean}
+should be employed if \code{translation} is not enabled or is too
+computationally expensive.}
 
 \item{do_timing}{Estimate timing with tictoc}
 
@@ -79,14 +92,42 @@ costless and should always be used!}
 
 \item{vi_r_val}{For fixed "r", which value?}
 
+\item{do_SQUAREM}{Accelerate method using SQUAREM}
+
+\item{verify_columns}{Verify that all columns are drawn from the data.frame itself.}
+
 \item{debug_ELBO}{Debug ELBO trajectory.}
 
 \item{print_prog}{Print after print_prog iterations to show progress.}
 
 \item{quiet}{Don't print noisy intermediate output.}
 
-\item{init}{Initialization method can be EM, zero, or random at moment.}
+\item{quiet_rho}{Debug parameter expansion by printing updates}
+
+\item{debug_px}{Debug parameter expansion by verifying ELBO}
+
+\item{px_method}{For \code{translation} expansion, how to update? "dynamic"
+tries OSL and then backup numerical improvement via L-BFGS-B.}
+
+\item{px_numerical_it}{How many steps of L-BFGS-B are used to improve?}
+
+\item{hw_INNER}{For HW prior, how many "loops" between optimizing the
+Inverse-Wishart and Inverse-Gamma parameters are done at each iteration?}
+
+\item{init}{Initialization method can be one of four options: "EM_FE" sets
+the random effects to zero, estimates the fixed effects and initializes the
+model. "EM" initializes the model with a ridge regression with a guess as
+to the random effect variance. "zero" initializes the variational means at
+zero. "random" initializes randomly.}
 }
 \description{
 Provides a set of control arguments to vglmer
+}
+\references{
+Goplerud, Max. 2022a. "Fast and Accurate Estimation of Non-Nested Binomial
+Hierarchical Models Using Variational Inference." Bayesian Analysis. 17(2):
+623-650.
+
+Goplerud, Max. 2022b. "Re-Evaluating Machine Learning for MRP Given the
+Comparable Performance of (Deep) Hierarchical Models." Working Paper.
 }

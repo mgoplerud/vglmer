@@ -1,0 +1,11 @@
+^misc_files/*
+^pres_figures/*
+^\.Rproj\.user$
+^old_versions/*
+^figures/*
+^old_figures/*
+^\.travis\.yml$
+^codecov\.yml$
+^paper_draft/*
+^\.github/*
+^.*\.Rproj$

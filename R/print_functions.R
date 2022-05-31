@@ -19,14 +19,35 @@
 #' @rdname vglmer-class
 #' @export
 fixef.vglmer <- function(object, ...) {
-  return(as.vector(object$beta$mean))
+  out <- object$beta$mean
+  rn <- rownames(out)
+  out <- as.vector(out)
+  names(out) <- rn
+  return(out)
 }
 
-# Load fixef, ranef from lme4
+# Load fixef, ranef, sigma from lme4
 #' @export
 lme4::fixef
 #' @export
 lme4::ranef
+
+#' @importFrom stats sigma
+
+#' @rdname vglmer-class
+#' @export
+sigma.vglmer <- function(object, ...){
+  #{\displaystyle \frac{\sqrt{2}}{2} \left(\frac{(2m-1)\Omega}{m}\right)^{1/2}}
+  
+  if (object$family != 'linear'){
+    stop('sigma from vglmer is only defined for linear models')
+  }
+  if (length(list(...)) > 0){
+    stop('... not used for sigma.vglmer')
+  }
+  naive_sigma <- with(object$sigmasq, sqrt(b/(a+1)))
+  return(naive_sigma)
+}
 
 #' @rdname vglmer-class
 #' @export
@@ -106,7 +127,7 @@ print.vglmer <- function(x, ...) {
   J <- length(x$sigma$cov)
 
   cat(paste0("Formula: J = ", J, ", |Z| = ", p.Z, ", |X| = ", p.X, "\n\n"))
-  cat(paste(format(x$formula), collapse = "\n\n"))
+  cat(paste(format(formula(x, form = 'original')), collapse = "\n\n"))
   cat("\n\n")
   if (missing_obs > 0) {
     missing_info <- paste0("after ", missing_obs, " deleted because of missing data and")
@@ -184,9 +205,19 @@ summary.vglmer <- function(object, display_re = TRUE, ...) {
 }
 
 #' @rdname vglmer-class
+#' @param form What type of formula to return? "original" is user provided; "fe"
+#'   is fixed effect only; "re" is random effect only.
 #' @export
-formula.vglmer <- function(x, ...) {
-  x$formula
+formula.vglmer <- function(x, form, ...) {
+  
+  if (form == 'original'){
+    x$formula$formula
+  }else if (form == 'fe'){
+    x$formula$fe
+  }else if (form == 're'){
+    x$formula$re
+  }else{stop('form must be "original", "fe", or "re".')}
+  
 }
 
 #' @importFrom stats qnorm
@@ -197,7 +228,7 @@ erfinv <- function(x) {
 # Internal function to tidy-up
 # inverse Wishart to extract mean
 fmt_IW_mean <- function(Phi, nu, digits = 2) {
-  mean <- solve(Phi) / (nu - nrow(Phi) - 1)
+  mean <- solve(as.matrix(Phi)) / (nu - nrow(Phi) - 1)
   if (nu - nrow(Phi) - 1 < 0) {
     return(matrix(NA, nrow = nrow(Phi), ncol = ncol(Phi)))
   } else {
@@ -210,6 +241,23 @@ fmt_IW_mean <- function(Phi, nu, digits = 2) {
 format_vglmer <- function(object) {
   beta.output <- data.frame(name = rownames(object$beta$mean), mean = as.vector(object$beta$mean), var = diag(object$beta$var), stringsAsFactors = F)
   alpha.output <- data.frame(name = rownames(object$alpha$mean), mean = as.vector(object$alpha$mean), var = as.vector(object$alpha$dia.var), stringsAsFactors = F)
-  output <- bind_rows(beta.output, alpha.output)
+  output <- rbind(beta.output, alpha.output)
   return(output)
+}
+
+#' @rdname vglmer-class
+#' @param object Object from vglmer
+#' @param type Default is "final" giving ELBO at convergence. "trajectory" gives
+#'   full sequence of ELBOs at each iteration.
+#' @export
+ELBO <- function(object, type = c('final', 'trajectory')){
+  
+  type <- match.arg(type)
+
+  if (type == 'final'){
+    object$ELBO$ELBO
+  }else{
+    object$ELBO_trajectory$ELBO
+  }
+  
 }
