@@ -9,7 +9,7 @@ devtools::install_github("mgoplerud/vglmer", dependencies = TRUE)
 
 At present, it can fit logistic, linear, and negative binomial outcomes with an arbitrary number of random effects. Details on negative binomial inference can be found [here](https://j.mp/goplerud_MAVB_extra) and are more experimential at the moment.
 
-This model accepts "standard" glmer syntax of the form:
+This package accepts "standard" glmer syntax of the form:
 
 ```
 vglmer(formula = y ~ x + (x | g), data = data, family = 'binomial')
