@@ -197,3 +197,165 @@ Eigen::VectorXd cpp_quad_legacy(
   return out;
   
 }
+
+// [[Rcpp::export]]
+Eigen::VectorXd cpp_var_lp(
+  const Eigen::SparseMatrix<double> design_C,
+  const Eigen::SparseMatrix<double> vi_C_uncond,
+  const Rcpp::List vi_M_var,
+  const Rcpp::List vi_M_list,
+  const Rcpp::List vi_P,
+  const bool sparse_input,
+  const Rcpp::LogicalVector skip_vector
+){
+
+  int N = design_C.rows();
+  int size_C = design_C.cols();
+  Eigen::VectorXd joint_quad(N);
+  int J = vi_M_var.length();
+  
+  // Calculate contribution from collapsed set
+  // Note that ( (X * V) * Z).sum(axis = 0) gives x_i^T V z_i
+  joint_quad = ( (design_C * vi_C_uncond).cwiseProduct(design_C) ) * Eigen::VectorXd::Ones(size_C);
+  
+  // Loop over each random effect
+  for (int j = 0; j < J; j++){
+    
+    Eigen::SparseMatrix<double> data_Mj = vi_M_list[j];
+    Eigen::SparseMatrix<double> vi_P_j = vi_P[j];
+    
+    bool skip_j = skip_vector[j];
+    if (skip_j){
+      continue;
+    }
+    
+    Eigen::VectorXd jq1(N);
+    Eigen::VectorXd jq2(N);
+    
+    if (sparse_input){
+      Eigen::SparseMatrix<double> var_Mj = vi_M_var[j];
+      jq1 = ( (data_Mj * var_Mj).cwiseProduct( data_Mj ) ) * Eigen::VectorXd::Ones(data_Mj.cols());
+      jq2 = ( (data_Mj * (vi_P_j * var_Mj).adjoint()).cwiseProduct( design_C )) * Eigen::VectorXd::Ones(size_C);
+    }else{
+      Eigen::MatrixXd var_Mj = vi_M_var[j];
+      jq1 = ( (data_Mj * var_Mj).cwiseProduct( data_Mj ) ) * Eigen::VectorXd::Ones(data_Mj.cols());
+      jq2 = ( (data_Mj * (vi_P_j * var_Mj).adjoint()).cwiseProduct( design_C )) * Eigen::VectorXd::Ones(size_C);
+    }
+    joint_quad += jq1 - 2 * jq2;
+  }
+  return joint_quad;
+}
+
+
+// [[Rcpp::export]]
+Rcpp::List cpp_update_m_var(
+  const Eigen::SparseMatrix<double> diag_vi_pg_mean,
+  const Eigen::SparseMatrix<double> design_C,
+  const Eigen::SparseMatrix<double> Tinv_C,
+  const Rcpp::List list_Tinv_M,
+  const Rcpp::List vi_M_list,
+  const bool any_collapsed_C,
+  const double lndet_C
+){
+  
+  int J = vi_M_list.length();
+  Eigen::VectorXd running_log_det_M_var(J);
+  Rcpp::List vi_M_var(J);
+  Rcpp::List misc(J);
+  
+  Eigen::MatrixXd meat_C = design_C.adjoint() * diag_vi_pg_mean * design_C + Tinv_C;
+    
+  for (int j = 0; j < J; j++){
+    
+    Eigen::SparseMatrix<double> data_M_j = vi_M_list[j];
+    
+    if (data_M_j.cols() == 0){
+      vi_M_var[j] = Eigen::MatrixXd(0,0);
+      running_log_det_M_var[j] = 0; 
+      continue;
+    }
+    Eigen::SparseMatrix<double> Tinv_Mj = list_Tinv_M[j];
+    
+    // # Z_j^T Omega Z_j + R - Z_j^T Omega X (X^T Omega X)^{-1} X^T Omega Z_j
+    // # A = Z_j^T Omega Z_j + R
+    // # U = - Z_j^T Omega X
+    // # C = X^T Omega X^{-1}
+    // # V = X^T Omega Z_j
+    // # A^{-1} - A^{-1} U (C^{-1} + V A^{-1} U) V A^{-1}
+    
+    Eigen::SparseMatrix<double> prec_M_j = data_M_j.adjoint() * diag_vi_pg_mean * data_M_j + Tinv_Mj;
+    Eigen::SimplicialLDLT<Eigen::SparseMatrix<double> > chol_prec(prec_M_j);
+    Eigen::SparseMatrix<double> ident_j(prec_M_j.cols(), prec_M_j.cols());
+    ident_j.setIdentity();
+    
+    // Eigen::ArrayXd vec_d_chol = ;
+    double lndet_Ainv = - chol_prec.vectorD().array().log().sum();
+    
+    if (any_collapsed_C){
+      Eigen::MatrixXd bread_j = data_M_j.adjoint() * diag_vi_pg_mean * design_C;
+      Eigen::MatrixXd meat_woodbury = meat_C - bread_j.adjoint() * chol_prec.solve(bread_j);
+      Eigen::MatrixXd scaled_bread = chol_prec.solve(bread_j);
+      Eigen::LDLT<Eigen::MatrixXd > chol_wood(meat_woodbury);
+      Eigen::MatrixXd var_M_j = scaled_bread * chol_wood.solve(scaled_bread.adjoint());  
+        
+      // Eigen::ArrayXd vec_d_wood = ;
+      double lndet_woodbury = chol_wood.vectorD().array().log().sum();
+      var_M_j += chol_prec.solve(ident_j);
+      vi_M_var[j] = var_M_j;
+      running_log_det_M_var[j] = - (lndet_woodbury + lndet_C - lndet_Ainv);
+
+    }else{
+      Eigen::SparseMatrix<double> var_M_j = chol_prec.solve(ident_j);
+      vi_M_var[j] = var_M_j;
+      running_log_det_M_var[j] = lndet_Ainv;
+    }
+  }
+  
+  return Rcpp::List::create(
+    Rcpp::Named("vi_M_var") = vi_M_var,
+    Rcpp::Named("running_log_det_M_var") = running_log_det_M_var
+  );
+}
+
+// [[Rcpp::export]]
+Rcpp::List cpp_update_c_var(
+  const Eigen::SparseMatrix<double> diag_vi_pg_mean,
+  const Eigen::SparseMatrix<double> design_C,
+  const Eigen::SparseMatrix<double> Tinv_C,
+  const Eigen::VectorXd s,
+  const Rcpp::List vi_M_list
+){
+
+  Eigen::SparseMatrix<double> t_design_C = design_C.adjoint();  
+  Eigen::SimplicialLDLT<Eigen::SparseMatrix<double> > chol_C(
+      t_design_C * diag_vi_pg_mean * design_C + Tinv_C
+  );
+  double log_det_C_var = - chol_C.vectorD().array().log().sum();
+
+  Eigen::SparseMatrix<double> ident_C(design_C.cols(), design_C.cols());
+  ident_C.setIdentity();
+  Eigen::SparseMatrix<double> vi_C_var = chol_C.solve(ident_C);
+
+  Eigen::VectorXd C_hat = chol_C.solve(t_design_C * s);
+  
+  int J = vi_M_list.length();
+  Rcpp::List vi_P(J);
+  int size_C = design_C.cols();
+  
+  for (int j = 0; j < J; j++){
+    Eigen::SparseMatrix<double> data_M_j = vi_M_list[j];
+    if (data_M_j.cols() == 0){
+      vi_P[j] = Eigen::SparseMatrix<double>(size_C, 0);
+    }else{
+      vi_P[j] = chol_C.solve(t_design_C * diag_vi_pg_mean * data_M_j);
+    }
+  }
+  
+  return Rcpp::List::create(
+    Rcpp::Named("vi_P") = vi_P,
+    Rcpp::Named("C_hat") = C_hat,
+    Rcpp::Named("vi_C_var") = vi_C_var,
+    Rcpp::Named("log_det_C_var") = log_det_C_var
+  );
+}
+  

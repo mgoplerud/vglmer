@@ -1,28 +1,3 @@
-# extract_group_memberships <- function(x, fr, drop.unused.levels){
-#   frloc <- factorize(x, frloc)
-#   if (is.null(ff <- tryCatch(eval(substitute(makeFac(fac),
-#                                              list(fac = x[[3]])), frloc), error = function(e) NULL)))
-#     stop("couldn't evaluate grouping factor ", deparse(x[[3]]),
-#          " within model frame:", " try adding grouping factor to data ",
-#          "frame explicitly if possible", call. = FALSE)
-#   if (all(is.na(ff))){
-#     stop("Invalid grouping factor specification, ", deparse(x[[3]]),
-#          call. = FALSE)
-#   }
-#   if (drop.unused.levels){
-#     ff <- factor(ff, exclude = NA)
-#   }
-#   return(ff)
-# }
-#
-# make_dgC <- function(x){
-#   if (!inherits(x, 'ddiMatrix')){
-#     x <- as(x, 'dgCMatrix')
-#   }else{
-#     x <- sparseMatrix(i = 1:nrow(x), j =1:nrow(x), x = diag(x))
-#   }
-#   return(x)
-# }
 
 safe_convert <- function(x){
   if (isDiagonal(x)){
@@ -67,13 +42,13 @@ prepare_T <- function(mapping, levels_per_RE, variables_per_RE, running_per_RE, 
   }
   for (v in 1:num_REs) {
     mapping_v <- mapping[[v]]
-
+    
     if (cyclical) {
       mapping_id_i <- rep(mapping_v[, 1], levels_per_RE[v]) +
         rep(seq(1, 1 + (levels_per_RE[v] - 1) * variables_per_RE[v], by = variables_per_RE[v]), each = nrow(mapping_v))
       mapping_id_j <- rep(mapping_v[, 2], levels_per_RE[v]) +
         rep(seq(1, 1 + (levels_per_RE[v] - 1) * variables_per_RE[v], by = variables_per_RE[v]), each = nrow(mapping_v))
-
+      
       mapping_id_x <- rep(mapping_v[, 3], levels_per_RE[v])
       RE_T[[v]] <- sparseMatrix(i = mapping_id_i, j = mapping_id_j, x = mapping_id_x, symmetric = T)
     } else {
@@ -81,7 +56,7 @@ prepare_T <- function(mapping, levels_per_RE, variables_per_RE, running_per_RE, 
         rep(seq(1, 1 + (levels_per_RE[v] - 1) * variables_per_RE[v], by = variables_per_RE[v]), each = nrow(mapping_v))
       mapping_id_j <- rep(mapping_v[, 2], levels_per_RE[v]) +
         rep(seq(1, 1 + (levels_per_RE[v] - 1) * variables_per_RE[v], by = variables_per_RE[v]), each = nrow(mapping_v))
-
+      
       mapping_id_x <- rep(mapping_v[, 3], levels_per_RE[v])
       mapping_id_i <- running_per_RE[v] + mapping_id_i
       mapping_id_j <- running_per_RE[v] + mapping_id_j
@@ -140,9 +115,9 @@ multi_digamma <- function(a, p) {
 EM_prelim_logit <- function(X, Z, s, pg_b, iter, ridge = 2) {
   jointXZ <- cbind(X, Z)
   N <- nrow(X)
-
+  
   EM_beta <- rep(0, ncol(jointXZ))
-
+  
   if (all(jointXZ[, 1] == 1)) {
     EM_beta[1] <- qlogis(sum(s + pg_b / 2) / sum(pg_b))
   }
@@ -150,7 +125,7 @@ EM_prelim_logit <- function(X, Z, s, pg_b, iter, ridge = 2) {
     EM_beta[1] <- runif(1, -.1, .1)
   }
   EM_variance <- sparseMatrix(i = 1:ncol(jointXZ), j = 1:ncol(jointXZ), x = 1 / ridge)
-
+  
   for (it in 1:iter) {
     EM_pg_c <- jointXZ %*% EM_beta
     EM_pg_mean <- pg_b / (2 * EM_pg_c) * tanh(EM_pg_c / 2)
@@ -159,9 +134,9 @@ EM_prelim_logit <- function(X, Z, s, pg_b, iter, ridge = 2) {
       EM_pg_mean[tiny_c] <- pg_b[tiny_c] / 4
     }
     EM_pg_diag_sqrt <- sparseMatrix(i = 1:N, j = 1:N, x = sqrt(EM_pg_mean))
-
+    
     EM_beta <- solve(Matrix::Cholesky( crossprod(EM_pg_diag_sqrt %*% jointXZ) + EM_variance),
-                               t(jointXZ) %*% (s) )
+                     t(jointXZ) %*% (s) )
     
     # EM_beta <- LinRegChol(X = jointXZ, omega = EM_pg_diag, y = s, prior_precision = EM_variance)$mean
   }
@@ -178,7 +153,7 @@ EM_prelim_nb <- function(X, Z, y, est_r, iter, ridge = 2) {
     jointXZ <- cbind(X, Z)
   }
   N <- nrow(jointXZ)
-
+  
   EM_beta <- rep(0, ncol(jointXZ))
   if (all(jointXZ[, 1] == 1)) {
     EM_beta[1] <- log(mean(y))
@@ -186,18 +161,18 @@ EM_prelim_nb <- function(X, Z, y, est_r, iter, ridge = 2) {
   if (EM_beta[1] == 0) {
     EM_beta[1] <- runif(1, -.1, .1)
   }
-
+  
   EM_variance <- sparseMatrix(i = 1:ncol(jointXZ), j = 1:ncol(jointXZ), x = 1 / ridge)
   for (it in 1:iter) {
     pg_c <- as.vector(jointXZ %*% EM_beta - log(est_r))
     pg_b <- y + est_r
     pg_mean <- as.vector(pg_b / (2 * pg_c) * tanh(pg_c / 2))
-
+    
     if (any(abs(pg_c) < 1e-10)) {
       tiny_c <- which(abs(pg_c) < 1e-10)
       pg_mean[tiny_c] <- pg_b[tiny_c] / 4
     }
-
+    
     adj_out <- (y - est_r) / 2 + pg_mean * log(est_r)
     # EM_beta <- LinRegChol(X = jointXZ, omega = sparseMatrix(i = 1:N, j = 1:N, x = pg_mean), y = adj_out, prior_precision = EM_variance)$mean
     
@@ -205,7 +180,7 @@ EM_prelim_nb <- function(X, Z, y, est_r, iter, ridge = 2) {
                      t(jointXZ) %*% (adj_out) )
     
   }
-
+  
   output <- list(beta = EM_beta[1:ncol(X)], alpha = EM_beta[-1:-ncol(X)])
   return(output)
 }
@@ -217,36 +192,40 @@ make_log_invwishart_constant <- function(nu, Phi) {
 }
 
 calculate_ELBO <- function(family, ELBO_type, factorization_method,
-     # Fixed constants or priors
-     d_j, g_j, prior_sigma_alpha_phi, prior_sigma_alpha_nu, 
-     iw_prior_constant, choose_term,
-     store_assignment_Z, store_design_Z, outer_alpha_RE_positions,
-     # Data
-     X, Z, s, y,
-     # PolyaGamma Parameters
-     vi_pg_b, vi_pg_mean, vi_pg_c,
-     # Sigma Parameters
-     vi_sigma_alpha, vi_sigma_alpha_nu, vi_sigma_outer_alpha,
-     # Beta Parameters / Alpha Parameters
-     vi_beta_mean, vi_beta_decomp,
-     vi_alpha_mean, vi_alpha_decomp,
-     log_det_beta_var, log_det_alpha_var,
-     vi_alpha_var = NULL, vi_beta_var = NULL,
-     cyclical_pos = NULL,
-     log_det_joint_var = NULL,
-     vi_joint_decomp = NULL,
-     vi_collapsed_P = NULL,
-     vi_X_sparse = NULL,
-     # r Parameters
-     vi_r_mu = NULL, vi_r_mean = NULL,
-     vi_r_sigma = NULL,
-     #linear parameters
-     vi_sigmasq_a = NULL, vi_sigmasq_b = NULL,
-     vi_sigmasq_prior_a = NULL, vi_sigmasq_prior_b = NULL,
-     # huang_wand parameters
-     do_huangwand = NULL, vi_a_a_jp = NULL, vi_a_b_jp = NULL,
-     vi_a_nu_jp = NULL, vi_a_APRIOR_jp = NULL
-  ) {
+                           # Fixed constants or priors
+                           d_j, g_j, prior_sigma_alpha_phi, prior_sigma_alpha_nu, 
+                           iw_prior_constant, choose_term,
+                           store_assignment_Z, store_design_Z, outer_alpha_RE_positions,
+                           # Data
+                           X, Z, s, y,
+                           # PolyaGamma Parameters
+                           vi_pg_b, vi_pg_mean, vi_pg_c,
+                           # Sigma Parameters
+                           vi_sigma_alpha, vi_sigma_alpha_nu, vi_sigma_outer_alpha,
+                           # Beta Parameters / Alpha Parameters
+                           vi_beta_mean, vi_beta_decomp,
+                           vi_alpha_mean, vi_alpha_decomp,
+                           log_det_beta_var , log_det_alpha_var,
+                           vi_alpha_var = NULL, vi_beta_var = NULL,
+                           cyclical_pos = NULL,
+                           log_det_joint_var = NULL,
+                           vi_joint_decomp = NULL,
+                           vi_P = NULL, log_det_M_var = NULL, log_det_C_var = NULL,
+                           vi_C_uncond = NULL, vi_C_mean = NULL,
+                           vi_M_var = NULL, vi_M_mean = NULL,
+                           vi_M_list = NULL, 
+                           design_M = NULL, 
+                           design_C = NULL,
+                           # r Parameters
+                           vi_r_mu = NULL, vi_r_mean = NULL,
+                           vi_r_sigma = NULL,
+                           #linear parameters
+                           vi_sigmasq_a = NULL, vi_sigmasq_b = NULL,
+                           vi_sigmasq_prior_a = NULL, vi_sigmasq_prior_b = NULL,
+                           # huang_wand parameters
+                           do_huangwand = NULL, vi_a_a_jp = NULL, vi_a_b_jp = NULL,
+                           vi_a_nu_jp = NULL, vi_a_APRIOR_jp = NULL
+) {
   
   ####
   ## PREPARE INTERMEDIATE QUANTITES
@@ -254,11 +233,16 @@ calculate_ELBO <- function(family, ELBO_type, factorization_method,
   
   N <- nrow(X)
   
-  # linear predictor: E[XB + ZA - log(r)]
-  if (family == 'negbin'){
-    ex_XBZA <- (X %*% vi_beta_mean + Z %*% vi_alpha_mean) - vi_r_mu
+  if (factorization_method == "collapsed"){
+    ex_XBZA <- design_C %*% vi_C_mean 
+    if (ncol(design_M) > 0){
+      ex_XBZA <- ex_XBZA + design_M %*% do.call('c', vi_M_mean) 
+    }
   }else{
     ex_XBZA <- (X %*% vi_beta_mean + Z %*% vi_alpha_mean)
+  }
+  if (family == 'negbin'){
+    ex_XBZA <- ex_XBZA - vi_r_mu
   }
   # quadratic var, i.e. Var(x_i^T beta + z_i^T alpha)
   if (factorization_method == "weak") {
@@ -266,32 +250,19 @@ calculate_ELBO <- function(family, ELBO_type, factorization_method,
     if (is.null(vi_joint_decomp)) {
       stop("Need to provide joint decomposition for ELBO weak")
     }
-
+    
     var_XBZA <- rowSums((cbind(X, Z) %*% t(vi_joint_decomp))^2)
     
     if (family == 'negbin'){
       var_XBZA <- var_XBZA + vi_r_sigma
     }
-  } else if (grepl(factorization_method, pattern="collapsed")) {
+  } else if (factorization_method == "collapsed") {
     
-    if (factorization_method == "collapsed_inv"){
-      
-      var_XBZA <- rowSums( ((- Z %*% vi_collapsed_P + X) %*% t(vi_beta_decomp))^2 )
-      var_XBZA <- var_XBZA + rowSums( (Z %*% t(vi_alpha_decomp))^2 )
-    } else if (factorization_method == "collapsed_2"){
-
-      var_XBZA <- cpp_quad_collapsed(V = vi_alpha_var, 
-         re_position_list = outer_alpha_RE_positions,
-         Z_list_raw = store_design_Z,
-         individual_assignments = store_assignment_Z,
-         vi_beta_var = as.matrix(vi_beta_var), 
-         P = vi_collapsed_P, X = X
-      )
-
-     }else {
-      var_XBZA <- rowSums( ( (- vi_X_sparse %*% vi_collapsed_P + Z) %*% t(vi_alpha_decomp) )^2 )
-      var_XBZA <- var_XBZA + rowSums( (X %*% t(vi_beta_decomp))^2 )
-    }
+    var_XBZA <- cpp_var_lp(design_C = design_C, vi_C_uncond = vi_C_uncond,
+       vi_M_var = vi_M_var,
+       vi_M_list = vi_M_list, vi_P = vi_P,
+       skip_vector = sapply(vi_M_var, FUN=function(i){ncol(i) == 0}), 
+       sparse_input = class(vi_M_var[[1]])[1] == 'dgCMatrix')
 
   } else {
     
@@ -305,14 +276,14 @@ calculate_ELBO <- function(family, ELBO_type, factorization_method,
   # Prepare vi_sigma_alpha
   moments_sigma_alpha <- mapply(vi_sigma_alpha, vi_sigma_alpha_nu, d_j, SIMPLIFY = FALSE, FUN = function(phi, nu, d) {
     inv_phi <- solve(phi)
-
+    
     sigma.inv <- nu * inv_phi
-
+    
     # ln.det <- - (multi_digamma(a = nu/2, p = d) + d * log(2) + log(det(inv_phi)) )
     ln.det <- log(det(phi)) - sum(digamma((nu - 1:d + 1) / 2)) - d * log(2)
     return(list(sigma.inv = sigma.inv, ln.det = ln.det))
   })
-
+  
   ln_det_sigma_alpha <- sapply(moments_sigma_alpha, FUN = function(i) {
     i$ln.det
   })
@@ -328,7 +299,8 @@ calculate_ELBO <- function(family, ELBO_type, factorization_method,
       logcomplete_1 <- sum(-1/2 * ((y - ex_XBZA)^2 + var_XBZA) * e_inv_sigmasq) +
         -1/2 * length(y) * (log(2 * pi) + e_ln_sigmasq)
       #Add log prior
-      logcomplete_1 <- logcomplete_1 + (-vi_sigmasq_prior_a - 1) * e_ln_sigmasq +
+      logcomplete_1 <- logcomplete_1 + 
+        (-vi_sigmasq_prior_a - 1) * e_ln_sigmasq +
         -vi_sigmasq_prior_b * e_inv_sigmasq
     } else {
       # Get the terms for the p(y, w | alpha, beta, Sigma) EXCLUDING the intractable PG.
@@ -337,7 +309,7 @@ calculate_ELBO <- function(family, ELBO_type, factorization_method,
         -1 / 2 * sum(var_XBZA * vi_pg_mean)
     }
     # Get the terms for p(alpha | Sigma)
-
+    
     if (family == 'linear'){
       e_ln_sigmasq <- log(vi_sigmasq_b) - digamma(vi_sigmasq_a)
       
@@ -348,17 +320,21 @@ calculate_ELBO <- function(family, ELBO_type, factorization_method,
       logcomplete_2 <-  logcomplete_2 +
         -1/2 * sum(d_j * g_j) * e_ln_sigmasq
     }else{
+      
       logcomplete_2 <- sum(-d_j * g_j / 2 * log(2 * pi) - g_j / 2 * ln_det_sigma_alpha) +
         -1 / 2 * sum(mapply(inv_sigma_alpha, vi_sigma_outer_alpha, FUN = function(a, b) {
           sum(diag(a %*% b))
         }))
     }
-
+    
     ## GET THE ENTROPY
     # Entropy for p(beta,alpha)
     if (factorization_method == "weak") {
       entropy_1 <- ncol(vi_joint_decomp) / 2 * log(2 * pi * exp(1)) +
         1 / 2 * log_det_joint_var
+    } else if (factorization_method == "collapsed") {
+      entropy_1 <- ncol(design_C) / 2 * log(2 * pi * exp(1)) + 1 / 2 * log_det_C_var +
+        ncol(design_M) / 2 * log(2 * pi * exp(1)) + 1 / 2 * log_det_M_var
     } else {
       entropy_1 <- nrow(vi_beta_mean) / 2 * log(2 * pi * exp(1)) + 1 / 2 * log_det_beta_var +
         nrow(vi_alpha_mean) / 2 * log(2 * pi * exp(1)) + 1 / 2 * log_det_alpha_var
@@ -380,24 +356,24 @@ calculate_ELBO <- function(family, ELBO_type, factorization_method,
         sum(diag(a %*% b))
       })
     entropy_3 <- sum(entropy_3)
-
+    
   } else if (ELBO_type == "profiled") {
     
     vi_r_var <- (exp(vi_r_sigma) - 1) * vi_r_mean^2
-
+    
     psi <- ex_XBZA + vi_r_mu
     zVz <- var_XBZA - vi_r_sigma
-
+    
     logcomplete_1 <- VEM.PELBO.r(ln_r = vi_r_mu, y, psi, zVz) +
       1 / 2 * VEM.PELBO.r_hessian(ln_r = vi_r_mu, y, psi, zVz) * vi_r_sigma
-
+    
     # logcomplete_1a <- sum(lgamma(y + vi_r_hat)) +
     #   - N * lgamma(vi_r_hat) - (vi_r_hat) * N * log(2) +
     #   as.vector(t((y - exp(vi_r_hat))/2) %*% ex_XBZA)
     # logcomplete_1b <- sum(-(y + vi_r_mean) * log(cosh(1/2 * sqrt(ex_XBZA^2 + vi_r_sigma + var_XBZA))))
     # logcomplete_1c <- N/2 * vi_r_mean * vi_r_sigma
     # logcomplete_1 <- logcomplete_1a + logcomplete_1b + logcomplete_1c + choose_term
-
+    
     logcomplete_2 <- sum(-d_j * g_j / 2 * log(2 * pi) - g_j / 2 * ln_det_sigma_alpha) +
       -1 / 2 * sum(mapply(inv_sigma_alpha, vi_sigma_outer_alpha, FUN = function(a, b) {
         sum(diag(a %*% b))
@@ -415,7 +391,7 @@ calculate_ELBO <- function(family, ELBO_type, factorization_method,
     } else {
       entropy_2 <- 1 / 2 * log(2 * pi * exp(1) * vi_r_sigma)
     }
-
+    
   } else {
     stop("ELBO must be profiled or augmented")
   }
@@ -446,11 +422,11 @@ calculate_ELBO <- function(family, ELBO_type, factorization_method,
     # E_ln_vi_a <<- E_ln_vi_a
     # vi_a_APRIOR_jp <<- vi_a_APRIOR_jp
     logcomplete_3_a <- mapply(d_j, vi_a_a_jp, vi_a_b_jp, E_ln_vi_a, 
-        vi_a_APRIOR_jp, 
-        FUN=function(d, tilde.a, tilde.b, E_ln_vi_a.j, APRIOR.j){
-      1/2 * sum(log(1/APRIOR.j^2)) - d * lgamma(1/2) - 3/2 * E_ln_vi_a.j +
-        sum(-1/APRIOR.j^2 * tilde.a/tilde.b)
-    })
+                              vi_a_APRIOR_jp, 
+                              FUN=function(d, tilde.a, tilde.b, E_ln_vi_a.j, APRIOR.j){
+                                1/2 * sum(log(1/APRIOR.j^2)) - d * lgamma(1/2) - 3/2 * E_ln_vi_a.j +
+                                  sum(-1/APRIOR.j^2 * tilde.a/tilde.b)
+                              })
     logcomplete_3 <- logcomplete_3 + sum(logcomplete_3_a)
   }else{
     logcomplete_3 <- 0 + # flat prior on beta
@@ -489,7 +465,7 @@ calculate_ELBO <- function(family, ELBO_type, factorization_method,
   
   entropy <- entropy_1 + entropy_2 + entropy_3 + entropy_4
   ELBO <- entropy + logcomplete
-
+  
   return(data.frame(
     ELBO, logcomplete, entropy, logcomplete_1,
     logcomplete_2, logcomplete_3, entropy_1, entropy_2, entropy_3, entropy_4
@@ -518,23 +494,23 @@ update_r <- function(vi_r_mu, vi_r_sigma, y, X, Z, factorization_method,
     alpha_quad <- rowSums((Z %*% t(vi_alpha_decomp))^2)
     var_XBZA <- beta_quad + alpha_quad
   }
-
+  
   N <- length(y)
-
+  
   # vi_r_mu <<- vi_r_mu
   # vi_r_sigma <<- vi_r_sigma
   # ex_XBZA <<- ex_XBZA
   # var_XBZA <<- var_XBZA
   # y <<- y
   # N <<- N
-
+  
   if (vi_r_method == "delta") {
     opt_vi_r <- optim(
       par = c(vi_r_mu, log(vi_r_sigma)), fn = VEM.delta_method,
       y = y, psi = ex_XBZA, zVz = var_XBZA,
       control = list(fnscale = -1), method = "L-BFGS"
     )
-
+    
     prior_vi_r <- VEM.delta_method(
       par = c(vi_r_mu, log(vi_r_sigma)), y = y,
       psi = ex_XBZA, zVz = var_XBZA
@@ -551,7 +527,7 @@ update_r <- function(vi_r_mu, vi_r_sigma, y, X, Z, factorization_method,
       y = y, psi = ex_XBZA, zVz = var_XBZA,
       control = list(fnscale = -1), method = "L-BFGS"
     )
-
+    
     if (vi_r_method == "Laplace") {
       proposed_vi_r_sigma <- -1 / VEM.PELBO.r_hessian(
         ln_r = opt_vi_r$par,
@@ -561,12 +537,12 @@ update_r <- function(vi_r_mu, vi_r_sigma, y, X, Z, factorization_method,
     } else {
       proposed_vi_r_sigma <- 0
     }
-
+    
     prior_vi_r <- VEM.PELBO.r(
       ln_r = vi_r_mu, y = y,
       psi = ex_XBZA, zVz = var_XBZA
     )
-
+    
     if (opt_vi_r$value < prior_vi_r) {
       warning("Optim for r decreased objective.")
       out_par <- c(vi_r_mu, vi_r_sigma)
@@ -576,7 +552,7 @@ update_r <- function(vi_r_mu, vi_r_sigma, y, X, Z, factorization_method,
   } else {
     stop("vi_r method must be VI or VEM or fixed")
   }
-
+  
   return(out_par)
 }
 
@@ -610,7 +586,7 @@ VEM.PELBO.r_deriv <- function(ln_r, y, psi, zVz) {
   N <- length(y)
   r <- exp(ln_r)
   meat <- sqrt(zVz + (psi - ln_r)^2)
-
+  
   # -E^lnr PolyGamma[0, E^lnr] + E^lnr PolyGamma[0, E^lnr + y]
   deriv_normcon <- -N * r * psigamma(r) + r * sum(psigamma(y + r))
   # Mathematica Syntax for Derivative Ln[Cosh[1/2 * Sqrt[zVz + (psi - ln_r)^2]]]
@@ -629,7 +605,7 @@ VEM.PELBO.r_hessian <- function(ln_r, y, psi, zVz) {
   N <- length(y)
   r <- exp(ln_r)
   meat <- sqrt(zVz + (psi - ln_r)^2)
-
+  
   # -E^lnr PolyGamma[0, E^lnr] + E^lnr PolyGamma[0, E^lnr + y] -
   #   E^(2 lnr) PolyGamma[1, E^lnr] + E^(2 lnr) PolyGamma[1, E^lnr + y]
   deriv_normcon <- -N * r * psigamma(r) + r * sum(psigamma(y + r)) +
@@ -643,7 +619,7 @@ VEM.PELBO.r_hessian <- function(ln_r, y, psi, zVz) {
   #     Tanh[1/2 Sqrt[(psi - r)^2 + z]]/(2 Sqrt[(psi - r)^2 + z]))
   deriv_lncosh <- -r * log(cosh(1 / 2 * meat)) + r * (psi - ln_r) * tanh(1 / 2 * meat) / meat +
     -(y + r) * ((psi - ln_r)^2 * sech(1 / 2 * meat)^2 / (4 * meat^2) - (psi - ln_r)^2 * tanh(1 / 2 * meat) / (2 * meat^3) +
-      tanh(1 / 2 * meat) / (2 * meat))
+                  tanh(1 / 2 * meat) / (2 * meat))
   deriv_lncosh <- sum(deriv_lncosh)
   # deriv_lncosh <- -(psi - ln_r)^2 * (r + y)/(2 * meat^2 * (1 + cosh(meat))) +
   # -r * log(cosh(1/2 * meat))  +
@@ -651,7 +627,7 @@ VEM.PELBO.r_hessian <- function(ln_r, y, psi, zVz) {
   # Mathematica
   # E^lnr - 1/2 E^lnr (-lnr + psi) - E^lnr Log[2]
   deriv_prelim <- N * r - 1 / 2 * r * sum(psi - ln_r) - N * r * log(2)
-
+  
   return(deriv_normcon + deriv_lncosh + deriv_prelim)
 }
 
@@ -659,13 +635,13 @@ VEM.PELBO.r_hessian <- function(ln_r, y, psi, zVz) {
 expect_alpha_prior_kernel <- function(vi_sigma_alpha, vi_sigma_alpha_nu, vi_sigma_outer_alpha, d_j){
   
   moments_sigma_alpha <- mapply(vi_sigma_alpha, vi_sigma_alpha_nu, 
-    d_j, SIMPLIFY = FALSE, FUN = function(phi, nu, d) {
-    inv_phi <- solve(phi)
-    
-    sigma.inv <- nu * inv_phi
-    
-    return(list(sigma.inv = sigma.inv))
-  })
+                                d_j, SIMPLIFY = FALSE, FUN = function(phi, nu, d) {
+                                  inv_phi <- solve(phi)
+                                  
+                                  sigma.inv <- nu * inv_phi
+                                  
+                                  return(list(sigma.inv = sigma.inv))
+                                })
   
   inv_sigma_alpha <- lapply(moments_sigma_alpha, FUN = function(i) {i$sigma.inv})
   

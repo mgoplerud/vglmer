@@ -6,6 +6,11 @@
 
 using namespace Rcpp;
 
+#ifdef RCPP_USE_GLOBAL_ROSTREAM
+Rcpp::Rostream<true>&  Rcpp::Rcout = Rcpp::Rcpp_cout_get();
+Rcpp::Rostream<false>& Rcpp::Rcerr = Rcpp::Rcpp_cerr_get();
+#endif
+
 // LinRegChol
 List LinRegChol(const Eigen::MappedSparseMatrix<double> X, const Eigen::MappedSparseMatrix<double> omega, const Eigen::MappedSparseMatrix<double> prior_precision, const Eigen::Map<Eigen::VectorXd> y, const bool save_chol);
 RcppExport SEXP _vglmer_LinRegChol(SEXP XSEXP, SEXP omegaSEXP, SEXP prior_precisionSEXP, SEXP ySEXP, SEXP save_cholSEXP) {
@@ -51,22 +56,24 @@ BEGIN_RCPP
 END_RCPP
 }
 // cg_custom
-List cg_custom(const Eigen::Map<Eigen::MatrixXd> X, const Eigen::MappedSparseMatrix<double> Z, const Eigen::Map<Eigen::MatrixXd> P, const Eigen::Map<Eigen::VectorXd> omega, const Eigen::MappedSparseMatrix<double> ridge, const Eigen::Map<Eigen::VectorXd> s, const Eigen::Map<Eigen::VectorXd> old_alpha, const double tol, const int it_max, const int low_dimension);
-RcppExport SEXP _vglmer_cg_custom(SEXP XSEXP, SEXP ZSEXP, SEXP PSEXP, SEXP omegaSEXP, SEXP ridgeSEXP, SEXP sSEXP, SEXP old_alphaSEXP, SEXP tolSEXP, SEXP it_maxSEXP, SEXP low_dimensionSEXP) {
+List cg_custom(const Eigen::MappedSparseMatrix<double> X, const Eigen::MappedSparseMatrix<double> Z, const Eigen::Map<Eigen::MatrixXd> P, const Eigen::Map<Eigen::VectorXd> omega, const Eigen::MappedSparseMatrix<double> ridge_Z, const Eigen::MappedSparseMatrix<double> ridge_X, const Eigen::Map<Eigen::VectorXd> s, const Eigen::Map<Eigen::VectorXd> offset_ridge_X, const Eigen::Map<Eigen::VectorXd> old_alpha, const double tol, const int it_max, const int low_dimension);
+RcppExport SEXP _vglmer_cg_custom(SEXP XSEXP, SEXP ZSEXP, SEXP PSEXP, SEXP omegaSEXP, SEXP ridge_ZSEXP, SEXP ridge_XSEXP, SEXP sSEXP, SEXP offset_ridge_XSEXP, SEXP old_alphaSEXP, SEXP tolSEXP, SEXP it_maxSEXP, SEXP low_dimensionSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< const Eigen::Map<Eigen::MatrixXd> >::type X(XSEXP);
+    Rcpp::traits::input_parameter< const Eigen::MappedSparseMatrix<double> >::type X(XSEXP);
     Rcpp::traits::input_parameter< const Eigen::MappedSparseMatrix<double> >::type Z(ZSEXP);
     Rcpp::traits::input_parameter< const Eigen::Map<Eigen::MatrixXd> >::type P(PSEXP);
     Rcpp::traits::input_parameter< const Eigen::Map<Eigen::VectorXd> >::type omega(omegaSEXP);
-    Rcpp::traits::input_parameter< const Eigen::MappedSparseMatrix<double> >::type ridge(ridgeSEXP);
+    Rcpp::traits::input_parameter< const Eigen::MappedSparseMatrix<double> >::type ridge_Z(ridge_ZSEXP);
+    Rcpp::traits::input_parameter< const Eigen::MappedSparseMatrix<double> >::type ridge_X(ridge_XSEXP);
     Rcpp::traits::input_parameter< const Eigen::Map<Eigen::VectorXd> >::type s(sSEXP);
+    Rcpp::traits::input_parameter< const Eigen::Map<Eigen::VectorXd> >::type offset_ridge_X(offset_ridge_XSEXP);
     Rcpp::traits::input_parameter< const Eigen::Map<Eigen::VectorXd> >::type old_alpha(old_alphaSEXP);
     Rcpp::traits::input_parameter< const double >::type tol(tolSEXP);
     Rcpp::traits::input_parameter< const int >::type it_max(it_maxSEXP);
     Rcpp::traits::input_parameter< const int >::type low_dimension(low_dimensionSEXP);
-    rcpp_result_gen = Rcpp::wrap(cg_custom(X, Z, P, omega, ridge, s, old_alpha, tol, it_max, low_dimension));
+    rcpp_result_gen = Rcpp::wrap(cg_custom(X, Z, P, omega, ridge_Z, ridge_X, s, offset_ridge_X, old_alpha, tol, it_max, low_dimension));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -115,6 +122,55 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< const Eigen::MatrixXd >::type X(XSEXP);
     Rcpp::traits::input_parameter< const Eigen::MatrixXd >::type vi_beta_var(vi_beta_varSEXP);
     rcpp_result_gen = Rcpp::wrap(cpp_quad_legacy(tZ, varA, tP, X, vi_beta_var));
+    return rcpp_result_gen;
+END_RCPP
+}
+// cpp_var_lp
+Eigen::VectorXd cpp_var_lp(const Eigen::SparseMatrix<double> design_C, const Eigen::SparseMatrix<double> vi_C_uncond, const Rcpp::List vi_M_var, const Rcpp::List vi_M_list, const Rcpp::List vi_P, const bool sparse_input, const Rcpp::LogicalVector skip_vector);
+RcppExport SEXP _vglmer_cpp_var_lp(SEXP design_CSEXP, SEXP vi_C_uncondSEXP, SEXP vi_M_varSEXP, SEXP vi_M_listSEXP, SEXP vi_PSEXP, SEXP sparse_inputSEXP, SEXP skip_vectorSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const Eigen::SparseMatrix<double> >::type design_C(design_CSEXP);
+    Rcpp::traits::input_parameter< const Eigen::SparseMatrix<double> >::type vi_C_uncond(vi_C_uncondSEXP);
+    Rcpp::traits::input_parameter< const Rcpp::List >::type vi_M_var(vi_M_varSEXP);
+    Rcpp::traits::input_parameter< const Rcpp::List >::type vi_M_list(vi_M_listSEXP);
+    Rcpp::traits::input_parameter< const Rcpp::List >::type vi_P(vi_PSEXP);
+    Rcpp::traits::input_parameter< const bool >::type sparse_input(sparse_inputSEXP);
+    Rcpp::traits::input_parameter< const Rcpp::LogicalVector >::type skip_vector(skip_vectorSEXP);
+    rcpp_result_gen = Rcpp::wrap(cpp_var_lp(design_C, vi_C_uncond, vi_M_var, vi_M_list, vi_P, sparse_input, skip_vector));
+    return rcpp_result_gen;
+END_RCPP
+}
+// cpp_update_m_var
+Rcpp::List cpp_update_m_var(const Eigen::SparseMatrix<double> diag_vi_pg_mean, const Eigen::SparseMatrix<double> design_C, const Eigen::SparseMatrix<double> Tinv_C, const Rcpp::List list_Tinv_M, const Rcpp::List vi_M_list, const bool any_collapsed_C, const double lndet_C);
+RcppExport SEXP _vglmer_cpp_update_m_var(SEXP diag_vi_pg_meanSEXP, SEXP design_CSEXP, SEXP Tinv_CSEXP, SEXP list_Tinv_MSEXP, SEXP vi_M_listSEXP, SEXP any_collapsed_CSEXP, SEXP lndet_CSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const Eigen::SparseMatrix<double> >::type diag_vi_pg_mean(diag_vi_pg_meanSEXP);
+    Rcpp::traits::input_parameter< const Eigen::SparseMatrix<double> >::type design_C(design_CSEXP);
+    Rcpp::traits::input_parameter< const Eigen::SparseMatrix<double> >::type Tinv_C(Tinv_CSEXP);
+    Rcpp::traits::input_parameter< const Rcpp::List >::type list_Tinv_M(list_Tinv_MSEXP);
+    Rcpp::traits::input_parameter< const Rcpp::List >::type vi_M_list(vi_M_listSEXP);
+    Rcpp::traits::input_parameter< const bool >::type any_collapsed_C(any_collapsed_CSEXP);
+    Rcpp::traits::input_parameter< const double >::type lndet_C(lndet_CSEXP);
+    rcpp_result_gen = Rcpp::wrap(cpp_update_m_var(diag_vi_pg_mean, design_C, Tinv_C, list_Tinv_M, vi_M_list, any_collapsed_C, lndet_C));
+    return rcpp_result_gen;
+END_RCPP
+}
+// cpp_update_c_var
+Rcpp::List cpp_update_c_var(const Eigen::SparseMatrix<double> diag_vi_pg_mean, const Eigen::SparseMatrix<double> design_C, const Eigen::SparseMatrix<double> Tinv_C, const Eigen::VectorXd s, const Rcpp::List vi_M_list);
+RcppExport SEXP _vglmer_cpp_update_c_var(SEXP diag_vi_pg_meanSEXP, SEXP design_CSEXP, SEXP Tinv_CSEXP, SEXP sSEXP, SEXP vi_M_listSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const Eigen::SparseMatrix<double> >::type diag_vi_pg_mean(diag_vi_pg_meanSEXP);
+    Rcpp::traits::input_parameter< const Eigen::SparseMatrix<double> >::type design_C(design_CSEXP);
+    Rcpp::traits::input_parameter< const Eigen::SparseMatrix<double> >::type Tinv_C(Tinv_CSEXP);
+    Rcpp::traits::input_parameter< const Eigen::VectorXd >::type s(sSEXP);
+    Rcpp::traits::input_parameter< const Rcpp::List >::type vi_M_list(vi_M_listSEXP);
+    rcpp_result_gen = Rcpp::wrap(cpp_update_c_var(diag_vi_pg_mean, design_C, Tinv_C, s, vi_M_list));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -245,10 +301,13 @@ static const R_CallMethodDef CallEntries[] = {
     {"_vglmer_LinRegChol", (DL_FUNC) &_vglmer_LinRegChol, 5},
     {"_vglmer_decomp_calculate_expected_outer_alpha", (DL_FUNC) &_vglmer_decomp_calculate_expected_outer_alpha, 6},
     {"_vglmer_direct_calculate_expected_outer_alpha", (DL_FUNC) &_vglmer_direct_calculate_expected_outer_alpha, 3},
-    {"_vglmer_cg_custom", (DL_FUNC) &_vglmer_cg_custom, 10},
+    {"_vglmer_cg_custom", (DL_FUNC) &_vglmer_cg_custom, 12},
     {"_vglmer_cpp_inv_alpha_var", (DL_FUNC) &_vglmer_cpp_inv_alpha_var, 6},
     {"_vglmer_cpp_quad_collapsed", (DL_FUNC) &_vglmer_cpp_quad_collapsed, 7},
     {"_vglmer_cpp_quad_legacy", (DL_FUNC) &_vglmer_cpp_quad_legacy, 5},
+    {"_vglmer_cpp_var_lp", (DL_FUNC) &_vglmer_cpp_var_lp, 7},
+    {"_vglmer_cpp_update_m_var", (DL_FUNC) &_vglmer_cpp_update_m_var, 7},
+    {"_vglmer_cpp_update_c_var", (DL_FUNC) &_vglmer_cpp_update_c_var, 5},
     {"_vglmer_calculate_alpha_decomp_full_factor", (DL_FUNC) &_vglmer_calculate_alpha_decomp_full_factor, 8},
     {"_vglmer_chol_sparse", (DL_FUNC) &_vglmer_chol_sparse, 3},
     {"_vglmer_cpp_zVz", (DL_FUNC) &_vglmer_cpp_zVz, 2},

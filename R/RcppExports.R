@@ -26,8 +26,8 @@ direct_calculate_expected_outer_alpha <- function(V, alpha_mu, re_position_list)
 }
 
 #' Conjugate Gradient for Large VI Problems
-cg_custom <- function(X, Z, P, omega, ridge, s, old_alpha, tol, it_max = 0L, low_dimension = 5L) {
-    .Call('_vglmer_cg_custom', PACKAGE = 'vglmer', X, Z, P, omega, ridge, s, old_alpha, tol, it_max, low_dimension)
+cg_custom <- function(X, Z, P, omega, ridge_Z, ridge_X, s, offset_ridge_X, old_alpha, tol, it_max = 0L, low_dimension = 5L) {
+    .Call('_vglmer_cg_custom', PACKAGE = 'vglmer', X, Z, P, omega, ridge_Z, ridge_X, s, offset_ridge_X, old_alpha, tol, it_max, low_dimension)
 }
 
 cpp_inv_alpha_var <- function(diag_vi_pg_mean, P, X, Tinv, vi_Z_list, beta_var_lndet) {
@@ -40,6 +40,18 @@ cpp_quad_collapsed <- function(V, re_position_list, Z_list_raw, individual_assig
 
 cpp_quad_legacy <- function(tZ, varA, tP, X, vi_beta_var) {
     .Call('_vglmer_cpp_quad_legacy', PACKAGE = 'vglmer', tZ, varA, tP, X, vi_beta_var)
+}
+
+cpp_var_lp <- function(design_C, vi_C_uncond, vi_M_var, vi_M_list, vi_P, sparse_input, skip_vector) {
+    .Call('_vglmer_cpp_var_lp', PACKAGE = 'vglmer', design_C, vi_C_uncond, vi_M_var, vi_M_list, vi_P, sparse_input, skip_vector)
+}
+
+cpp_update_m_var <- function(diag_vi_pg_mean, design_C, Tinv_C, list_Tinv_M, vi_M_list, any_collapsed_C, lndet_C) {
+    .Call('_vglmer_cpp_update_m_var', PACKAGE = 'vglmer', diag_vi_pg_mean, design_C, Tinv_C, list_Tinv_M, vi_M_list, any_collapsed_C, lndet_C)
+}
+
+cpp_update_c_var <- function(diag_vi_pg_mean, design_C, Tinv_C, s, vi_M_list) {
+    .Call('_vglmer_cpp_update_c_var', PACKAGE = 'vglmer', diag_vi_pg_mean, design_C, Tinv_C, s, vi_M_list)
 }
 
 #' Cyclical Calculation of Variance Decomposition

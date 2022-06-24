@@ -7,14 +7,14 @@
 vglmer(formula, data, family, control = vglmer_control())
 }
 \arguments{
-\item{formula}{Standard glmer-style formula for random effects.}
+\item{formula}{lme4-style formula that can include multiple random effects.
+Splines can be specified via `s_v(x)`, see the examples for details.}
 
 \item{data}{data.frame containing the outcome and variables.}
 
 \item{family}{Options are "binomial" or "negbin". If "binomial", outcome must
-be either {0,1} (binary) or cbind(success, failure) as per standard glm(er)
-syntax. Non-integer values are permitted for binomial if "force_whole" is
-set to FALSE in vglmer_control.}
+be either {0,1} (binary) or cbind(success, failure). Non-integer values are
+permitted for binomial if "force_whole" is set to FALSE in vglmer_control.}
 
 \item{control}{Control additional arguments. Must be made using
 vglmer_control(); see for documentation for additional details.}
@@ -42,7 +42,7 @@ variance.}
 }
 \description{
 Estimate a hierarchical model using mean-field variational
-inference. Accepts standard syntax to glmer: \code{y ~ X + (1 + Z | g)}.
+inference. Accepts standard syntax for lme4: \code{y ~ X + (1 + Z | g)}.
 Options are described below.
 }
 \examples{

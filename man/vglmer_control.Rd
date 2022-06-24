@@ -6,6 +6,8 @@
 \usage{
 vglmer_control(
   iterations = 1000,
+  collapse_size = "FE",
+  block_collapse = FALSE,
   prior_variance = "mean_exists",
   factorization_method = "weak",
   tolerance_elbo = 1e-08,
