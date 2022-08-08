@@ -259,8 +259,10 @@ calculate_ELBO <- function(family, ELBO_type, factorization_method,
   } else if (factorization_method == "collapsed") {
     
     var_XBZA <- cpp_var_lp(design_C = design_C, vi_C_uncond = vi_C_uncond,
-       vi_M_var = vi_M_var, vi_M_list = vi_M_list, vi_P = vi_P,
-       sparse_input = class(vi_M_var[[1]]) == 'dgCMatrix')
+       vi_M_var = vi_M_var,
+       vi_M_list = vi_M_list, vi_P = vi_P,
+       skip_vector = sapply(vi_M_var, FUN=function(i){ncol(i) == 0}), 
+       sparse_input = class(vi_M_var[[1]])[1] == 'dgCMatrix')
 
   } else {
     
@@ -297,7 +299,8 @@ calculate_ELBO <- function(family, ELBO_type, factorization_method,
       logcomplete_1 <- sum(-1/2 * ((y - ex_XBZA)^2 + var_XBZA) * e_inv_sigmasq) +
         -1/2 * length(y) * (log(2 * pi) + e_ln_sigmasq)
       #Add log prior
-      logcomplete_1 <- logcomplete_1 + (-vi_sigmasq_prior_a - 1) * e_ln_sigmasq +
+      logcomplete_1 <- logcomplete_1 + 
+        (-vi_sigmasq_prior_a - 1) * e_ln_sigmasq +
         -vi_sigmasq_prior_b * e_inv_sigmasq
     } else {
       # Get the terms for the p(y, w | alpha, beta, Sigma) EXCLUDING the intractable PG.

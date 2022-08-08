@@ -205,7 +205,8 @@ Eigen::VectorXd cpp_var_lp(
   const Rcpp::List vi_M_var,
   const Rcpp::List vi_M_list,
   const Rcpp::List vi_P,
-  const bool sparse_input
+  const bool sparse_input,
+  const Rcpp::LogicalVector skip_vector
 ){
 
   int N = design_C.rows();
@@ -222,6 +223,11 @@ Eigen::VectorXd cpp_var_lp(
     
     Eigen::SparseMatrix<double> data_Mj = vi_M_list[j];
     Eigen::SparseMatrix<double> vi_P_j = vi_P[j];
+    
+    bool skip_j = skip_vector[j];
+    if (skip_j){
+      continue;
+    }
     
     Eigen::VectorXd jq1(N);
     Eigen::VectorXd jq2(N);

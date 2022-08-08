@@ -6,6 +6,11 @@
 
 using namespace Rcpp;
 
+#ifdef RCPP_USE_GLOBAL_ROSTREAM
+Rcpp::Rostream<true>&  Rcpp::Rcout = Rcpp::Rcpp_cout_get();
+Rcpp::Rostream<false>& Rcpp::Rcerr = Rcpp::Rcpp_cerr_get();
+#endif
+
 // LinRegChol
 List LinRegChol(const Eigen::MappedSparseMatrix<double> X, const Eigen::MappedSparseMatrix<double> omega, const Eigen::MappedSparseMatrix<double> prior_precision, const Eigen::Map<Eigen::VectorXd> y, const bool save_chol);
 RcppExport SEXP _vglmer_LinRegChol(SEXP XSEXP, SEXP omegaSEXP, SEXP prior_precisionSEXP, SEXP ySEXP, SEXP save_cholSEXP) {
@@ -121,8 +126,8 @@ BEGIN_RCPP
 END_RCPP
 }
 // cpp_var_lp
-Eigen::VectorXd cpp_var_lp(const Eigen::SparseMatrix<double> design_C, const Eigen::SparseMatrix<double> vi_C_uncond, const Rcpp::List vi_M_var, const Rcpp::List vi_M_list, const Rcpp::List vi_P, const bool sparse_input);
-RcppExport SEXP _vglmer_cpp_var_lp(SEXP design_CSEXP, SEXP vi_C_uncondSEXP, SEXP vi_M_varSEXP, SEXP vi_M_listSEXP, SEXP vi_PSEXP, SEXP sparse_inputSEXP) {
+Eigen::VectorXd cpp_var_lp(const Eigen::SparseMatrix<double> design_C, const Eigen::SparseMatrix<double> vi_C_uncond, const Rcpp::List vi_M_var, const Rcpp::List vi_M_list, const Rcpp::List vi_P, const bool sparse_input, const Rcpp::LogicalVector skip_vector);
+RcppExport SEXP _vglmer_cpp_var_lp(SEXP design_CSEXP, SEXP vi_C_uncondSEXP, SEXP vi_M_varSEXP, SEXP vi_M_listSEXP, SEXP vi_PSEXP, SEXP sparse_inputSEXP, SEXP skip_vectorSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -132,7 +137,8 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< const Rcpp::List >::type vi_M_list(vi_M_listSEXP);
     Rcpp::traits::input_parameter< const Rcpp::List >::type vi_P(vi_PSEXP);
     Rcpp::traits::input_parameter< const bool >::type sparse_input(sparse_inputSEXP);
-    rcpp_result_gen = Rcpp::wrap(cpp_var_lp(design_C, vi_C_uncond, vi_M_var, vi_M_list, vi_P, sparse_input));
+    Rcpp::traits::input_parameter< const Rcpp::LogicalVector >::type skip_vector(skip_vectorSEXP);
+    rcpp_result_gen = Rcpp::wrap(cpp_var_lp(design_C, vi_C_uncond, vi_M_var, vi_M_list, vi_P, sparse_input, skip_vector));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -299,7 +305,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_vglmer_cpp_inv_alpha_var", (DL_FUNC) &_vglmer_cpp_inv_alpha_var, 6},
     {"_vglmer_cpp_quad_collapsed", (DL_FUNC) &_vglmer_cpp_quad_collapsed, 7},
     {"_vglmer_cpp_quad_legacy", (DL_FUNC) &_vglmer_cpp_quad_legacy, 5},
-    {"_vglmer_cpp_var_lp", (DL_FUNC) &_vglmer_cpp_var_lp, 6},
+    {"_vglmer_cpp_var_lp", (DL_FUNC) &_vglmer_cpp_var_lp, 7},
     {"_vglmer_cpp_update_m_var", (DL_FUNC) &_vglmer_cpp_update_m_var, 7},
     {"_vglmer_cpp_update_c_var", (DL_FUNC) &_vglmer_cpp_update_c_var, 5},
     {"_vglmer_calculate_alpha_decomp_full_factor", (DL_FUNC) &_vglmer_calculate_alpha_decomp_full_factor, 8},

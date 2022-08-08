@@ -511,14 +511,17 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
   ###
 
   vi_sigmasq_prior_a <- 0
-  vi_sigmasq_a <- (length(y) + sum(d_j * g_j))/2 + vi_sigmasq_prior_a
+  vi_sigmasq_prior_b <- 0
   
-  vi_sigmasq_prior_b <- 1
-  vi_sigmasq_b <- 0
+  vi_sigmasq_a <- vi_sigmasq_b <- 1
   
   if (family == "linear") {
+    
+    vi_sigmasq_a <- (length(y) + sum(d_j * g_j))/2 + vi_sigmasq_prior_a
+    vi_sigmasq_b <- 0
+    
     s <- y
-    vi_pg_b <- 1
+    vi_pg_b <- rep(1, length(y))
     vi_r_mu <- 0
     vi_r_sigma <- 0
     vi_r_mean <- 0
@@ -672,7 +675,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     if (family == "linear"){
       jointXZ <- cbind(X,Z)
       if (control$init == 'EM_FE'){
-        EM_init <- LinRegChol(X = X,
+        EM_init <- LinRegChol(X = drop0(X),
            omega = sparseMatrix(i = 1:nrow(X), j = 1:nrow(X), x = 1),
            y = y, prior_precision = sparseMatrix(i = 1:p.X, j = 1:p.X, x = 1e-5))$mean
         # stop('Setup EM init for linear')
@@ -915,8 +918,10 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
   
   if (factorization_method == "collapsed"){
     
-    warning('Turning off SQUAREM for "collapsed')
-    do_SQUAREM <- FALSE
+    if (do_SQUAREM){
+      warning('Turning off SQUAREM for "collapsed')
+      do_SQUAREM <- FALSE
+    }
     
     if (family == 'binomial'){
       init_c <- as.vector(X %*% vi_beta_mean + Z %*% vi_alpha_mean)
@@ -952,6 +957,9 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
       }
     }
 
+    size_Mj <- sum(lengths(M_j))
+    size_Cj <- sum(lengths(C_j))
+    
     joint_XZ <- cbind(X,Z)
     stopifnot(all(joint_XZ[,1] == 1))
     
@@ -1009,7 +1017,6 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
       return(o)
     })
 
-
     lagged_M_var <- vi_M_var
     lagged_C_var <- vi_C_var
     
@@ -1023,8 +1030,8 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
   
   if (debug_param) {
     if (factorization_method == "collapsed"){
-      store_beta <- array(NA, dim = c(iterations, sum(lengths(C_j))))
-      store_alpha <- array(NA, dim = c(iterations, sum(lengths(M_j))))
+      store_beta <- array(NA, dim = c(iterations, size_Cj))
+      store_alpha <- array(NA, dim = c(iterations, size_Mj))
       store_sigma <- array(NA, dim = c(iterations, sum(d_j^2)))
     }else{
       store_beta <- array(NA, dim = c(iterations, p.X))
@@ -1052,7 +1059,10 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
   }else{
     squarem_success <- NA
   }
+  
+
   for (it in 1:iterations) {
+
     
     if (it %% print_prog == 0) {
       cat(".")
@@ -1090,8 +1100,8 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
           vi_C_uncond = vi_C_uncond,
           vi_M_var = vi_M_var,
           vi_M_list = vi_M_list,
-          vi_P = vi_P,
-          sparse_input = class(vi_M_var[[1]]) == 'dgCMatrix'
+          vi_P = vi_P, skip_vector = sapply(vi_M_var, FUN=function(i){ncol(i) == 0}),
+          sparse_input = class(vi_M_var[[1]])[1] == 'dgCMatrix'
         )
         
         if (family == 'negbin'){
@@ -1745,21 +1755,28 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     if (family == 'linear'){
       
       adjust_var <- 1/sqrt(vi_sigmasq_a/vi_sigmasq_b)
-      vi_beta_decomp <- vi_beta_decomp * adjust_var
-      vi_alpha_decomp <- vi_alpha_decomp * adjust_var
-      vi_joint_decomp <- vi_joint_decomp * adjust_var
-      
-      vi_alpha_var <- vi_alpha_var * adjust_var^2
-      vi_beta_var <- vi_beta_var * adjust_var^2
-      if (factorization_method == "collapsed"){
-        vi_alpha_var_list <- lapply(vi_alpha_var_list, FUN=function(i){adjust_var^2 * i})
-      }
-      
       e_ln_sigmasq <- log(vi_sigmasq_b) - digamma(vi_sigmasq_a)
-
-      log_det_joint_var <- log_det_joint_var + (p.X + p.Z) * e_ln_sigmasq
-      log_det_beta_var <- log_det_beta_var + p.X * e_ln_sigmasq
-      log_det_alpha_var <- log_det_alpha_var + p.Z * e_ln_sigmasq
+      
+      if (factorization_method == "collapsed"){
+        vi_M_var <- lapply(vi_M_var, FUN=function(i){adjust_var^2 * i})
+        vi_C_var <- vi_C_var * adjust_var^2
+        vi_C_uncond <- vi_C_uncond * adjust_var^2
+        
+        log_det_M_var <- log_det_M_var + size_Mj * e_ln_sigmasq
+        log_det_C_var <- log_det_C_var + size_Cj * e_ln_sigmasq
+      }else{
+        
+        vi_beta_decomp <- vi_beta_decomp * adjust_var
+        vi_alpha_decomp <- vi_alpha_decomp * adjust_var
+        vi_joint_decomp <- vi_joint_decomp * adjust_var
+        
+        vi_alpha_var <- vi_alpha_var * adjust_var^2
+        vi_beta_var <- vi_beta_var * adjust_var^2
+        
+        log_det_joint_var <- log_det_joint_var + (p.X + p.Z) * e_ln_sigmasq
+        log_det_beta_var <- log_det_beta_var + p.X * e_ln_sigmasq
+        log_det_alpha_var <- log_det_alpha_var + p.Z * e_ln_sigmasq
+      }
     }
 
     if (debug_ELBO & it != 1) {
@@ -1881,7 +1898,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
 
       vi_sigma_outer_alpha <- variance_by_alpha_jg$outer_alpha
       vi_sigma_alpha <- mapply(vi_sigma_outer_alpha, prior_sigma_alpha_phi, SIMPLIFY = FALSE, FUN = function(i, j) {
-        i + j
+        i * vi_sigmasq_a/vi_sigmasq_b + j
       })
       
     }else{
@@ -1895,11 +1912,11 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
         for (inner_it in 1:10){
           
           vi_sigma_alpha <- mapply(vi_sigma_outer_alpha, vi_a_a_jp, 
-           vi_a_b_jp, vi_a_nu_jp, SIMPLIFY = FALSE, 
-           FUN = function(i, tilde.a, tilde.b, nu) {
-             i + Diagonal(x = tilde.a/tilde.b) * 2 * nu
-           })
-          
+             vi_a_b_jp, vi_a_nu_jp, SIMPLIFY = FALSE, 
+             FUN = function(i, tilde.a, tilde.b, nu) {
+               i * vi_sigmasq_a/vi_sigmasq_b + Diagonal(x = tilde.a/tilde.b) * 2 * nu
+             })
+
           # vi_sigma_alpha <<- vi_sigma_alpha
           #Update a_{j,p}
           diag_Einv_sigma <- mapply(vi_sigma_alpha, 
@@ -1949,25 +1966,21 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
         vi_lp <- (s - as.vector(X %*% vi_beta_mean + Z %*% vi_alpha_mean))^2 + joint_quad
       } else if (factorization_method == "collapsed"){
         
-        # vi_collapsed_P_list <- lapply(cyclical_pos, FUN=function(i){vi_collapsed_P[,i]})
-        # joint_quad_old <- apply(X, MARGIN = 1, FUN=function(i){as.numeric(t(i) %*% vi_beta_var %*% i)})
-        # vi_collapsed_P_list <- lapply(cyclical_pos, FUN=function(i){vi_collapsed_P[,i]})
-        # for (j in 1:number_of_RE){
-        #   var_aj <- vi_alpha_var_list[[j]]
-        #   M_j <- vi_Z_list[[j]] - X %*% vi_collapsed_P_list[[j]]
-        #   joint_quad_old <- joint_quad_old + apply(M_j, MARGIN = 1, FUN=function(i){as.numeric(t(i) %*% var_aj %*% i)})
-        # }
-          
-        joint_quad <- cpp_quad_collapsed(V = vi_alpha_var, 
-                                         re_position_list = outer_alpha_RE_positions,
-                                         Z_list_raw = store_design_Z,
-                                         individual_assignments = store_assignment_Z,
-                                         vi_beta_var = as.matrix(vi_beta_var), 
-                                         P = vi_collapsed_P, X = X
+        joint_quad <- cpp_var_lp(design_C = design_C,
+           vi_C_uncond = vi_C_uncond,
+           vi_M_var = vi_M_var,
+           vi_M_list = vi_M_list,
+           vi_P = vi_P, skip_vector = sapply(vi_M_var, FUN=function(i){ncol(i) == 0}),
+           sparse_input = class(vi_M_var[[1]])[1] == 'dgCMatrix'
         )
+        
         joint_quad <- as.vector(joint_quad)
         
-        vi_lp <- (s - as.vector(X %*% vi_beta_mean + Z %*% vi_alpha_mean))^2 + joint_quad
+        vi_lp <- design_C %*% vi_C_mean 
+        if (ncol(design_M) > 0){
+          vi_lp <- vi_lp + design_M %*% do.call('c', vi_M_mean) 
+        }
+        vi_lp <- (s - vi_lp)^2 + joint_quad
 
       } else {
         beta_quad <- rowSums((X %*% t(vi_beta_decomp))^2)
@@ -2986,6 +2999,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
       store_ELBO <- rbind(store_ELBO, update_ELBO)
     } else {
       final.ELBO$it <- it
+      final.ELBO$step <- NA
       store_ELBO <- rbind(store_ELBO, final.ELBO)
     }
     
@@ -3180,7 +3194,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
   if (factorization_method == "weak") {
     output$joint <- vi_joint_decomp
   }else if (factorization_method == "collapsed") {
-
+  
     vi_C_var <- solve(drop0(
       t(design_C) %*% diag_vi_pg_mean %*% design_C + Tinv_C
     ))
@@ -3236,8 +3250,8 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     var_C <- var_C[names(C_j)]
     names(var_C) <- names(C_j)
     
-    fmt_var <- mapply(var_M, var_C, C_j, M_j, SIMPLIFY = FALSE,
-       FUN=function(ci,mi,index_c, index_m){
+    fmt_var <- mapply(var_C, var_M, C_j, M_j, SIMPLIFY = FALSE,
+       FUN=function(ci, mi,index_c, index_m){
          c(ci, mi)[order(c(index_c, index_m))]
        })
     
