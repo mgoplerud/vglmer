@@ -318,7 +318,7 @@ Rcpp::List cpp_update_m_var(
 }
 
 // [[Rcpp::export]]
-Rcpp::List cpp_update_c_var(
+Rcpp::List test_f(
   const Eigen::SparseMatrix<double> diag_vi_pg_mean,
   const Eigen::SparseMatrix<double> design_C,
   const Eigen::SparseMatrix<double> Tinv_C,
@@ -327,15 +327,16 @@ Rcpp::List cpp_update_c_var(
 ){
 
   Eigen::SparseMatrix<double> t_design_C = design_C.adjoint();  
+  Eigen::SparseMatrix<double> inter_matrix_C = t_design_C * diag_vi_pg_mean * design_C + Tinv_C;
   Eigen::SimplicialLDLT<Eigen::SparseMatrix<double> > chol_C(
-      t_design_C * diag_vi_pg_mean * design_C + Tinv_C
+      inter_matrix_C
   );
+  
   double log_det_C_var = - chol_C.vectorD().array().log().sum();
-
+  
   Eigen::SparseMatrix<double> ident_C(design_C.cols(), design_C.cols());
   ident_C.setIdentity();
   Eigen::SparseMatrix<double> vi_C_var = chol_C.solve(ident_C);
-
   Eigen::VectorXd C_hat = chol_C.solve(t_design_C * s);
   
   int J = vi_M_list.length();
@@ -347,7 +348,8 @@ Rcpp::List cpp_update_c_var(
     if (data_M_j.cols() == 0){
       vi_P[j] = Eigen::SparseMatrix<double>(size_C, 0);
     }else{
-      vi_P[j] = chol_C.solve(t_design_C * diag_vi_pg_mean * data_M_j);
+      Eigen::SparseMatrix<double> inter_matrix = t_design_C * diag_vi_pg_mean * data_M_j;
+      vi_P[j] = chol_C.solve(inter_matrix);
     }
   }
   

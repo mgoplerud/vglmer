@@ -1247,7 +1247,6 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
       }
       if (any_collapsed_C){
         
-        
         Tinv_C <- Tinv[unlist(C_j), unlist(C_j), drop = F]
         
         # chol.update.C <- Cholesky(t(design_C) %*% diag_vi_pg_mean %*% design_C + Tinv_C)
@@ -1259,7 +1258,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
         # # vi_C_var_alt <- solve(t(design_C) %*% diag_vi_pg_mean %*% design_C + Tinv_C)
         # log_det_C_var <- -2 * as.numeric(determinant(chol.update.C)$modulus)
         
-        update_C <- cpp_update_c_var(diag_vi_pg_mean = diag_vi_pg_mean,
+        update_C <- test_f(diag_vi_pg_mean = diag_vi_pg_mean,
                          design_C = design_C, Tinv_C = Tinv_C, s = s,
                          vi_M_list = vi_M_list)
         
@@ -1361,17 +1360,17 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
         }
         
         if (TRUE){
-          
           if (any_collapsed_M){
+            
             cg_alpha <- cg_custom(Z = design_M[exclude_collapsed,], 
-                                  P = as.matrix(all_P), X = drop0(design_C[exclude_collapsed,]),
+                                  P = as.matrix(all_P), 
+                                  X = drop0(design_C[exclude_collapsed,]),
                                   it_max = 25, 
                                   tol = sqrt(.Machine$double.eps), ridge_X = Tinv_C,
                                   omega = vi_pg_mean[exclude_collapsed], ridge_Z = Tinv_M, 
                                   s = as.vector(s - diag_vi_pg_mean %*% design_C %*% C_hat)[exclude_collapsed], 
                                   old_alpha = do.call('c', vi_M_mean),
                                   offset_ridge_X = as.vector(t(all_P) %*% Tinv_C %*% C_hat))
-            
             vi_M_mean <- matrix(cg_alpha$alpha)
           }
         }else{
@@ -3173,16 +3172,27 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
         t(design_C) %*% Diagonal(x = vi_pg_mean) %*% i
     })
     vi_P <- do.call('cbind', vi_P)
-
+    
+    vi_C_uncond <- vi_C_var + vi_P %*% bdiag(vi_M_var) %*% t(vi_P)
+    
+    # Adjust for linear model
+    adjust_var <- 1/sqrt(vi_sigmasq_a/vi_sigmasq_b)
+    e_ln_sigmasq <- log(vi_sigmasq_b) - digamma(vi_sigmasq_a)
+    
+    vi_C_var <- vi_C_var * adjust_var^2
+    vi_C_uncond <- vi_C_uncond * adjust_var^2
+    vi_M_var <- lapply(vi_M_var, FUN=function(i){adjust_var^2 * i})
+    
     if (any_collapsed_C){
-      vi_C_uncond <- vi_C_var + vi_P %*% bdiag(vi_M_var) %*% t(vi_P)
       output$collapsed$variance <- vi_C_uncond
       output$collapsed$mean <- vi_C_mean
       output$collapsed$names_of_collapsed <- names_of_collapsed
     }else{
       output$collapsed <- list(variance = NULL, mean = NULL, decomp = NULL)
     }
+    
     output$marginal <- list(variance = vi_M_var, mean = vi_M_mean, index = M_j)
+    
     
     if (block_collapse){
 

@@ -50,8 +50,8 @@ cpp_update_m_var <- function(diag_vi_pg_mean, design_C, Tinv_C, list_Tinv_M, vi_
     .Call('_vglmer_cpp_update_m_var', PACKAGE = 'vglmer', diag_vi_pg_mean, design_C, Tinv_C, list_Tinv_M, vi_M_list, any_collapsed_C, lndet_C)
 }
 
-cpp_update_c_var <- function(diag_vi_pg_mean, design_C, Tinv_C, s, vi_M_list) {
-    .Call('_vglmer_cpp_update_c_var', PACKAGE = 'vglmer', diag_vi_pg_mean, design_C, Tinv_C, s, vi_M_list)
+test_f <- function(diag_vi_pg_mean, design_C, Tinv_C, s, vi_M_list) {
+    .Call('_vglmer_test_f', PACKAGE = 'vglmer', diag_vi_pg_mean, design_C, Tinv_C, s, vi_M_list)
 }
 
 #' Cyclical Calculation of Variance Decomposition
