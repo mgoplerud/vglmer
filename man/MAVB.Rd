@@ -23,7 +23,7 @@ present, it is only enabled for binomial models.
 }
 \details{
 This should only be used if the parameters of the model are of interest; to
-use MAVB to improve prediction accuracy, use predict_MAVB.
+use MAVB when generating predictions, use \link{predict_MAVB}.
 }
 \references{
 Goplerud, Max. 2022. "Fast and Accurate Estimation of Non-Nested Binomial

@@ -8,7 +8,7 @@
 format_glmer(object)
 }
 \arguments{
-\item{object}{Object from glmer, vglmer, or stan to the respective "format_"
+\item{object}{Object from glmer or lmer to the respective "format_"
 function}
 }
 \description{

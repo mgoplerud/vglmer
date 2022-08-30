@@ -5,7 +5,7 @@
 #'
 #' @name format_obj
 #'
-#' @param object Object from glmer, vglmer, or stan to the respective "format_"
+#' @param object Object from glmer or lmer to the respective "format_"
 #'   function
 #' @importFrom stats vcov
 #' @keywords internal

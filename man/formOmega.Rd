@@ -18,3 +18,4 @@ formOmega(a, b, intKnots)
 Code from Wand and Ormerod (2008)
 Found here here: 10.1111/j.1467-842X.2008.00507.x
 }
+\keyword{internal}

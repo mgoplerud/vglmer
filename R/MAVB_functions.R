@@ -5,7 +5,7 @@
 #' present, it is only enabled for binomial models.
 #'
 #' This should only be used if the parameters of the model are of interest; to
-#' use MAVB to improve prediction accuracy, use predict_MAVB.
+#' use MAVB when generating predictions, use \link{predict_MAVB}.
 #'
 #' @param object Model fit using vglmer
 #' @param samples Samples to draw from MAVB distribution.
@@ -117,7 +117,6 @@ MAVB <- function(object, samples, verbose = FALSE, var_px = Inf) {
   return(MAVB_sims)
 }
 
-# Prediction and MAVB
 #' @inheritParams MAVB
 #' @inheritParams vglmer_predict
 #' @rdname vglmer_predict
@@ -224,9 +223,9 @@ custom_glmer_samples <- function(glmer, samples, ordering) {
 
 #' Draw samples from the (non-MAVB) posterior
 #' 
-#' @param object Model fit using vglmer
-#' @param samples Samples to draw from MAVB distribution.
-#' @param verbose Print the progress of the samples.
+#' @param object Model fit using vglmer.
+#' @param samples Number of samples to draw from the variational distribution.
+#' @param verbose Print progress of drawing the samples.
 #' @export
 posterior_samples.vglmer <- function (object, samples, verbose = FALSE) 
 {

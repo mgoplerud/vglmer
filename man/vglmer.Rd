@@ -7,17 +7,22 @@
 vglmer(formula, data, family, control = vglmer_control())
 }
 \arguments{
-\item{formula}{Standard glmer-style formula for random effects.}
+\item{formula}{\code{lme4} formula for random effects. Options involving
+\code{||} have not been tested. Typically, \code{(1 + Z | G)} indicates a
+random effect for each level of variable \code{"G"} with a differing slope
+for the effect of variable \code{"Z"} and an intercept (\code{1}). See,
+e.g., Gelman and Hill (2006) for a discussion of these models. Splines can
+be estimated as described in the "Details" section.}
 
 \item{data}{data.frame containing the outcome and variables.}
 
-\item{family}{Options are "binomial", "negbin", or "linear". If "binomial", outcome must
-be either {0,1} (binary) or cbind(success, failure) as per standard glm(er)
-syntax. Non-integer values are permitted for binomial if "force_whole" is
-set to FALSE in vglmer_control.}
+\item{family}{Options are "binomial", "negbin", or "linear". If "binomial",
+outcome must be either {0,1} (binary) or cbind(success, failure) as per
+standard glm(er) syntax. Non-integer values are permitted for binomial if
+\code{force_whole} is set to FALSE in vglmer_control.}
 
-\item{control}{Control additional arguments. Must be made using
-\code{vglmer_control()}; see for documentation for additional details.}
+\item{control}{Adjust internal options for estimation. Must use an object
+created by \link{vglmer_control}.}
 }
 \value{
 Returns an object of class vglmer: See the available methods (e.g.
@@ -41,10 +46,15 @@ variance.}
 }
 }
 \description{
-Estimate a hierarchical model using mean-field variational
-inference. Accepts standard syntax to glmer: \code{y ~ X + (1 + Z | g)}.
-Options are described below. Goplerud (2022) provides details on the
-variational algorithm for the binomial case.
+Estimate hierarchicals model using mean-field variational inference. Accepts
+standard syntax used for \code{lme4}, e.g., \code{y ~ X + (1 + Z | g)}. Options are
+described below. Goplerud (2022a; 2022b) provides details on the variational
+algorithm.
+}
+\details{
+XX
+
+\bold{Estimation Syntax:} The syntax
 }
 \examples{
 
@@ -78,6 +88,7 @@ vglmer(y ~ x + (x | g),
   family = "binomial"
 )
 }
+
 }
 \references{
 Goplerud, Max. 2022. "Fast and Accurate Estimation of Non-Nested Binomial

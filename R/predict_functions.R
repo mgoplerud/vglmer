@@ -4,20 +4,23 @@
 #' to combine linear prediction after performing MAVB.
 #'
 #' @name vglmer_predict
-#' @param object Object from vglmer.
-#' @param newdata Data to get predictions on.
-#' @param samples How many samples to draw? 0, default, gets the expected value.
-#'   Two methods:
-#'   \itemize{
-#'   \item Number - draw that many samples.
-#'   \item Matrix - use previous samples for prediction. Currently used for MAVB
-#'   but will be depreciated in updated version.
-#'   }
-#' @param samples_only Return only samples *not* linear predictor.
-#' @param summary Return summary of linear predictor, not full posterior.
-#' @param allow_missing_levels Allow prediction for random effects not in object.
-#'   As is standard, give an estimate of "0" for that effect.
-#' @param ... Not used; included to maintain compatability
+#' @param object Model estimated using \code{vglmer}.
+#' @param newdata Dataset to build predictions on. It cannot be missing.
+#' @param samples The number of samples to draw. Using \code{0} (default) gives
+#'   the expectation of the linear predictor. Give a positive integer to draw
+#'   that many samples. Give a matrix to multiple the design by those samples
+#'   and get the linear predictor.
+#' @param samples_only Logical. Default (\code{FALSE}) returns the samples from the
+#'   variational posterior on the parameters, not the linear predictor.
+#' @param summary Logical. Default (\code{TRUE}) returns only the posterior mean and
+#'   variance for each observation. \code{FALSE} returns a matrix of the sampled
+#'   linear predictor for each observation.
+#' @param allow_missing_levels Logical. Default (\code{FALSE}) does not allow
+#'   prediction for levels not observed in the original data. \code{TRUE} allows
+#'   for prediction on unseen levels; the value of \code{0} (with no
+#'   uncertainty) is used for the corresponding random effect.
+#' @param ... Not used; included to maintain compatability with existing
+#'   methods.
 #'
 #' @examples
 #'

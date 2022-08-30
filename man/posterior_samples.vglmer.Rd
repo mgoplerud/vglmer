@@ -7,11 +7,11 @@
 posterior_samples.vglmer(object, samples, verbose = FALSE)
 }
 \arguments{
-\item{object}{Model fit using vglmer}
+\item{object}{Model fit using vglmer.}
 
-\item{samples}{Samples to draw from MAVB distribution.}
+\item{samples}{Number of samples to draw from the variational distribution.}
 
-\item{verbose}{Print the progress of the samples.}
+\item{verbose}{Print progress of drawing the samples.}
 }
 \description{
 Draw samples from the (non-MAVB) posterior

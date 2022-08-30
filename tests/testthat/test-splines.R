@@ -5,19 +5,21 @@ test_that("fit with non-default options", {
   skip_on_cran()
   
   dat <- data.frame(x = rnorm(100), x2 = rexp(100),
-                    g = sample(state.abb[1:5], 100, replace = T),
-                    f = sample(letters[1:5], 100, replace = T))
+    g = sample(state.abb[1:5], 100, replace = T),
+    f = sample(letters[1:5], 100, replace = T))
   
   dat$y <- rbinom(100, 1, plogis(dat$x * runif(5)[match(dat$f, letters)]))
   
   # Custom knots as argument
   fit_knots <- vglmer(y ~ v_s(x, knots = quantile(dat$x, c(0.25, 0.75, 0.6))),
-                      data = dat, family = 'binomial')
+                      data = dat, family = 'binomial',
+                      control = vglmer_control(iterations = 15))
   
   fit_tpf <- vglmer(y ~ v_s(x, type = 'tpf'),
-    data = dat, family = 'binomial')
+    data = dat, family = 'binomial', control = vglmer_control(iterations = 2))
   fit_o <- vglmer(y ~ v_s(x, type = 'o'),
-    data = dat, family = 'binomial')
+    data = dat, family = 'binomial',
+    control = vglmer_control(iterations = 2))
   
   
   expect_identical(fit_knots$spline$attr[[1]]$knots, quantile(dat$x, c(0.25, 0.6, 0.75)))
@@ -43,7 +45,7 @@ test_that("fit splines with missing data", {
   dat$f[sample(100, 5)] <- NA
   
   fit_spline <- vglmer(y ~ v_s(x, by = f) + (1 | g), 
-               data = dat, family = 'binomial')
+               data = dat, family = 'binomial', control = vglmer_control(iterations = 5))
   expect_s3_class(fit_spline, 'vglmer')
   expect_gt(min(diff(fit_spline$ELBO_trajectory$ELBO)), -sqrt(.Machine$double.eps))
 
@@ -149,10 +151,11 @@ test_that("Test order of splines", {
   dat$y <- rbinom(100, 1, plogis(dat$x * runif(5)[match(dat$f, letters)]))
   
   m1 <- vglmer(y ~ x + x2 + v_s(x), 
-     data = dat, family = 'binomial')
+     data = dat, family = 'binomial',
+     control = vglmer_control(iterations = 2))
   expect_equal(length(coef(m1)), 3)
   m1a <- vglmer(y ~ x2 + x + v_s(x), data = dat, 
-    family = 'binomial')
+    family = 'binomial', control = vglmer_control(iterations = 2))
   
   expect_equal(ELBO(m1a), ELBO(m1))
   expect_equal(ranef(m1), ranef(m1a), tol = 1e-4, scale = 1)

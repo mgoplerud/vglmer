@@ -4,6 +4,7 @@
 #' @param a lower boundary
 #' @param b upper boundary
 #' @param intKnots internal knots
+#' @keywords internal
 formOmega <- function(a,b,intKnots){
   allKnots <- c(rep(a,4),intKnots,rep(b,4))
   K <- length(intKnots) ; L <- 3 * (K+8)

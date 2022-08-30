@@ -1,25 +1,52 @@
 #' SuperLearner with (Variational) Hierarchical Models
 #' 
-#' Functions to integrate vglmer (or glmer) into SuperLearner. Additional
-#' function to add an argument for "formula" to any existing SuperLearner
-#' method. This is useful when the design should not include all covariates.
+#' Functions to integrate \code{vglmer} (or \code{glmer}) into
+#' \code{SuperLearner}. Most of the arguments are standard for
+#' \code{SuperLearner} functions. See "Details" for how \code{formula} should be
+#' used.
 #'
-#' @param Y The outcome in the training data set.
-#' @param X The predictor variables in the training data.
-#' @param newX The prediction variables in validation data.
-#' @param formula The formula used to fit the model using standard "lme4"
-#'   syntax.
-#' @param family Family; only linear or binomial permitted.
-#' @param id Passed from SuperLeanrer. Not used.
-#' @param obsWeights Weights for each observation.
-#' @param control Control fitting; vglmer_control for SL.vglmer and
-#'   glmer_control for SL.glmer
-#' @param object Model estimated using SL.vglmer or SL.glmer
-#' @param ... Not used
-#' @param learner Character vector of method from SuperLearner
-#' @param env Environment to look for method
+#' @param Y From SuperLearner: The outcome in the training data set.
+#' @param X From SuperLearner: The predictor variables in the training data.
+#' @param newX From SuperLearner: The prediction variables in validation data.
+#' @param formula The formula used for estimation, e.g. for \code{vglmer} or
+#'   \code{[g]lmer}.
+#' @param family Family as character: Only "gaussian" and "binomial" accepted.
+#' @param id From SuperLearner: Passed from SuperLearner.
+#' @param obsWeights From SuperLearner: Weights for each observation. Not
+#'   permitted for \code{SL.vglmer}.
+#' @param control Adjust the additional options for \code{vglmer} and
+#'   \code{[g]lmer}. See the corresponding estimation functions for details.
+#' @param object Used in \code{predict} for \code{SL.glmer} and
+#'   \code{SL.vglmer}. A model estimated using either \code{SL.vglmer} or
+#'   \code{SL.glmer}.
+#' @param ... Not used; added for compatibility with existing methods.
+#' @param learner Character vector of model from SuperLearner. See "Details"
+#'   for how this is used.
+#' @param env Environment to look for model. See "Details" for how this is used.
 #' @name sl_vglmer
 #' 
+#' @details This documentation describes two types of function. They are
+#'   described below.
+#'   
+#'   \bold{Formula with SuperLearner}: The \code{vglmer} package provides a way
+#'   to estimate models that require or use formula with \code{SuperLearner}.
+#'   This allows for a design to be passed that contains variables that are
+#'   \emph{not} used in estimation. This can be used as follows (see
+#'   "Examples"). One calls the function \code{add_formula_SL} around the quoted
+#'   name of a \code{SuperLearner} model, e.g. \code{add_formula_SL(learner =
+#'   "SL.knn")}. This creates a new model and predict function with the suffix
+#'   \code{"_f"}. This \bold{requires} a formula to be provided.
+#'   
+#'   With this in hand, \code{"SL.knn_f"} can be passed to SuperLearner with the
+#'   accompanying formula argument and thus one can compare models with
+#'   different formula or design on the same ensemble.
+#'   
+#'   \bold{Estimating Hierarchical Models in SuperLearner}: Two methods for
+#'   estimating hierarchical models are provided. One allows for the use of
+#'   variational hierarchical models using \code{SL.vglmer}. Non-variational
+#'   hierarchical models estimated via \code{lme4} can be used in an ensemble
+#'   with \code{SL.glmer}. The accompanying predict methods are also provided.
+#'   
 #' @examples
 #' 
 #' if (requireNamespace('SuperLearner', quietly = TRUE)){
@@ -28,19 +55,20 @@
 #'   x = rnorm(100),
 #'   g = sample(letters, 100, replace = TRUE)
 #' )
-#' sim_data$y <- rbinom(nrow(sim_data), 1, plogis(runif(26)[match(sim_data$g, letters)]))
+#' sim_data$y <- rbinom(nrow(sim_data), 
+#'   1, plogis(runif(26)[match(sim_data$g, letters)]))
 #' sim_data$g <- factor(sim_data$g)
 #' sl_vglmer <- function(...){SL.vglmer(..., formula = y ~ x + (1 | g))}
 #' SL.glm <- SuperLearner::SL.glm
 #' add_formula_SL('SL.glm')
-#' sl_glm <- function(...){SL.glm_f(..., formula = ~ x)}
+#' sl_glm_form <- function(...){SL.glm_f(..., formula = ~ x)}
 #  
 #' \donttest{
 #'    SuperLearner::SuperLearner(
 #'      Y = sim_data$y, family = 'binomial',
 #'      X = sim_data[, c('x', 'g')],
 #'      cvControl = list(V = 2),
-#'      SL.library = c('sl_vglmer', 'sl_glm')
+#'      SL.library = c('sl_vglmer', 'sl_glm_form')
 #'    )
 #' }
 #' }
@@ -144,7 +172,8 @@ SL.glmer <- function(Y, X, newX, formula, family, id, obsWeights, control = glme
 }
 
 #' @rdname sl_vglmer
-#' @param allow.new.levels Allowing missing levels not in training data.
+#' @param allow.new.levels From \code{lme4}, allow levels in prediction that are
+#'   not in the training data. Default (\code{TRUE}) for \code{SuperLearner}.
 #' @export
 predict.SL.glmer <- function(object, newdata, allow.new.levels = TRUE, ...){
   if(!requireNamespace('lme4', quietly = FALSE)) {stop("SL.glmer requires the lme4 package, but it isn't available")} 
