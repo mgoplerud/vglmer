@@ -402,10 +402,16 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     rep(i, j)
   })))
   M <- cbind(match(M.names[, 1], colnames(X)), rep(1 / g_j, d_j * g_j))
+  id_M <- seq_len(ncol(Z))
+  # Remove FE
+  if (any(is.na(M[,1]))){
+    which_is_na_M <- which(is.na(M[,1]))
+    id_M <- id_M[-which_is_na_M]
+    M <- M[-which_is_na_M, , drop = F]
+  }
   
-
   if (nrow(M) > 0){
-    M <- sparseMatrix(i = 1:ncol(Z), j = M[, 1], x = M[, 2], dims = c(ncol(Z), ncol(X)))
+    M <- sparseMatrix(i = id_M, j = M[, 1], x = M[, 2], dims = c(ncol(Z), ncol(X)))
   }else{
     M <- drop0(matrix(0, nrow = 0, ncol = ncol(X)))
   }
@@ -414,7 +420,10 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     any_Mprime <- TRUE
     M_prime.names <- paste0(rep(names(names_of_RE), g_j * d_j), " @ ", M.names)
     M_prime <- cbind(match(M_prime.names, unique(M_prime.names)), rep(1 / g_j, d_j * g_j))
-    M_prime <- sparseMatrix(i = 1:ncol(Z), j = M_prime[, 1], x = M_prime[, 2])
+    M_prime <- sparseMatrix(i = seq_len(ncol(Z))[id_M],
+                            j = M_prime[id_M, 1], 
+                            x = M_prime[id_M, 2],
+                            dims = c(ncol(Z), max(M_prime[,1])))
     colnames(M_prime) <- unique(M_prime.names)
     
     M_prime_one <- M_prime
@@ -422,8 +431,18 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     
     stopifnot(identical(paste0(rep(names(names_of_RE), d_j), " @ ", unlist(names_of_RE)), colnames(M_prime)))
     
-    M_mu_to_beta <- sparseMatrix(i = 1:sum(d_j), j = match(unlist(names_of_RE), colnames(X)), x = 1, dims = c(sum(d_j), p.X))
+    mu_to_beta_names <- match(unlist(names_of_RE), colnames(X))
     
+    id_mu_to_beta <- seq_len(sum(d_j))
+    which_is_na_mu_to_beta <- which(is.na(mu_to_beta_names))
+    if (length(which_is_na_mu_to_beta) > 0){
+      mu_to_beta_names <- mu_to_beta_names[-which_is_na_mu_to_beta]
+      id_mu_to_beta <- id_mu_to_beta[-which_is_na_mu_to_beta]
+    }
+    
+    M_mu_to_beta <- sparseMatrix(
+      i = id_mu_to_beta, j = mu_to_beta_names, 
+      x = 1, dims = c(sum(d_j), p.X))
     
   }else{
     any_Mprime <- FALSE
@@ -818,8 +837,6 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     log_det_joint_var <- NULL
   }
 
-  # if (!quiet){warning('Check vi sigma alpha nu')}
-
   # Create mapping for this to allow sparse implementations.
 
   mapping_sigma_alpha <- make_mapping_alpha(vi_sigma_alpha)
@@ -942,8 +959,8 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     warning('Turning off SQUAREM for "collapsed')
     do_SQUAREM <- FALSE
   }
-  if (family %in% c('negbin', 'linear')){
-    if (do_SQUAREM){warning('Turning off SQUAREM for negbin/linear temporarily.')}
+  if (family %in% c('negbin')){
+    if (do_SQUAREM){warning('Turning off SQUAREM for negbin temporarily.')}
     do_SQUAREM <- FALSE
   }
   if (family == 'negbin' & !(control$vi_r_method %in% c('VEM', 'fixed'))){
