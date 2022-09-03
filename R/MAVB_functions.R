@@ -21,16 +21,26 @@
 #' 623-650.
 #' @export
 MAVB <- function(object, samples, verbose = FALSE, var_px = Inf) {
+  
   if (!inherits(object, "vglmer")) {
     stop("Must provide object from vglmer")
   }
+  
   if (object$family != "binomial") {
     stop("MAVB only implemented for binomial at present.")
   }
-
+  
   M_prime <- object$MAVB_parameters$M_prime
   M_prime_one <- object$MAVB_parameters$M_prime_one
   M_mu_to_beta <- object$MAVB_parameters$M_mu_to_beta
+  B_j <- object$MAVB_parameters$B_j
+  if (!isDiagonal(B_j)){
+    stop('MAVB not set up for non-diagonal mean expansion; do all REs have a corresponding FE?')
+  }else{
+    if (!isTRUE(all.equal(B_j@x, rep(1, nrow(B_j))))){
+      stop('B_j is diagonal but not identity matrix; do all REs have a corresponding FE?')
+    }
+  }
   d_j <- object$MAVB_parameters$d_j
   g_j <- object$MAVB_parameters$g_j
   outer_alpha_RE_positions <- object$MAVB_parameters$outer_alpha_RE_positions

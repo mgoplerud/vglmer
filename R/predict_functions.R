@@ -84,12 +84,13 @@ predict.vglmer <- function(object, newdata,
     stop("Misaligned Fixed Effects")
   }
 
+  mk_Z <- model.frame(delete.response(terms(object$formula$interpret_gam$fake.formula)), 
+                      data = newdata, drop.unused.levels = TRUE)
+  rownames_Z <- rownames(mk_Z)
+  
   if (!is.null(object$formula$re)){
     
     # Extract the Z (Random Effect) design matrix.
-    mk_Z <- model.frame(delete.response(terms(object$formula$interpret_gam$fake.formula)), 
-          data = newdata, drop.unused.levels = TRUE)
-    rownames_Z <- rownames(mk_Z)
     mk_Z <- mkReTrms(formula(object, form = 're'), mk_Z, reorder.terms = FALSE, reorder.vars = FALSE)
     Z <- t(mk_Z$Zt)
     
@@ -193,9 +194,12 @@ predict.vglmer <- function(object, newdata,
     Z.spline <- drop0(do.call('cbind', Z.spline))
     rownames(Z.spline) <- rownames(newdata)
     
-    Z.spline <- Z.spline[match(rownames(Z), rownames(Z.spline)),]
-
-    Z <- drop0(cbind(Z, Z.spline))
+    if (ncol(Z) > 0){
+      Z.spline <- Z.spline[match(rownames(Z), rownames(Z.spline)),]
+      Z <- drop0(cbind(Z, Z.spline))
+    }else{
+      Z <- Z.spline
+    }
     
     if (!isTRUE(identical(object$spline$size[store_spline_type %in% 1], 
                           Z.spline.size[store_spline_type  %in% 1]))){

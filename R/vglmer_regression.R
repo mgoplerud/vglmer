@@ -222,6 +222,10 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     }
   } else if (family == 'negbin') {
     
+    if (is.matrix(y)) {
+      stop('"linear" family requires a vector outcome.')
+    }
+    
     if (!(class(y) %in% c("numeric", "integer"))) {
       stop("Must provide vector of numbers with negbin.")
     }
@@ -239,6 +243,14 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
       }
     }
   } else if (family == 'linear') {
+    
+    if (is.matrix(y)) {
+      stop('"linear" family requires a vector outcome.')
+    }
+    if (!(class(y) %in% c("numeric", "integer"))) {
+      stop("Must provide vector of numbers with linear.")
+    }
+    
     y <- as.numeric(y)
     
     #Do nothing if linear
@@ -399,31 +411,35 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
 
   }
   
-  M.names <- cbind(unlist(mapply(names_of_RE, g_j, FUN = function(i, j) {
+  M.names <- cbind(unlist(mapply(names_of_RE, g_j, SIMPLIFY = FALSE, FUN = function(i, j) {
     rep(i, j)
   })))
-  M <- cbind(match(M.names[, 1], colnames(X)), rep(1 / g_j, d_j * g_j))
-  id_M <- seq_len(ncol(Z))
-  # Remove FE
-  if (any(is.na(M[,1]))){
-    which_is_na_M <- which(is.na(M[,1]))
-    id_M <- id_M[-which_is_na_M]
-    M <- M[-which_is_na_M, , drop = F]
-  }
   
-  if (nrow(M) > 0){
-    M <- sparseMatrix(i = id_M, j = M[, 1], x = M[, 2], dims = c(ncol(Z), ncol(X)))
+  if (!is.null(M.names)){
+    U_names <- unique(cbind(rep(names(names_of_RE), g_j * d_j), M.names))
+    B_j <- lapply(split(U_names[,2], U_names[,1]), FUN=function(j){
+      B_jj <- which(j %in% colnames(X))
+      if (length(B_jj) == 0){
+        return(matrix(nrow = length(j), ncol = 0))
+      }
+      sparseMatrix(i = B_jj, j = 1:length(B_jj), 
+        x = 1, dims = c(length(j), length(B_jj)))   
+    })
+    U_names_Bj <- unique(U_names[,2])
+    M <- cbind(match(M.names[, 1], U_names_Bj), rep(1 / g_j, d_j * g_j))
+    M <- sparseMatrix(i = 1:nrow(M), j = M[, 1], x = M[, 2], dims = c(ncol(Z), length(U_names_Bj)))
   }else{
+    B_j <- list()
     M <- drop0(matrix(0, nrow = 0, ncol = ncol(X)))
   }
-  
+
   if (!is.null(names_of_RE)){
     any_Mprime <- TRUE
     M_prime.names <- paste0(rep(names(names_of_RE), g_j * d_j), " @ ", M.names)
     M_prime <- cbind(match(M_prime.names, unique(M_prime.names)), rep(1 / g_j, d_j * g_j))
-    M_prime <- sparseMatrix(i = seq_len(ncol(Z))[id_M],
-                            j = M_prime[id_M, 1], 
-                            x = M_prime[id_M, 2],
+    M_prime <- sparseMatrix(i = seq_len(ncol(Z)),
+                            j = M_prime[, 1], 
+                            x = M_prime[, 2],
                             dims = c(ncol(Z), max(M_prime[,1])))
     colnames(M_prime) <- unique(M_prime.names)
     
@@ -456,8 +472,6 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
   
   
   # Extract the Specials
-  
-
   if (length(parse_formula$smooth.spec) > 0){
     
     base_specials <- length(parse_formula$smooth.spec)
@@ -471,7 +485,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
 
     Z.spline <- as.list(rep(NA, n.specials))
     Z.spline.size <- rep(NA, n.specials)
-    special_counter <- 1
+    special_counter <- 0
     
     for (i in 1:base_specials){
       
@@ -487,6 +501,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
       
       spline_counter <- 1
       for (spline_i in all_splines_i){
+        special_counter <- special_counter + 1
         
         stopifnot(spline_counter %in% 1:2)
         
@@ -509,25 +524,21 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
         fmt_names_Z <- c(fmt_names_Z, colnames(spline_i$x))
         p.Z <- p.Z + ncol(spline_i$x)
         spline_counter <- spline_counter + 1
-        special_counter <- special_counter + 1
-        
-        
       }
     }
     
     cyclical_pos <- lapply(1:number_of_RE, FUN = function(i) {
       seq(breaks_for_RE[i] + 1, breaks_for_RE[i + 1])
     })
-    
+
     Z.spline <- drop0(do.call('cbind', Z.spline))
-    
     Z <- drop0(cbind(Z, Z.spline))
     
     if (ncol(M_prime) == 0){
       M_prime <- rbind(M_prime, 
-                       drop0(matrix(0, nrow = ncol(Z.spline), ncol = 0)))
+          drop0(matrix(0, nrow = ncol(Z.spline), ncol = 0)))
       M_prime_one <- rbind(M_prime_one, 
-                           drop0(matrix(0, nrow = ncol(Z.spline), ncol = 0)))
+          drop0(matrix(0, nrow = ncol(Z.spline), ncol = 0)))
     }else{
       M_prime <- rbind(M_prime, 
          drop0(sparseMatrix(i = 1, j = 1, x = 0, 
@@ -537,13 +548,33 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
          dims = c(ncol(Z.spline), ncol(M_prime_one)))))
     }
     
+    M_prime <- cbind(M_prime, drop0(sparseMatrix(i = 1, j = 1, x = 0,
+      dims = c(nrow(M_prime), special_counter)
+    )))
+    M_prime_one <- cbind(M_prime_one, drop0(sparseMatrix(i = 1, j = 1, x = 0,
+      dims = c(nrow(M_prime_one), special_counter)
+    )))
+    
+    M_mu_to_beta <- rbind(M_mu_to_beta, 
+      drop0(sparseMatrix(i = 1, j = 1, x = 0, 
+        dims = c(special_counter, p.X)))
+    )
+    
+    extra_Bj <- lapply(setdiff(names(names_of_RE), names(B_j)), FUN=function(i){Diagonal(n = d_j[i])})
+    names(extra_Bj) <- setdiff(names(names_of_RE), names(B_j))
+    B_j <- c(B_j, extra_Bj)[names(names_of_RE)]
+    
   }else{
     n.specials <- 0
     Z.spline.attr <- NULL
     Z.spline <- NULL
     Z.spline.size <- NULL
   }
-
+  
+  if (length(B_j) > 0){
+    B_j <- bdiag(B_j)
+  }else{B_j <- NULL}
+  
   debug_px <- control$debug_px
   if (control$parameter_expansion %in% c('translation', 'diagonal')){
     px_method <- control$px_method
@@ -1270,7 +1301,6 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
           tic("ux_mean")
         }
         
-        
         chol.update.joint <- solve(Matrix::Cholesky(  
           crossprod(sqrt_pg_weights %*% joint.XZ) + 
             bdiag(zero_mat, bdiag(Tinv)) ),
@@ -1437,9 +1467,10 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     }
 
     if (debug_ELBO & it != 1) {
+      
       variance_by_alpha_jg <- calculate_expected_outer_alpha(L = vi_alpha_decomp, alpha_mu = as.vector(vi_alpha_mean), re_position_list = outer_alpha_RE_positions)
       vi_sigma_outer_alpha <- variance_by_alpha_jg$outer_alpha
-      
+
       debug_ELBO.2 <- calculate_ELBO(family = family,
         ELBO_type = ELBO_type,
         factorization_method = factorization_method,
@@ -1461,6 +1492,10 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
         do_huangwand = do_huangwand, vi_a_a_jp = vi_a_a_jp, vi_a_b_jp = vi_a_b_jp,
         vi_a_nu_jp = vi_a_nu_jp, vi_a_APRIOR_jp = vi_a_APRIOR_jp
       )
+      
+      if (debug_ELBO.2$ELBO < debug_ELBO.1$ELBO){
+        browser()
+      }
     }
     if (do_timing) {
       toc(quiet = verbose_time, log = T)
@@ -1578,6 +1613,11 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
         do_huangwand = do_huangwand, vi_a_a_jp = vi_a_a_jp, vi_a_b_jp = vi_a_b_jp,
         vi_a_nu_jp = vi_a_nu_jp, vi_a_APRIOR_jp = vi_a_APRIOR_jp
       )
+      if (it > 1){
+        if (debug_ELBO.3$ELBO < debug_ELBO.2$ELBO){
+          browser()
+        }
+      }
     }
 
     if (parameter_expansion == "none" | !any_Mprime) {
@@ -1589,20 +1629,32 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
       if (do_timing) {
         tic("Update PX")
       }
+      
       # Do a simple mean adjusted expansion.
       # Get the mean of each random effect.
-      
+
       vi_mu_j <- t(M_prime) %*% vi_alpha_mean
+      
+      meat_Bj <- bdiag(mapply(vi_sigma_alpha, vi_sigma_alpha_nu, d_j, 
+        SIMPLIFY = FALSE, FUN = function(phi, nu, d) {
+          inv_phi <- solve(phi)
+          sigma.inv <- nu * inv_phi
+          return(sigma.inv)
+        }))
+      
+      proj_vi_mu_j <- B_j %*% solve(t(B_j) %*% meat_Bj %*% B_j) %*% t(B_j) %*% meat_Bj %*% vi_mu_j
       
       # Remove the "excess mean" mu_j from each random effect \alpha_{j,g}
       # and add the summd mass back to the betas.
-      vi_alpha_mean <- vi_alpha_mean - M_prime_one %*% vi_mu_j
-      vi_beta_mean <- vi_beta_mean + t(M_mu_to_beta) %*% vi_mu_j
+      vi_alpha_mean <- vi_alpha_mean - M_prime_one %*% proj_vi_mu_j
+      vi_beta_mean <- vi_beta_mean + t(M_mu_to_beta) %*% proj_vi_mu_j
       
       variance_by_alpha_jg <- calculate_expected_outer_alpha(
         L = vi_alpha_decomp,
-        alpha_mu = as.vector(vi_alpha_mean), re_position_list = outer_alpha_RE_positions
+        alpha_mu = as.vector(vi_alpha_mean), 
+        re_position_list = outer_alpha_RE_positions
       )
+      
       vi_sigma_outer_alpha <- variance_by_alpha_jg$outer_alpha
       if (parameter_expansion == "mean"){accept.PX <- TRUE}
     }  
@@ -2048,7 +2100,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     }
     
     # Adjust the terms in the ELBO calculation that are different.
-
+    
     final.ELBO <- calculate_ELBO(family = family,
       ELBO_type = ELBO_type,
       factorization_method = factorization_method,
@@ -2569,9 +2621,9 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
         update_ELBO <- rbind(debug_ELBO.1, debug_ELBO.2, debug_ELBO.3, final.ELBO)
       }
       update_ELBO$it <- it
-      store_ELBO$step <- NA
       store_ELBO <- rbind(store_ELBO, update_ELBO)
     } else {
+      final.ELBO$step <- NA
       final.ELBO$it <- it
       store_ELBO <- rbind(store_ELBO, final.ELBO)
     }
@@ -2762,6 +2814,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     M_mu_to_beta = M_mu_to_beta,
     M_prime = M_prime,
     M_prime_one = M_prime_one,
+    B_j = B_j,
     outer_alpha_RE_positions = outer_alpha_RE_positions,
     d_j = d_j, g_j = g_j
   )
