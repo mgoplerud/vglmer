@@ -1,5 +1,20 @@
 context("Test vglmer robustness to certain situations")
 
+if (isTRUE(as.logical(Sys.getenv("CI")))){
+  # If on CI
+  NITER <- 2
+  env_test <- "CI"
+}else if (!identical(Sys.getenv("NOT_CRAN"), "true")){
+  # If on CRAN
+  NITER <- 2
+  env_test <- "CRAN"
+  set.seed(131)
+}else{
+  # If on local machine
+  NITER <- 2000
+  env_test <- 'local'
+}
+
 test_that("vglmer can run with objects in environment", {
   N <- 100
   G <- 5
@@ -82,15 +97,14 @@ test_that('vglmer parses environment correctly', {
   dta$y_b <- rbinom(n = N, size = dta$size, prob = plogis(-1 + dta$x + alpha[match(dta$g, G_names)]))
   #runs with clean environment
   est_simple <- suppressMessages(vglmer(y ~ x + (1 | g), data = dta, 
-                                        control = vglmer_control(iterations = 5),
-                                        family = 'binomial'))
+    control = vglmer_control(iterations = 5),
+    family = 'binomial'))
   expect_true(inherits(est_simple, 'vglmer'))
   
   est_simple <- suppressMessages(vglmer(cbind(y_b, size) ~ x + (1 | g), 
-                                        control = vglmer_control(iterations = 5),                                        data = dta, family = 'binomial'))
+    control = vglmer_control(iterations = 5),                                        
+    data = dta, family = 'binomial'))
   expect_true(inherits(est_simple, 'vglmer'))
-  
-
 })
 
 test_that("vglmer can run with 'debug' settings", {
@@ -134,4 +148,21 @@ test_that("vglmer can run with exactly balanced classes", {
       control = vglmer_control(iterations = 1))  
   
   expect_s3_class(est_vglmer, 'vglmer')
+})
+
+test_that("Run without FE for corresponding random slope", {
+
+  N <- 25
+  G <- 2
+  G_names <- paste(sample(letters, G, replace = T), 1:G)
+  x <- rnorm(N)
+  g <- sample(G_names, N, replace = T)
+  alpha <- rnorm(G)
+  
+  y <- rbinom(n = N, size = 1, prob = plogis(-1 + x + alpha[match(g, G_names)]))
+  
+  fit_noFE_for_RE <- vglmer(
+    formula = y ~ 1 + (1 + x | g),
+    family = 'linear', 
+    data = NULL)
 })

@@ -1,5 +1,22 @@
 context("test spline functionality")
 
+if (isTRUE(as.logical(Sys.getenv("CI")))){
+  # If on CI
+  NITER <- 2
+  env_test <- "CI"
+}else if (!identical(Sys.getenv("NOT_CRAN"), "true")){
+  # If on CRAN
+  NITER <- 2
+  env_test <- "CRAN"
+  set.seed(41414)
+}else{
+  # If on local machine
+  NITER <- 2000
+  env_test <- 'local'
+}
+
+print(paste0(NITER, ' for tests because ', env_test))
+
 test_that("fit with non-default options", {
   
   skip_on_cran()
@@ -16,10 +33,10 @@ test_that("fit with non-default options", {
                       control = vglmer_control(iterations = 15))
   
   fit_tpf <- vglmer(y ~ v_s(x, type = 'tpf'),
-    data = dat, family = 'binomial', control = vglmer_control(iterations = 2))
+    data = dat, family = 'binomial', control = vglmer_control(iterations = NITER))
   fit_o <- vglmer(y ~ v_s(x, type = 'o'),
     data = dat, family = 'binomial',
-    control = vglmer_control(iterations = 2))
+    control = vglmer_control(iterations = NITER))
   
   
   expect_identical(fit_knots$spline$attr[[1]]$knots, quantile(dat$x, c(0.25, 0.6, 0.75)))
@@ -53,6 +70,7 @@ test_that("fit splines with missing data", {
 
 test_that("Check failures of spline fitting", {
   
+  suppressWarnings(rm(f))
   dat <- data.frame(x = rnorm(100), x2 = rexp(100),
                     g = sample(state.abb[1:5], 100, replace = T),
                     f = sample(letters[1:5], 100, replace = T))
@@ -108,27 +126,32 @@ test_that("CRAN basic spline tests", {
   # Check runs with 2
   m2 <- vglmer(y ~ v_s(x2) + v_s(x), 
                control = vglmer_control(
-                 iterations = 2, print_prog = 20, prior_variance = 'mean_exists'),
+                 iterations = NITER, print_prog = 20, prior_variance = 'mean_exists'),
                data = dat, family = 'binomial')
   # Check runs with "by"
   m3 <- vglmer(y ~ v_s(x2) + v_s(x, by = f), data = dat, 
                family = 'binomial',
-               control = vglmer_control(iterations = 2, print_prog = 20))
+               control = vglmer_control(iterations = NITER, print_prog = 20))
   # Check runs with RE 
   m4 <- vglmer(y ~ v_s(x, by = f) + (1 | g), 
                data = dat, family = 'binomial',
-               control = vglmer_control(iterations = 2, print_prog = 20))
+               control = vglmer_control(iterations = NITER, print_prog = 20))
   
   # Check runs with double "by"
   m5 <- vglmer(y ~ v_s(x, by = f) + v_s(x, by = g), 
                data = dat, family = 'binomial',
-               control = vglmer_control(iterations = 2, print_prog = 20))
+               control = vglmer_control(iterations = NITER, print_prog = 20))
   # Check runs with 2 "by" for single grouping
   m6 <- vglmer(y ~ v_s(x, by = f) + v_s(x2, by = f), 
-               data = dat, family = 'binomial',
-               control = vglmer_control(iterations = 2, print_prog = 20,
-                                        factorization_method = 'strong'))
+     data = dat, family = 'binomial',
+     control = vglmer_control(iterations = NITER, print_prog = 20,
+      factorization_method = 'strong'))
   expect_equal(ncol(m6$sigma$cov[[1]]), 3)
+
+  m7 <- vglmer(y ~ v_s(x, by = f) + v_s(x2, by = f) , 
+     data = dat, family = 'binomial',
+     control = vglmer_control(iterations = NITER, print_prog = 20,
+      factorization_method = 'strong'))
   
   # Check ELBO increases
   expect_gt(min(diff(m1$ELBO_trajectory$ELBO)), -sqrt(.Machine$double.eps))
@@ -137,6 +160,15 @@ test_that("CRAN basic spline tests", {
   expect_gt(min(diff(m4$ELBO_trajectory$ELBO)), -sqrt(.Machine$double.eps))
   expect_gt(min(diff(m5$ELBO_trajectory$ELBO)), -sqrt(.Machine$double.eps))
   expect_gt(min(diff(m6$ELBO_trajectory$ELBO)), -sqrt(.Machine$double.eps))
+  expect_gt(min(diff(m7$ELBO_trajectory$ELBO)), -sqrt(.Machine$double.eps))
+  
+  expect_vector(predict(m1, newdata = dat[1:5,]))
+  expect_vector(predict(m2, newdata = dat[1:5,]))
+  expect_vector(predict(m3, newdata = dat[1:5,]))
+  expect_vector(predict(m4, newdata = dat[1:5,]))
+  expect_vector(predict(m5, newdata = dat[1:5,]))
+  expect_vector(predict(m6, newdata = dat[1:5,]))
+  expect_vector(predict(m7, newdata = dat[1:5,]))
   
 })
 
@@ -152,10 +184,10 @@ test_that("Test order of splines", {
   
   m1 <- vglmer(y ~ x + x2 + v_s(x), 
      data = dat, family = 'binomial',
-     control = vglmer_control(iterations = 2))
+     control = vglmer_control(iterations = NITER))
   expect_equal(length(coef(m1)), 3)
   m1a <- vglmer(y ~ x2 + x + v_s(x), data = dat, 
-    family = 'binomial', control = vglmer_control(iterations = 2))
+    family = 'binomial', control = vglmer_control(iterations = NITER))
   
   expect_equal(ELBO(m1a), ELBO(m1))
   expect_equal(ranef(m1), ranef(m1a), tol = 1e-4, scale = 1)
@@ -166,9 +198,26 @@ test_that("Test order of splines", {
   
 })
 
+test_that("Prediction spline test", {
+  
+  
+  dat <- data.frame(x = rnorm(100), x2 = rexp(100),
+                    g = sample(state.abb[1:5], 100, replace = T),
+                    f = sample(letters[1:5], 100, replace = T))
+  
+  dat$y <- rbinom(100, 1, plogis(dat$x * runif(5)[match(dat$f, letters)]))
+  
+  m1 <- vglmer(y ~ x + x2 + v_s(x), 
+               data = dat, family = 'linear',
+               control = vglmer_control(iterations = 3))
+  # Check that prediction works for simple spline case
+  expect_vector(predict(m1, newdata = dat))
+  
+  
+})
+
 # TO-DO tests
-# Prediction tests
-# check decomposition of D and then retransformation
+# check decomposition of D and then re-transformation
 # test with custom knots and prediction outside of knots/etc.
 
 

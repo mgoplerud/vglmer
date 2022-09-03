@@ -1,5 +1,20 @@
 context("Match glmer")
 
+if (isTRUE(as.logical(Sys.getenv("CI")))){
+  # If on CI
+  NITER <- 2
+  env_test <- "CI"
+}else if (!identical(Sys.getenv("NOT_CRAN"), "true")){
+  # If on CRAN
+  NITER <- 2
+  env_test <- "CRAN"
+  set.seed(12345)
+}else{
+  # If on local machine
+  NITER <- 2000
+  env_test <- 'local'
+}
+
 test_that("Compare against lmer", {
   
   skip_on_cran()
@@ -25,7 +40,7 @@ test_that("Compare against lmer", {
                                factorization_method = v),
       family = "linear"
     ))
-    expect_gte(min(diff(example_vglmer$ELBO_trajectory$ELBO)), 0)
+    expect_gte(min(diff(example_vglmer$ELBO_trajectory$ELBO)), -sqrt(.Machine$double.eps))
     
     fmt_vglmer <- format_vglmer(example_vglmer)
     # comp_methods <- merge(fmt_glmer, fmt_vglmer, by = c("name"))
@@ -61,7 +76,7 @@ test_that("Compare against glmer", {
       family = "binomial"
     ))
 
-    expect_gte(min(diff(example_vglmer$ELBO_trajectory$ELBO)), 0)
+    expect_gte(min(diff(example_vglmer$ELBO_trajectory$ELBO)), -sqrt(.Machine$double.eps))
 
     fmt_vglmer <- format_vglmer(example_vglmer)
     comp_methods <- merge(fmt_glmer, fmt_vglmer, by = c("name"))
@@ -94,7 +109,7 @@ test_that("Compare against glmer", {
 #       control = vglmer_control(factorization_method = v, parameter_expansion = 'mean', debug_px = TRUE)
 #     ))
 #     # Test whether it monotonically increases
-#     expect_gte(min(diff(ELBO(example_vglmer, 'traj'))), 0)
+#     expect_gte(min(diff(ELBO(example_vglmer, 'traj'))), -sqrt(.Machine$double.eps))
 # 
 #     fmt_vglmer <- format_vglmer(example_vglmer)
 #     comp_methods <- merge(fmt_glmer, fmt_vglmer, by = c("name"))
@@ -163,7 +178,7 @@ test_that("Compare against glmer (binomial)", {
     control = vglmer_control(debug_px = TRUE)
   ))
 
-  expect_gte(min(diff(example_vglmer$ELBO_trajectory$ELBO)), 0)
+  expect_gte(min(diff(example_vglmer$ELBO_trajectory$ELBO)), -sqrt(.Machine$double.eps))
 
   fmt_vglmer <- format_vglmer(example_vglmer)
   # comp_methods <- merge(fmt_glmer, fmt_vglmer, by = c("name"))
