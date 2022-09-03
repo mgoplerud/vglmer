@@ -42,7 +42,7 @@ test_that("Prediction Matches Manual and (nearly) glmer", {
   expect_true(is.matrix(draw_MAVB))
   expect_true(is.matrix(draw_samples))
   
-  if (env_test != 'CRAN'){
+  if (env_test == 'local'){
     glmer_predict <- predict(est_glmer)
     def_predict <- predict(example_vglmer, 
                            newdata = data.frame(y = y, x = x, g = g, g2 = g2))
