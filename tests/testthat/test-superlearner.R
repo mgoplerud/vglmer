@@ -26,14 +26,20 @@ test_that("Test SuperLearner", {
   
   if (requireNamespace("SuperLearner", quietly = TRUE)) {
     require(SuperLearner)
+    
+    sl_k <- add_formula_SL('SL.glm', env = globalenv())
+    sl_k <- function(...){SL.glm_f(formula = ~ x1 + x2, ...)}
     sl_m <- function(...) {
-      suppressMessages(SL.vglmer(formula = ~ v_s(x1) + x2 + (1 + x2 | f), 
+      suppressMessages(SL.vglmer(formula = ~ x1 + (1 | f), 
         control = vglmer_control(iterations = 2), ...))
+    }
+    sl_g <- function(...) {
+      suppressMessages(SL.glmer(formula = ~ x1 + (1 | f), ...))
     }
     fit_SL <- SuperLearner::SuperLearner(
       Y = y, cvControl = list(V = 2),
       X = data.frame(x1 = x1, x2 = x2, f = f),
-      SL.library = "sl_m"
+      SL.library = c("sl_m", "sl_g", "sl_k")
     )
     expect_s3_class(fit_SL, "SuperLearner")
 

@@ -17,8 +17,12 @@ if (isTRUE(as.logical(Sys.getenv("CI")))){
 
 test_that("Prediction Matches Manual and (nearly) glmer", {
   
-  N <- 1000
-  G <- 10
+  if (env_test == 'local'){
+    N <- 1000
+  }else{
+    N <- 50
+  }
+  G <- 3
   x <- rnorm(N)
   g <- sample(1:G, N, replace = T)
   g2 <- sample(1:G, N, replace = T)
@@ -33,24 +37,28 @@ test_that("Prediction Matches Manual and (nearly) glmer", {
     formula = y ~ x + (1 + x | g) + (1 | g2), data = NULL, family = "binomial",
     control = vglmer_control(factorization_method = "weak")
   )
-
-  glmer_predict <- predict(est_glmer)
-  def_predict <- predict(example_vglmer, 
-    newdata = data.frame(y = y, x = x, g = g, g2 = g2))
-
-  expect_gt(
-    cor(def_predict, glmer_predict), 0.95
-  )
+  draw_samples <- posterior_samples.vglmer(example_vglmer, samples = 10)
+  draw_MAVB <- MAVB(example_vglmer, samples = 10, var_px = 1)
+  expect_true(is.matrix(draw_MAVB))
+  expect_true(is.matrix(draw_samples))
+  
+  if (env_test != 'CRAN'){
+    glmer_predict <- predict(est_glmer)
+    def_predict <- predict(example_vglmer, 
+                           newdata = data.frame(y = y, x = x, g = g, g2 = g2))
+    
+    expect_gt(
+      cor(def_predict, glmer_predict), 0.95
+    )
+  }
 
   alpha_names <- rownames(example_vglmer$alpha$mean)
-
   manual_predict <- as.vector(
     example_vglmer$alpha$mean[match(paste0("g2 @ (Intercept) @ ", g2), alpha_names)] +
       example_vglmer$alpha$mean[match(paste0("g @ x @ ", g), alpha_names)] * x +
       example_vglmer$alpha$mean[match(paste0("g @ (Intercept) @ ", g), alpha_names)] +
       cbind(1, x) %*% example_vglmer$beta$mean
   )
-
   expect_equal(def_predict, manual_predict)
 })
 

@@ -22,7 +22,7 @@ SL.vglmer(
 
 \method{predict}{SL.vglmer}(object, newdata, allow_missing_levels = TRUE, ...)
 
-SL.glmer(Y, X, newX, formula, family, id, obsWeights, control = glmerControl())
+SL.glmer(Y, X, newX, formula, family, id, obsWeights, control = NULL)
 
 \method{predict}{SL.glmer}(object, newdata, allow.new.levels = TRUE, ...)
 

@@ -138,7 +138,7 @@ predict.SL.vglmer <- function(object, newdata, allow_missing_levels = TRUE, ...)
 #' @importFrom stats predict
 #' @rdname sl_vglmer
 #' @export
-SL.glmer <- function(Y, X, newX, formula, family, id, obsWeights, control = glmerControl()) {
+SL.glmer <- function(Y, X, newX, formula, family, id, obsWeights, control = NULL) {
   if(!requireNamespace('lme4', quietly = FALSE)) {stop("SL.glmer requires the lme4 package, but it isn't available")} 
   
   if (is.character(formula)){
@@ -162,8 +162,19 @@ SL.glmer <- function(Y, X, newX, formula, family, id, obsWeights, control = glme
   }
   X[['...Y']] <- Y
   formula <- update.formula(formula, '`...Y` ~ .')
+  environment(formula) <- environment()
   
-  fit.glmer <- lme4::glmer(formula, data = X, weights = obsWeights, family = family, control = control)
+  if (family$family == 'gaussian'){
+    if (is.null(control)){
+      control <- lmerControl()
+    }
+    fit.glmer <- lme4::lmer(formula, data = X, weights = obsWeights, control = control)
+  }else{
+    if (is.null(control)){
+      control <- glmerControl()
+    }
+    fit.glmer <- lme4::glmer(formula, data = X, weights = obsWeights, family = family, control = control)
+  }
   pred <- stats::predict(fit.glmer, newdata = newX, allow.new.levels = TRUE, type = 'response')
   fit <- list(object = fit.glmer)
   out <- list(pred = pred, fit = fit)
