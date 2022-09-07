@@ -1,21 +1,23 @@
-#' Variational Inference for Non-Linear Hierarchical Models
+#' Variational Inference for Hierarchical Generalized Linear Models
 #'
-#' Estimate hierarchicals model using mean-field variational inference. Accepts
-#' standard syntax used for \code{lme4}, e.g., \code{y ~ X + (1 + Z | g)}. Options are
-#' described below. Goplerud (2022a; 2022b) provides details on the variational
-#' algorithm.
+#' Estimate hierarchical models using mean-field variational inference.
+#' \code{vglmer} accepts standard syntax used for \code{lme4}, e.g., \code{y ~ X
+#' + (1 + Z | g)}. Options are described below. Goplerud (2022a; 2022b) provides
+#' details on the variational algorithm.
 #'
-#' @param formula \code{lme4} formula for random effects. Options involving
-#'   \code{||} have not been tested. Typically, \code{(1 + Z | G)} indicates a
-#'   random effect for each level of variable \code{"G"} with a differing slope
-#'   for the effect of variable \code{"Z"} and an intercept (\code{1}). See,
-#'   e.g., Gelman and Hill (2006) for a discussion of these models. Splines can
-#'   be estimated as described in the "Details" section.
+#' @param formula \code{lme4} style-formula for random effects. Options
+#'   involving \code{||} have not been tested extensively and should be used
+#'   with caution. Typically, \code{(1 + Z | G)} indicates a random effect for
+#'   each level of variable \code{"G"} with a differing slope for the effect of
+#'   variable \code{"Z"} and an intercept (\code{1}). See, e.g., Gelman and Hill
+#'   (2006) for a discussion of these models. Splines can be estimated as
+#'   described in the "Details" section.
 #' @param data data.frame containing the outcome and variables.
-#' @param family Options are "binomial", "negbin", or "linear". If "binomial",
-#'   outcome must be either {0,1} (binary) or cbind(success, failure) as per
-#'   standard glm(er) syntax. Non-integer values are permitted for binomial if
-#'   \code{force_whole} is set to FALSE in vglmer_control.
+#' @param family Options are "binomial", "linear", or "negbin" (experimental).
+#'   If "binomial", outcome must be either {0,1} (binary) or cbind(success,
+#'   failure) as per standard \code{glm(er)} syntax. Non-integer values are
+#'   permitted for binomial if \code{force_whole} is set to FALSE in
+#'   vglmer_control.
 #' @param control Adjust internal options for estimation. Must use an object
 #'   created by \link{vglmer_control}.
 #'
@@ -54,25 +56,92 @@
 #' 
 #' @details XX
 #' 
-#' \bold{Estimation Syntax:} The syntax 
+#' \bold{Default Settings:} By default, the model is estimated using the
+#' "strong" (i.e. fully factorized) variational assumption. Setting
+#' \code{vglmer_control(factorization_method = "weak")} will improve the quality
+#' of the variance approximation but may take considerably more time to
+#' estimate. See Goplerud (2022a) for discussion. 
+#' 
+#' By default, the prior on each variance component (\eqn{\Sigma_j}) uses a
+#' Huang-Wand prior (Huang and Wand 2013) with hyper-parameters \eqn{\nu_j = 2}
+#' and \eqn{A_{j,k} = 5}. This is designed to be proper but weakly informative.
+#' Other options are discussed in \link{vglmer_control} under the
+#' \code{prior_variance} argument.
+#' 
+#' By default, estimation is accelerated using SQUAREM (Varadhan and Roland
+#' 2008) and (one-step-late) parameter expansion for variational Bayes. Under
+#' the default \code{"strong"} factorization, a "translation" expansion is used;
+#' under other factorizations a "mean" expansion is used. These can all be
+#' disabled or adjusted using \link{vglmer_control}. See Goplerud (2022b) for
+#' more discussion of these methods.
+#' 
+#' \bold{Estimation Syntax:} The \code{formula} argument takes syntax designed
+#' to be a similar as possible to \code{lme4}. That is, one can specify models
+#' using `y ~ x + (1 | g)` where `(1 | g)` indicates a random intercept. While
+#' not tested extensively, terms of `(1 | g / f)` should work as expected. Terms
+#' of `(1 + x || g)` may work, although will raise a warning about duplicated
+#' names of random effects. `(1 + x || g)` terms may not work with spline
+#' estimation. To get around this, one can might copy the column \code{g} to
+#' \code{g_copy} and then write \code{(1 | g) + (0 + x | g_copy)}.
+#' 
+#' Splines can be added using the term \code{v_s(x)} for a spline on the
+#' variable \code{x}.
+#' 
+#' \bold{Splines:} Splines for estimating non-linear effects of continuous
+#' predictors can be included using \code{v_s(x)}. These are transformed into
+#' hierarchical terms in a standard fashion (e.g. Ruppert et al. 2003) and then
+#' estimated using the variational algorithms. At the present, only truncated
+#' linear functions (\code{type = "tpf"}; the default) and O'Sullivan splines
+#' (Wand and Ormerod 2008) are included.
+#' 
+#' It is possible to have the spline vary across some categorical predictor by
+#' specifying the \code{"by"} argument such as \code{v_s(x, by = g)}. In effect,
+#' this adds additional hierarchical terms for the group-level deviations from
+#' the "global" spline. 
+#' 
+#' \bold{Note:} In contrast to the typical presentation of these splines
+#' interacted with categorical variables (e.g., Ruppert et al. 2003), the
+#' default use of \code{"by"} includes the lower order interactions that are
+#' regularized, i.e. \code{(1 + x | g)}, versus their unregularized version
+#' (e.g., \code{x * g}). Further, all group-level deviations from the global
+#' spline share the same smoothing parameter (variance component).
+#' 
 #' @return Returns an object of class vglmer: See the available methods (e.g.
-#'   \code{coef}) using \code{methods(class="vglmer")}. A few of the internal
-#'   outputs are described below.
+#'   \code{coef}) using \code{methods(class="vglmer")}.
 #' \describe{
-#'
-#' \item{alpha}{Contains the posterior distribution of each random effect.
-#' \code{mean} contains the posterior means; \code{dia.var} contains the
-#' variance of each random effect. \code{var} contains the variance-covariance
+#' \item{beta}{Contains the approximated posterior distribution of the fixed
+#' effects (beta); \code{mean} contains the posterior means; \code{var} contains
+#' the variance matrix; \code{decomp_var} contains a matrix L such that L^T L
+#' equals the full variance matrix.}
+#' \item{alpha}{Contains the approximated posterior distribution of each random
+#' effect. \code{mean} contains the posterior means; \code{dia.var} contains the
+#' variance of each random effect. \code{var} contains the variance
 #' matrix of each random effect (j,g). \code{decomp_var} contains a matrix L
-#' such that L^T L the full variance of the entire set of random effects.}
-#'
-#' \item{sigma}{Contains the posterior distribution of each random effect error
-#' variance.}
-#'
+#' such that L^T L equals the full variance of the entire set of random
+#' effects.}
+#' \item{joint}{If \code{factorization_method="weak"}, this is a list with one
+#' element \code{decomp_var} that contains a matrix L such that L^T L equals the
+#' full variance matrix between the fixed and random effects. The
+#' marginal variances are included in \code{beta} and \code{alpha}. If the
+#' factorization method is not \code{"weak"}, this is \code{NULL}.}
+#' \item{sigma}{Contains the approximated posterior distribution of each random
+#' effect error variance; all distributions are Inverse-Wishart. \code{cov}
+#' contains a list of the estimated scale matrices. \code{df} contains a list of
+#' the degrees of freedom.}
+#' \item{hw}{If a Huang-Wand prior is used (see Goplerud 2022b or Huang and Wand
+#' 2013 for more details), then the approximated posterior distribution.
+#' Otherwise, it is \code{NULL}. All distributions are Inverse-Gamma. \code{a}
+#' contains a list of the scale parameters. \code{b} contains a list of the
+#' shape parameters.}
+#' \item{family}{The estimation family used.}
 #' \item{ELBO}{Contains the ELBO at the termination of the algorithm.}
-#'
 #' \item{ELBO_trajectory}{A data.frame tracking the ELBO per iteration.}
-#'
+#' \item{control}{Contains the control parameters from \code{vglmer_control}
+#' used in estimation.}
+#' \item{internal_parameters}{A variety of internal parameters used in post-estimation functions.}
+#' \item{formula}{Contains the formula used for estimation; contains the
+#' original formula, fixed effects, and random effects parts separately for
+#' post-estimation. See \code{formula.vglmer} for more details.}
 #' }
 #' @importFrom lme4 mkReTrms findbars subbars
 #' @importFrom stats model.response model.matrix model.frame rnorm rWishart
@@ -81,9 +150,20 @@
 #' @importFrom Rcpp sourceCpp
 #' 
 #' @references
-#' Goplerud, Max. 2022. "Fast and Accurate Estimation of Non-Nested Binomial
+#' Goplerud, Max. 2022a. "Fast and Accurate Estimation of Non-Nested Binomial
 #' Hierarchical Models Using Variational Inference." Bayesian Analysis. 17(2):
 #' 623-650.
+#' 
+#' Goplerud, Max. 2022b. "Re-Evaluating Machine Learning for MRP Given the
+#' Comparable Performance of (Deep) Hierarchical Models." Working paper.
+#'
+#' Huang, Alan, and Matthew P. Wand. 2013. "Simple Marginally Noninformative
+#' Prior Distributions for Covariance Matrices." Bayesian Analysis.
+#' 8(2):439-452.
+#' 
+#' Varadhan, Ravi, and Christophe Roland. 2008. "Simple and Globally Convergent
+#' Methods for Accelerating the Convergence of any EM Algorithm." Scandinavian
+#' Journal of Statistics. 35(2): 335-353.
 #' @useDynLib vglmer
 #' @export
 vglmer <- function(formula, data, family, control = vglmer_control()) {
@@ -308,7 +388,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     character_re_group <- sapply(character_re, FUN=function(i){i[2]})
     
     if (any(duplicated(character_re_group))){
-      stop('Some random groups are duplicated. Reformulate initial formula.')
+      stop('Some grouping factors for random effects are duplicated. Reformulate initial formula.')
     }
     
     for (v in sapply(character_re, FUN=function(i){i[2]})){
@@ -348,8 +428,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     
   }
   
-  
-  if (!is.null(re_fmla)){
+  if (!is.null(re_fmla) & (length(re_fmla) > 0)){
     mk_Z <- mkReTrms(re_fmla, data, reorder.terms = FALSE, reorder.vars = FALSE)
     Z <- t(mk_Z$Zt)
     
@@ -362,6 +441,22 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     # RE names and names of variables included for each.
     names_of_RE <- mk_Z$cnms
     
+    if (anyDuplicated(names(names_of_RE)) > 0){
+      warning('Some random effects names are duplicated. Re-naming for stability by adding "-[0-9]" at end.')
+      nre <- names(names_of_RE)
+      unre <- unique(nre)
+      for (u in unre){
+        nre_u <- which(nre == u)
+        if (length(nre_u) > 1){
+          nre[nre_u] <- paste0(nre[nre_u], '-', seq_len(length(nre_u)))
+        }
+      }
+      names(names_of_RE) <- nre
+      if (anyDuplicated(names(names_of_RE)) > 0){
+        stop('Renaming duplicates failed. Please rename random effects to proceed.')
+      }
+    }
+
     number_of_RE <- length(mk_Z$Gp) - 1
     
     if ( (number_of_RE < 1) & (length(parse_formula$smooth.spec) == 0) ) {
@@ -1907,9 +2002,12 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
       mapping_for_R_block <- make_mapping_alpha(update_expansion_R, px.R = TRUE)
       update_expansion_Rblock <- prepare_T(mapping = mapping_for_R_block, levels_per_RE = g_j, num_REs = number_of_RE,
                         variables_per_RE = d_j, running_per_RE = breaks_for_RE, cyclical = FALSE, px.R = TRUE)
-      # cat('r')
-      stopifnot(all.equal(update_expansion_Rblock, bdiag(mapply(update_expansion_R, g_j, FUN=function(i,g){bdiag(lapply(1:g, FUN=function(k){i}))}))))
 
+      check_Rblock <- bdiag(mapply(update_expansion_R, g_j, FUN=function(i,g){bdiag(lapply(1:g, FUN=function(k){i}))}))
+      if (max(abs(check_Rblock - update_expansion_Rblock)) != 0){
+        warning('Error in creating parameter expansion; check that ELBO increases monotonically.')
+      }
+      
       update_expansion_R_logdet <- sapply(update_expansion_R, FUN=function(i){determinant(i)$modulus})
       
       prop_vi_beta_mean <- update_expansion_bX
@@ -2710,7 +2808,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     lagged_ELBO <- final.ELBO$ELBO
   }
   if (it == iterations) {
-    message(paste0("Ended without Convergence after", it, " iterations : ELBO change of ", round(change_elbo[1], abs(floor(log(tolerance_elbo) / log(10))))))
+    message(paste0("Ended without Convergence after ", it, " iterations : ELBO change of ", round(change_elbo[1], abs(floor(log(tolerance_elbo) / log(10))))))
   }
 
   if (parameter_expansion %in% c("translation", "diagonal")) {
@@ -2723,9 +2821,6 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     beta = list(mean = vi_beta_mean),
     ELBO = final.ELBO, 
     ELBO_trajectory = store_ELBO,
-    parameter.change = change_all,
-    parameter.vi = store_vi,
-    parameter.path = store_parameter_traj,
     sigma = list(cov = vi_sigma_alpha, df = vi_sigma_alpha_nu),
     alpha = list(mean = vi_alpha_mean)
   )
@@ -2774,14 +2869,12 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
                                         hw = store_hw)
   }
   if (factorization_method %in% c("weak", "collapsed")) {
-    output$joint <- vi_joint_decomp
+    output$joint <- list(decomp_var = vi_joint_decomp)
   }
   if (control$return_data) {
     output$data <- list(X = X, Z = Z, y = y, trials = trials)
   }
   
-  output$spline <- list(attr = Z.spline.attr, size = Z.spline.size)
-
   output$formula <- list(formula = formula, 
      re = re_fmla, fe = fe_fmla,
      interpret_gam = parse_formula)
@@ -2801,16 +2894,17 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
 
   output$internal_parameters <- list(
     it_used = it, it_max = iterations,
+    parameter.change = change_all,
+    parameter.vi = store_vi,
+    parameter.path = store_parameter_traj,
+    spline = list(attr = Z.spline.attr, size = Z.spline.size),
     missing_obs = missing_obs, N = nrow(X),
     acceleration = list(accept.PX = accept.PX, 
       squarem_success = squarem_success, debug_PX_ELBO = debug_PX_ELBO),
     names_of_RE = names_of_RE, d_j = d_j, g_j = g_j
   )
 
-  output$alpha$var <- variance_by_alpha_jg$variance_jg
-  output$alpha$decomp_var <- vi_alpha_decomp
-  output$timing <- tic_summary
-  output$MAVB_parameters <- list(
+  MAVB_parameters <- list(
     M_mu_to_beta = M_mu_to_beta,
     M_prime = M_prime,
     M_prime_one = M_prime_one,
@@ -2818,6 +2912,10 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     outer_alpha_RE_positions = outer_alpha_RE_positions,
     d_j = d_j, g_j = g_j
   )
+  output$internal_parameters$MAVB_parameters <- MAVB_parameters
+  output$alpha$var <- variance_by_alpha_jg$variance_jg
+  output$alpha$decomp_var <- vi_alpha_decomp
+  output$timing <- tic_summary
   class(output) <- "vglmer"
   
   return(output)
@@ -2831,8 +2929,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
 #' @param factorization_method The factorization method to use. Default of
 #'   \code{strong}. Described in detail in Goplerud (2022a). \code{strong},
 #'   \code{partial}, and \code{weak} correspond to Schemes I, II, and III
-#'   respectively. "weak" should
-#'   have best performance but is slowest.
+#'   respectively. "weak" should have best performance but is slowest.
 #' @param prior_variance Options are \code{hw}, \code{jeffreys},
 #'   \code{mcmcglmm}, \code{mvD}, \code{mean_exists}, limit, and uniform. The
 #'   default (\code{hw}) is the Huang-Wand (2013) prior whose hyper-parameters
@@ -2841,7 +2938,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
 #'   Otherwise, the prior is an Inverse Wishart with the
 #'   following parameters where d is the dimensionality of the random effect.
 #'   \itemize{
-#'   \item hw: Huang and Wand (2013)
+#'   \item hw: Huang and Wand (2013) with \eqn{\nu_j = 2} and \eqn{A_{j,k} = 5}
 #'   \item mean_exists: IW(d + 1, I)
 #'   \item jeffreys: IW(0, 0)
 #'   \item mcmcglmm: IW(0, I)
@@ -2889,7 +2986,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
 #'
 #' @param verbose_time Print time for each step (debugging only)
 #' @param do_timing Estimate timing with tictoc
-#' @param do_SQUAREM Accelerate method using SQUAREM
+#' @param do_SQUAREM Accelerate method using SQUAREM (Varadhan and Roland 2008).
 #' @param verify_columns Verify that all columns are drawn from the data.frame itself.
 #' 
 #' @references 
@@ -2899,6 +2996,14 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
 #'
 #' Goplerud, Max. 2022b. "Re-Evaluating Machine Learning for MRP Given the
 #' Comparable Performance of (Deep) Hierarchical Models." Working Paper.
+#' 
+#' Huang, Alan, and Matthew P. Wand. 2013. "Simple Marginally Noninformative
+#' Prior Distributions for Covariance Matrices." Bayesian Analysis.
+#' 8(2):439-452.
+#' 
+#' Varadhan, Ravi, and Christophe Roland. 2008. "Simple and Globally Convergent
+#' Methods for Accelerating the Convergence of any EM Algorithm." Scandinavian
+#' Journal of Statistics. 35(2): 335-353.
 #' @export
 vglmer_control <- function(iterations = 1000,
    prior_variance = "hw",

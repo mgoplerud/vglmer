@@ -44,7 +44,7 @@ are nu = 2 and A = 5.
 Otherwise, the prior is an Inverse Wishart with the
 following parameters where d is the dimensionality of the random effect.
 \itemize{
-\item hw: Huang and Wand (2013)
+\item hw: Huang and Wand (2013) with \eqn{\nu_j = 2} and \eqn{A_{j,k} = 5}
 \item mean_exists: IW(d + 1, I)
 \item jeffreys: IW(0, 0)
 \item mcmcglmm: IW(0, I)
@@ -58,8 +58,7 @@ case, use either \code{hw} or \code{mean_exists}.}
 \item{factorization_method}{The factorization method to use. Default of
 \code{strong}. Described in detail in Goplerud (2022a). \code{strong},
 \code{partial}, and \code{weak} correspond to Schemes I, II, and III
-respectively. "weak" should
-have best performance but is slowest.}
+respectively. "weak" should have best performance but is slowest.}
 
 \item{tolerance_elbo}{Change in ELBO to stop algorithm.}
 
@@ -92,7 +91,7 @@ computationally expensive.}
 
 \item{vi_r_val}{For fixed "r", which value?}
 
-\item{do_SQUAREM}{Accelerate method using SQUAREM}
+\item{do_SQUAREM}{Accelerate method using SQUAREM (Varadhan and Roland 2008).}
 
 \item{verify_columns}{Verify that all columns are drawn from the data.frame itself.}
 
@@ -130,4 +129,12 @@ Hierarchical Models Using Variational Inference." Bayesian Analysis. 17(2):
 
 Goplerud, Max. 2022b. "Re-Evaluating Machine Learning for MRP Given the
 Comparable Performance of (Deep) Hierarchical Models." Working Paper.
+
+Huang, Alan, and Matthew P. Wand. 2013. "Simple Marginally Noninformative
+Prior Distributions for Covariance Matrices." Bayesian Analysis.
+8(2):439-452.
+
+Varadhan, Ravi, and Christophe Roland. 2008. "Simple and Globally Convergent
+Methods for Accelerating the Convergence of any EM Algorithm." Scandinavian
+Journal of Statistics. 35(2): 335-353.
 }

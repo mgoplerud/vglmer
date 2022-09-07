@@ -181,8 +181,34 @@ test_that("Compare against glmer (binomial)", {
   expect_gte(min(diff(example_vglmer$ELBO_trajectory$ELBO)), -sqrt(.Machine$double.eps))
 
   fmt_vglmer <- format_vglmer(example_vglmer)
-  # comp_methods <- merge(fmt_glmer, fmt_vglmer, by = c("name"))
-  # 
-  # cor_mean <- with(comp_methods, cor(mean.x, mean.y))
-  # expect_gt(cor_mean, expected = 0.99)
+  
+  
+})
+
+
+test_that("Compare against more unusual lmer syntax", {
+  N <- 50
+  G <- 3
+  x <- rnorm(N)
+  g <- sample(1:G, N, replace = T)
+  alpha <- rnorm(G)
+  sigmasq <- abs(rcauchy(1))
+  coef_scale <- rexp(1, rate = 1/2)
+  y <- rnorm(n = N, mean = coef_scale * (-1 + x + alpha[g]) * sqrt(sigmasq), sd = sqrt(sigmasq))
+  
+  df <- data.frame(y = y, x = x, g = g, g_copy = g)  
+  
+  expect_warning(vglmer(y ~ (1 + x || g), 
+                        control = vglmer_control(iterations = 1),
+                        data = df, family = 'linear'), 'are duplicated')
+  
+  est_v <- suppressWarnings(vglmer(y ~ (1 + x || g), 
+         control = vglmer_control(iterations = NITER),
+         data = df, family = 'linear'))
+  est_v_copy <- vglmer(y ~ (1 | g) + (0 + x | g_copy), 
+                                   control = vglmer_control(iterations = NITER),
+                                   data = df, family = 'linear')
+  
+  expect_equivalent(suppressWarnings(predict(est_v, df)), predict(est_v_copy, df))
+  expect_equivalent(ELBO(est_v), ELBO(est_v_copy))
 })

@@ -30,10 +30,11 @@ MAVB <- function(object, samples, verbose = FALSE, var_px = Inf) {
     stop("MAVB only implemented for binomial at present.")
   }
   
-  M_prime <- object$MAVB_parameters$M_prime
-  M_prime_one <- object$MAVB_parameters$M_prime_one
-  M_mu_to_beta <- object$MAVB_parameters$M_mu_to_beta
-  B_j <- object$MAVB_parameters$B_j
+  M_prime <- object$internal_parameters$MAVB_parameters$M_prime
+  M_prime_one <- object$internal_parameters$MAVB_parameters$M_prime_one
+  M_mu_to_beta <- object$internal_parameters$MAVB_parameters$M_mu_to_beta
+  B_j <- object$internal_parameters$MAVB_parameters$B_j
+  
   if (!isDiagonal(B_j)){
     stop('MAVB not set up for non-diagonal mean expansion; do all REs have a corresponding FE?')
   }else{
@@ -41,13 +42,13 @@ MAVB <- function(object, samples, verbose = FALSE, var_px = Inf) {
       stop('B_j is diagonal but not identity matrix; do all REs have a corresponding FE?')
     }
   }
-  d_j <- object$MAVB_parameters$d_j
-  g_j <- object$MAVB_parameters$g_j
-  outer_alpha_RE_positions <- object$MAVB_parameters$outer_alpha_RE_positions
+  d_j <- object$internal_parameters$MAVB_parameters$d_j
+  g_j <- object$internal_parameters$MAVB_parameters$g_j
+  outer_alpha_RE_positions <- object$internal_parameters$MAVB_parameters$outer_alpha_RE_positions
   factorization_method <- object$control$factorization_method
 
   if (factorization_method == "weak") {
-    decomp_joint <- object$joint
+    decomp_joint <- object$joint$decomp_var
     joint_mean <- rbind(object$beta$mean, object$alpha$mean)
     p.XZ <- ncol(decomp_joint)
     p.X <- nrow(object$beta$mean)
@@ -243,15 +244,15 @@ posterior_samples.vglmer <- function (object, samples, verbose = FALSE)
     stop("Must provide object from vglmer")
   }
   
-  M_prime <- object$MAVB_parameters$M_prime
-  M_prime_one <- object$MAVB_parameters$M_prime_one
-  M_mu_to_beta <- object$MAVB_parameters$M_mu_to_beta
-  d_j <- object$MAVB_parameters$d_j
-  g_j <- object$MAVB_parameters$g_j
-  outer_alpha_RE_positions <- object$MAVB_parameters$outer_alpha_RE_positions
+  M_prime <- object$internal_parameters$MAVB_parameters$M_prime
+  M_prime_one <- object$internal_parameters$MAVB_parameters$M_prime_one
+  M_mu_to_beta <- object$internal_parameters$MAVB_parameters$M_mu_to_beta
+  d_j <- object$internal_parameters$MAVB_parameters$d_j
+  g_j <- object$internal_parameters$MAVB_parameters$g_j
+  outer_alpha_RE_positions <- object$internal_parameters$MAVB_parameters$outer_alpha_RE_positions
   factorization_method <- object$control$factorization_method
   if (factorization_method == "weak") {
-    decomp_joint <- object$joint
+    decomp_joint <- object$joint$decomp_var
     joint_mean <- rbind(object$beta$mean, object$alpha$mean)
     p.XZ <- ncol(decomp_joint)
     p.X <- nrow(object$beta$mean)

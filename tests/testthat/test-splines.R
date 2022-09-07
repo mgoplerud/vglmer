@@ -39,7 +39,7 @@ test_that("fit with non-default options", {
     control = vglmer_control(iterations = NITER))
   
   
-  expect_identical(fit_knots$spline$attr[[1]]$knots, quantile(dat$x, c(0.25, 0.6, 0.75)))
+  expect_identical(fit_knots$internal_parameters$spline$attr[[1]]$knots, quantile(dat$x, c(0.25, 0.6, 0.75)))
 
   expect_gt(min(diff(ELBO(fit_tpf, 'trajectory'))), -sqrt(.Machine$double.eps))
   expect_gt(min(diff(ELBO(fit_o, 'trajectory'))), -sqrt(.Machine$double.eps))
@@ -152,7 +152,7 @@ test_that("CRAN basic spline tests", {
      data = dat, family = 'binomial',
      control = vglmer_control(iterations = NITER, print_prog = 20,
       factorization_method = 'strong'))
-  
+
   # Check ELBO increases
   expect_gt(min(diff(m1$ELBO_trajectory$ELBO)), -sqrt(.Machine$double.eps))
   expect_gt(min(diff(m2$ELBO_trajectory$ELBO)), -sqrt(.Machine$double.eps))

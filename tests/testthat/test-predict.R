@@ -42,10 +42,10 @@ test_that("Prediction Matches Manual and (nearly) glmer", {
   expect_true(is.matrix(draw_MAVB))
   expect_true(is.matrix(draw_samples))
   
+  def_predict <- predict(example_vglmer, newdata = data.frame(y = y, x = x, g = g, g2 = g2))
+  
   if (env_test == 'local'){
     glmer_predict <- predict(est_glmer)
-    def_predict <- predict(example_vglmer, 
-                           newdata = data.frame(y = y, x = x, g = g, g2 = g2))
     
     expect_gt(
       cor(def_predict, glmer_predict), 0.95
@@ -121,8 +121,10 @@ test_that("Prediction Matches for Missing in new.data", {
 })
 
 test_that("Prediction Matches for Simulation", {
-  N <- 1000
-  G <- 10
+  
+  
+  N <- 50
+  G <- 3
   x <- rnorm(N)
   g <- sample(1:G, N, replace = T)
   g2 <- sample(1:G, N, replace = T)
@@ -171,8 +173,11 @@ test_that("Prediction Matches for Simulation", {
 
 
 test_that("Prediction Matches for vglmer after MAVB", {
-  N <- 1000
-  G <- 10
+  
+  skip_on_cran()
+  
+  N <- 50
+  G <- 4
   x <- rnorm(N)
   g <- sample(1:G, N, replace = T)
   g2 <- sample(1:G, N, replace = T)
@@ -206,6 +211,9 @@ test_that("Prediction Matches for vglmer after MAVB", {
 })
 
 test_that("Prediction with Samples", {
+  
+  skip_on_cran()
+  
   N <- 50
   G <- 10
   x <- rnorm(N + G)

@@ -97,6 +97,22 @@ predict.vglmer <- function(object, newdata,
     # RE names and names of variables included for each.
     names_of_RE <- mk_Z$cnms
     
+    if (anyDuplicated(names(names_of_RE)) > 0){
+      warning('Some random effects names are duplicated. Re-naming for stability by adding "-[0-9]" at end.')
+      nre <- names(names_of_RE)
+      unre <- unique(nre)
+      for (u in unre){
+        nre_u <- which(nre == u)
+        if (length(nre_u) > 1){
+          nre[nre_u] <- paste0(nre[nre_u], '-', seq_len(length(nre_u)))
+        }
+      }
+      names(names_of_RE) <- nre
+      if (anyDuplicated(names(names_of_RE)) > 0){
+        stop('Renaming duplicates failed. Please rename random effects to proceed.')
+      }
+    }
+    
     number_of_RE <- length(mk_Z$Gp) - 1
     # The position that demarcates each random effect.
     # That is, breaks_for_RE[2] means at that position + 1 does RE2 start.
@@ -145,7 +161,7 @@ predict.vglmer <- function(object, newdata,
     
     Z.spline <- as.list(rep(NA, n.specials))
     Z.spline.size <- rep(NA, n.specials)
-    Z.spline.attr <- object$spline$attr
+    Z.spline.attr <- object$internal_parameters$spline$attr
     
     special_counter <- 1
     store_spline_type <- rep(NA, n.specials)
@@ -201,7 +217,11 @@ predict.vglmer <- function(object, newdata,
       Z <- Z.spline
     }
     
-    if (!isTRUE(identical(object$spline$size[store_spline_type %in% 1], 
+    if (!isTRUE(all.equal(names_of_RE, object$internal_parameters$names_of_RE))){
+      stop('Names of REs do not match estimation data. This may occur when REs have to be re-named.')
+    }
+    
+    if (!isTRUE(identical(object$internal_parameters$spline$size[store_spline_type %in% 1], 
                           Z.spline.size[store_spline_type  %in% 1]))){
       stop('Misalignment of splines in prediction.')
     }
@@ -300,7 +320,7 @@ predict.vglmer <- function(object, newdata,
       p.X <- nrow(vi_beta_mean)
 
       if (!only.lp) {
-        vi_joint_decomp <- object$joint
+        vi_joint_decomp <- object$joint$decomp_var
         sim_init_joint <- matrix(rnorm(samples * (p.X + p.Z)), ncol = samples)
         sim_init_joint <- t(vi_joint_decomp) %*% sim_init_joint
 

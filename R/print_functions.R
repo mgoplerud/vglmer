@@ -130,7 +130,7 @@ print.vglmer <- function(x, ...) {
   missing_obs <- x$internal_parameters$missing_obs
   it_used <- x$internal_parameters$it_used
   it_max <- x$internal_parameters$it_max
-  final_param_change <- round(max(x$parameter.change), 6)
+  final_param_change <- round(max(x$internal_parameters$parameter.change), 6)
   final_ELBO_change <- round(tail(diff(x$ELBO_trajectory$ELBO), 1), 8)
   converged <- it_max != it_used
   p.X <- nrow(x$beta$mean)
@@ -179,7 +179,7 @@ summary.vglmer <- function(object, display_re = TRUE, ...) {
     return(i)
   })
   re_names <- names(object$internal_parameters$names_of_RE)
-  cat(paste0("Output from vglmer using ", object$factorization_method, " factorization.\n"))
+  cat(paste0("Output from vglmer using '", object$control$factorization_method, "' factorization.\n"))
   cat("\nSummary of Fixed Effects\n")
   print(sum_obj)
   cat("\n")
@@ -221,7 +221,7 @@ summary.vglmer <- function(object, display_re = TRUE, ...) {
 #'   \code{"original"} returns the user input, \code{"fe"} returns the fixed
 #'   effects only, \code{"re"} returns the random effects only.
 #' @export
-formula.vglmer <- function(x, form, ...) {
+formula.vglmer <- function(x, form = "original", ...) {
   
   if (form == 'original'){
     x$formula$formula
