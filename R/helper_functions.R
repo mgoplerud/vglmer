@@ -197,7 +197,7 @@ calculate_ELBO <- function(family, ELBO_type, factorization_method,
      iw_prior_constant, choose_term,
      # Data
      X, Z, s, y,
-     # PolyaGamma Parameters
+     # Polya-Gamma or Weighting Parameters
      vi_pg_b, vi_pg_mean, vi_pg_c,
      # Sigma Parameters
      vi_sigma_alpha, vi_sigma_alpha_nu, vi_sigma_outer_alpha,
@@ -266,7 +266,11 @@ calculate_ELBO <- function(family, ELBO_type, factorization_method,
   ## GET the terms for the expectation
   ## of the log-complete data given the variational distribution.
   if (ELBO_type == "augmented") {
-    if (family == "linear") {
+    if (family == 'poisson'){
+      
+      logcomplete_1 <- sum(y * ex_XBZA) - sum(exp(ex_XBZA + 1/2 * var_XBZA))
+      
+    }else if (family == "linear") {
       
       e_ln_sigmasq <- log(vi_sigmasq_b) - digamma(vi_sigmasq_a)
       e_inv_sigmasq <- vi_sigmasq_a/vi_sigmasq_b
@@ -310,7 +314,9 @@ calculate_ELBO <- function(family, ELBO_type, factorization_method,
         ncol(vi_alpha_decomp) / 2 * log(2 * pi * exp(1)) + 1 / 2 * log_det_alpha_var
     }
     #ENTROPY FOR LINK SPECIFIC PARAMETERS
-    if (family == 'linear'){
+    if (family == 'poisson'){
+      entropy_2 <- 0
+    }else if (family == 'linear'){
       entropy_2 <- vi_sigmasq_a + log(vi_sigmasq_b) + lgamma(vi_sigmasq_a) + 
         -(vi_sigmasq_a + 1) * digamma(vi_sigmasq_a)
     }else{
