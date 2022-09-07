@@ -1,24 +1,28 @@
 #' Predict after vglmer
 #'
-#' Get linear predictor for new observations after using vglmer. Use predict_MAVB
-#' to combine linear prediction after performing MAVB.
-#'
+#' @description These functions return the estimated linear predictor using the
+#'   estimated variational distributions. \code{predict.vglmer} draws
+#'   predictions using the estimated variational distributions;
+#'   \code{predict_MAVB} does so using the MAVB procedure described in Goplerud
+#'   (2022a).
 #' @name vglmer_predict
-#' @param object Model estimated using \code{vglmer}.
-#' @param newdata Dataset to build predictions on. It cannot be missing.
-#' @param samples The number of samples to draw. Using \code{0} (default) gives
-#'   the expectation of the linear predictor. Give a positive integer to draw
-#'   that many samples. Give a matrix to multiple the design by those samples
-#'   and get the linear predictor.
-#' @param samples_only Logical. Default (\code{FALSE}) returns the samples from the
-#'   variational posterior on the parameters, not the linear predictor.
-#' @param summary Logical. Default (\code{TRUE}) returns only the posterior mean and
-#'   variance for each observation. \code{FALSE} returns a matrix of the sampled
-#'   linear predictor for each observation.
-#' @param allow_missing_levels Logical. Default (\code{FALSE}) does not allow
-#'   prediction for levels not observed in the original data. \code{TRUE} allows
-#'   for prediction on unseen levels; the value of \code{0} (with no
-#'   uncertainty) is used for the corresponding random effect.
+#' @param object Model fit using \code{vglmer}.
+#' @param newdata Dataset to use for predictions. It cannot be missing.
+#' @param samples Number of samples to draw. Using \code{0} (default) gives the
+#'   expectation of the linear predictor. A positive integer draws
+#'   \code{samples} samples from the variational distributions and calculates
+#'   the linear predictor.
+#' @param samples_only Default (\code{FALSE}) returns the samples from the
+#'   variational posterior, \bold{not} the prediction. Each row is a sample and
+#'   each column is an parameter.
+#' @param summary Default (\code{TRUE}) returns the posterior mean and variance
+#'   for each observation. \code{FALSE} returns a matrix of the sampled linear
+#'   predictor for each observation. Each row is a sample and each column is an
+#'   observation.
+#' @param allow_missing_levels Default (\code{FALSE}) does not allow prediction
+#'   for levels not observed in the original data. \code{TRUE} allows for
+#'   prediction on unseen levels; the value of \code{0} (with no uncertainty) is
+#'   used for the corresponding random effect.
 #' @param ... Not used; included to maintain compatability with existing
 #'   methods.
 #'
@@ -44,17 +48,19 @@
 #'   newdata = data.frame(g = "AB", x = 0),
 #'   allow_missing_levels = TRUE
 #' )
-#' @return Returns an estimate of the linear predictor. The default returns the
-#'   predicted posterior mean. If "samples > 0", then it returns a summary of
-#'   the prediction for each observation, i.e. its mean and variance. Setting "summary = FALSE" will return \code{samples} posterior samples of
-#'   the linear predictor for each observation.
-#'
-#'   \code{predict_MAVB} performs MAVB as described in Goplerud (2020) and then
-#'   returns either a posterior summary or the samples using the same options as
-#'   the generic predict.
-#'   If "allow_missing_levels = TRUE", then observations with a new
-#'   (unseen) level for the random effect get a "zero" for that term of the
-#'   prediction.
+#' @return This function returns an estimate of the linear predictor. The
+#'   default returns the predicted posterior mean, i.e.
+#'   \eqn{E_{q(\alpha,\beta)}[x_i^T \beta + z_i^T\alpha]}. 
+#'   
+#'   If \code{samples > 0}, the functions return a summary of the prediction for
+#'   each observation, i.e. the estimated mean and variance. If \code{summary =
+#'   FALSE}, the sampled values of the linear predictor are returned as a
+#'   matrix. \code{predict_MAVB} performs MAVB as described in Goplerud (2022a)
+#'   before returning the linear predictor. 
+#'   
+#'   If \code{allow_missing_levels = TRUE}, then observations with a new
+#'   (unseen) level for the random effect are given a value of zero for that
+#'   term of the prediction.
 #' @importFrom stats delete.response terms
 #' @export
 predict.vglmer <- function(object, newdata,
@@ -344,7 +350,7 @@ predict.vglmer <- function(object, newdata,
   }
 
   if (samples_only) {
-    return(samples)
+    return(t(samples))
   }
 
   lp <- XZ %*% samples
@@ -367,6 +373,21 @@ predict.vglmer <- function(object, newdata,
   } else {
     lp <- lp[match(total_obs, obs_in_both), , drop = F]
     rownames(lp) <- NULL
-    return(lp)
+    return(t(lp))
   }
+}
+
+
+#' @inheritParams MAVB
+#' @inheritParams vglmer_predict
+#' @rdname vglmer_predict
+#' @export
+predict_MAVB <- function(object, newdata, samples = 0, samples_only = FALSE,
+                         var_px = Inf, summary = TRUE, allow_missing_levels = FALSE) {
+  pxSamples <- MAVB(object = object, samples = samples, var_px = var_px)
+  lp <- predict.vglmer(object,
+                       newdata = newdata, samples = pxSamples, samples_only = samples_only,
+                       summary = summary, allow_missing_levels = allow_missing_levels
+  )
+  return(lp)
 }

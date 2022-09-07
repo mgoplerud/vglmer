@@ -7,21 +7,19 @@
 vglmer(formula, data, family, control = vglmer_control())
 }
 \arguments{
-\item{formula}{\code{lme4} style-formula for random effects. Options
-involving \code{||} have not been tested extensively and should be used
-with caution. Typically, \code{(1 + Z | G)} indicates a random effect for
-each level of variable \code{"G"} with a differing slope for the effect of
-variable \code{"Z"} and an intercept (\code{1}). See, e.g., Gelman and Hill
-(2006) for a discussion of these models. Splines can be estimated as
-described in the "Details" section.}
+\item{formula}{\code{lme4} style-formula for random effects. Typically,
+\code{(1 + Z | G)} indicates a random effect for each level of variable
+\code{"G"} with a differing slope for the effect of variable \code{"Z"} and
+an intercept (\code{1}); see "Details" for further discussion and how
+splines are specified.}
 
 \item{data}{data.frame containing the outcome and variables.}
 
 \item{family}{Options are "binomial", "linear", or "negbin" (experimental).
-If "binomial", outcome must be either {0,1} (binary) or cbind(success,
-failure) as per standard \code{glm(er)} syntax. Non-integer values are
+If "binomial", outcome must be either \eqn{\{0,1\}} (binary) or \code{cbind(success,
+failure)} as per standard \code{glm(er)} syntax. Non-integer values are
 permitted for binomial if \code{force_whole} is set to FALSE in
-vglmer_control.}
+\code{vglmer_control}.}
 
 \item{control}{Adjust internal options for estimation. Must use an object
 created by \link{vglmer_control}.}
@@ -32,16 +30,16 @@ Returns an object of class vglmer: See the available methods (e.g.
 \describe{
 \item{beta}{Contains the approximated posterior distribution of the fixed
 effects (beta); \code{mean} contains the posterior means; \code{var} contains
-the variance matrix; \code{decomp_var} contains a matrix L such that L^T L
+the variance matrix; \code{decomp_var} contains a matrix \eqn{L} such that \eqn{L^T L}
 equals the full variance matrix.}
 \item{alpha}{Contains the approximated posterior distribution of each random
 effect. \code{mean} contains the posterior means; \code{dia.var} contains the
 variance of each random effect. \code{var} contains the variance
-matrix of each random effect (j,g). \code{decomp_var} contains a matrix L
-such that L^T L equals the full variance of the entire set of random
+matrix of each random effect (j,g). \code{decomp_var} contains a matrix \eqn{L}
+such that \eqn{L^T L} equals the full variance of the entire set of random
 effects.}
 \item{joint}{If \code{factorization_method="weak"}, this is a list with one
-element \code{decomp_var} that contains a matrix L such that L^T L equals the
+element \code{decomp_var} that contains a matrix \eqn{L} such that \eqn{L^T L} equals the
 full variance matrix between the fixed and random effects. The
 marginal variances are included in \code{beta} and \code{alpha}. If the
 factorization method is not \code{"weak"}, this is \code{NULL}.}
@@ -49,8 +47,8 @@ factorization method is not \code{"weak"}, this is \code{NULL}.}
 effect error variance; all distributions are Inverse-Wishart. \code{cov}
 contains a list of the estimated scale matrices. \code{df} contains a list of
 the degrees of freedom.}
-\item{hw}{If a Huang-Wand prior is used (see Goplerud 2022b or Huang and Wand
-2013 for more details), then the approximated posterior distribution.
+\item{hw}{If a Huang-Wand prior is used (see Huang and Wand 2013 or Goplerud
+2022b for more details), then the approximated posterior distribution.
 Otherwise, it is \code{NULL}. All distributions are Inverse-Gamma. \code{a}
 contains a list of the scale parameters. \code{b} contains a list of the
 shape parameters.}
@@ -69,10 +67,35 @@ post-estimation. See \code{formula.vglmer} for more details.}
 Estimate hierarchical models using mean-field variational inference.
 \code{vglmer} accepts standard syntax used for \code{lme4}, e.g., \code{y ~ X
 + (1 + Z | g)}. Options are described below. Goplerud (2022a; 2022b) provides
-details on the variational algorithm.
+details on the variational algorithms.
 }
 \details{
-XX
+\bold{Estimation Syntax:} The \code{formula} argument takes syntax designed
+to be a similar as possible to \code{lme4}. That is, one can specify models
+using \code{y ~ x + (1 | g)} where \code{(1 | g)} indicates a random intercept. While
+not tested extensively, terms of \code{(1 | g / f)} should work as expected. Terms
+of \code{(1 + x || g)} may work, although will raise a warning about duplicated
+names of random effects. \code{(1 + x || g)} terms may not work with spline
+estimation. To get around this, one can might copy the column \code{g} to
+\code{g_copy} and then write \code{(1 | g) + (0 + x | g_copy)}.
+
+\bold{Splines:} Splines can be added using the term \code{v_s(x)} for a
+spline on the variable \code{x}. These are transformed into hierarchical
+terms in a standard fashion (e.g. Ruppert et al. 2003) and then estimated
+using the variational algorithms. At the present, only truncated linear
+functions (\code{type = "tpf"}; the default) and O'Sullivan splines (Wand and
+Ormerod 2008) are included. The options are described in more detail at
+\link{v_s}.
+
+It is possible to have the spline vary across some categorical predictor by
+specifying the \code{"by"} argument such as \code{v_s(x, by = g)}. In effect,
+this adds additional hierarchical terms for the group-level deviations from
+the "global" spline. \emph{Note:} In contrast to the typical presentation of
+these splines interacted with categorical variables (e.g., Ruppert et al.
+2003), the default use of \code{"by"} includes the lower order interactions
+that are regularized, i.e. \code{(1 + x | g)}, versus their unregularized
+version (e.g., \code{x * g}). Further, all group-level deviations from the
+global spline share the same smoothing parameter (variance component).
 
 \bold{Default Settings:} By default, the model is estimated using the
 "strong" (i.e. fully factorized) variational assumption. Setting
@@ -92,37 +115,6 @@ the default \code{"strong"} factorization, a "translation" expansion is used;
 under other factorizations a "mean" expansion is used. These can all be
 disabled or adjusted using \link{vglmer_control}. See Goplerud (2022b) for
 more discussion of these methods.
-
-\bold{Estimation Syntax:} The \code{formula} argument takes syntax designed
-to be a similar as possible to \code{lme4}. That is, one can specify models
-using `y ~ x + (1 | g)` where `(1 | g)` indicates a random intercept. While
-not tested extensively, terms of `(1 | g / f)` should work as expected. Terms
-of `(1 + x || g)` may work, although will raise a warning about duplicated
-names of random effects. `(1 + x || g)` terms may not work with spline
-estimation. To get around this, one can might copy the column \code{g} to
-\code{g_copy} and then write \code{(1 | g) + (0 + x | g_copy)}.
-
-Splines can be added using the term \code{v_s(x)} for a spline on the
-variable \code{x}.
-
-\bold{Splines:} Splines for estimating non-linear effects of continuous
-predictors can be included using \code{v_s(x)}. These are transformed into
-hierarchical terms in a standard fashion (e.g. Ruppert et al. 2003) and then
-estimated using the variational algorithms. At the present, only truncated
-linear functions (\code{type = "tpf"}; the default) and O'Sullivan splines
-(Wand and Ormerod 2008) are included.
-
-It is possible to have the spline vary across some categorical predictor by
-specifying the \code{"by"} argument such as \code{v_s(x, by = g)}. In effect,
-this adds additional hierarchical terms for the group-level deviations from
-the "global" spline. 
-
-\bold{Note:} In contrast to the typical presentation of these splines
-interacted with categorical variables (e.g., Ruppert et al. 2003), the
-default use of \code{"by"} includes the lower order interactions that are
-regularized, i.e. \code{(1 + x | g)}, versus their unregularized version
-(e.g., \code{x * g}). Further, all group-level deviations from the global
-spline share the same smoothing parameter (variance component).
 }
 \examples{
 
@@ -154,6 +146,14 @@ vglmer(y ~ x + (x | g),
   data = sim_data,
   control = vglmer_control(factorization_method = "weak"),
   family = "binomial"
+)
+}
+
+# Use a spline on x with a linear outcome
+\donttest{
+vglmer(y ~ v_s(x),
+  data = sim_data,
+  family = "linear"
 )
 }
 

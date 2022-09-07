@@ -58,19 +58,18 @@ permitted for \code{SL.vglmer}.}
 
 \item{...}{Not used; added for compatibility with existing methods.}
 
-\item{allow.new.levels}{From \code{lme4}, allow levels in prediction that are
+\item{allow.new.levels}{From \code{lme4}: Allow levels in prediction that are
 not in the training data. Default (\code{TRUE}) for \code{SuperLearner}.}
 
-\item{learner}{Character vector of model from SuperLearner. See "Details"
-for how this is used.}
+\item{learner}{Character name of model from SuperLearner. See "Details" for
+how this is used.}
 
 \item{env}{Environment to look for model. See "Details" for how this is used.}
 }
 \description{
-Functions to integrate \code{vglmer} (or \code{glmer}) into
+This contains functions to integrate \code{vglmer} (or \code{glmer}) into
 \code{SuperLearner}. Most of the arguments are standard for
-\code{SuperLearner} functions. See "Details" for how \code{formula} should be
-used.
+\code{SuperLearner} functions. It requires the specification of a formula.
 }
 \details{
 This documentation describes two types of function. They are
@@ -87,7 +86,9 @@ This documentation describes two types of function. They are
   
   With this in hand, \code{"SL.knn_f"} can be passed to SuperLearner with the
   accompanying formula argument and thus one can compare models with
-  different formula or design on the same ensemble.
+  different formula or design on the same ensemble. The \code{env} may need
+  to be manually specified to ensure the created functions can be called by
+  \code{SuperLearner}.
   
   \bold{Estimating Hierarchical Models in SuperLearner}: Two methods for
   estimating hierarchical models are provided. One allows for the use of

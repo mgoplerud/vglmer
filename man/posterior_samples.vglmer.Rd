@@ -2,17 +2,20 @@
 % Please edit documentation in R/MAVB_functions.R
 \name{posterior_samples.vglmer}
 \alias{posterior_samples.vglmer}
-\title{Draw samples from the (non-MAVB) posterior}
+\title{Draw samples from the variational distribution}
 \usage{
 posterior_samples.vglmer(object, samples, verbose = FALSE)
 }
 \arguments{
-\item{object}{Model fit using vglmer.}
+\item{object}{Model fit using \code{vglmer}.}
 
-\item{samples}{Number of samples to draw from the variational distribution.}
+\item{samples}{Number of samples to draw.}
 
 \item{verbose}{Print progress of drawing the samples.}
 }
 \description{
-Draw samples from the (non-MAVB) posterior
+This function draws samples from the estimated variational
+  distribution that approximates the posterior. If using \code{MAVB} is
+  preferred to attempt to improve the quality, please use \link{MAVB} or
+  \link{predict_MAVB}.
 }

@@ -11,6 +11,7 @@
 \alias{summary.vglmer}
 \alias{formula.vglmer}
 \alias{format_vglmer}
+\alias{format_glmer}
 \alias{ELBO}
 \title{Generic Functions after Running vglmer}
 \usage{
@@ -32,23 +33,26 @@
 
 format_vglmer(object)
 
+format_glmer(object)
+
 ELBO(object, type = c("final", "trajectory"))
 }
 \arguments{
-\item{object}{A model estimated using \code{vglmer}.}
+\item{object}{Model fit using \code{vglmer}.}
 
-\item{...}{Not used.}
+\item{...}{Not used; included to maintain compatability with existing
+methods.}
 
-\item{x}{Model fit using vglmer}
+\item{x}{Model fit using \code{vglmer}.}
 
-\item{display_re}{Logical. Default (\code{TRUE}) prints a summary of the
+\item{display_re}{Default (\code{TRUE}) prints a summary of the
 random effects alongside the fixed effects.}
 
-\item{form}{Character. Describes the type of formula to report:
+\item{form}{Describes the type of formula to report:
 \code{"original"} returns the user input, \code{"fe"} returns the fixed
 effects only, \code{"re"} returns the random effects only.}
 
-\item{type}{Character. Default (\code{"final"}) gives the ELBO at convergence.
+\item{type}{Default (\code{"final"}) gives the ELBO at convergence.
 \code{"trajectory"} gives the ELBO estimated at each iteration. This is
 used to assess model convergence.}
 }
@@ -58,21 +62,21 @@ used to assess model convergence.}
 \code{vglmer}. These all provide summaries of the estimated posterior.
 }
 \details{
-The accompanying functions are briefly described below. \code{coef}
-  and \code{vcov} return the mean and variance of the fixed effects.
-  \code{fixef} returns the mean of the fixed effects.
+The accompanying functions are briefly described below. 
 
-  \code{ranef} extracts the random effects in a similar, although slightly
-  different format, to \code{lme4}. It includes the estimated posterior mean
-  and variance in a list of data.frames with one entry per random effect.
+\code{coef} and \code{vcov} return the mean and variance of the fixed
+effects. \code{fixef} returns the mean of the fixed effects.
 
-  \code{format_vglmer} collects the mean and variance of the fixed and random
-  effects into a single data.frame. This is useful for examining all of the
-  posterior estimates simultaneously. See \code{?format_glmer} for a function
-  that converts an object estimated with \code{[g]lmer} into a comparable
-  format.
-  
-  \code{ELBO} extracts the ELBO from the estimated model. \code{type} can be
-  set equal to \code{"trajectory"} to get the estimated ELBO at each
-  iteration and assess convergence.
+\code{ranef} extracts the random effects in a similar, although slightly
+different format, to \code{lme4}. It includes the estimated posterior mean
+and variance in a list of data.frames with one entry per random effect.
+
+\code{format_vglmer} collects the mean and variance of the fixed and random
+effects into a single data.frame. This is useful for examining all of the
+posterior estimates simultaneously. \code{format_glmer} converts an object
+estimated with \code{[g]lmer} into a comparable format.
+
+\code{ELBO} extracts the ELBO from the estimated model. \code{type} can be
+set equal to \code{"trajectory"} to get the estimated ELBO at each iteration
+and assess convergence.
 }

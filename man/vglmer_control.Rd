@@ -2,25 +2,24 @@
 % Please edit documentation in R/vglmer_regression.R
 \name{vglmer_control}
 \alias{vglmer_control}
-\title{Control for vglmer}
+\title{Control for vglmer estimation}
 \usage{
 vglmer_control(
   iterations = 1000,
   prior_variance = "hw",
   factorization_method = c("strong", "partial", "weak"),
+  parameter_expansion = "translation",
+  do_SQUAREM = TRUE,
   tolerance_elbo = 1e-08,
   tolerance_parameters = 1e-05,
-  prevent_degeneracy = FALSE,
   force_whole = TRUE,
   verbose_time = TRUE,
-  parameter_expansion = "translation",
   do_timing = FALSE,
   debug_param = FALSE,
   return_data = FALSE,
   linpred_method = "joint",
   vi_r_method = "VEM",
   vi_r_val = NA,
-  do_SQUAREM = TRUE,
   verify_columns = FALSE,
   debug_ELBO = FALSE,
   print_prog = NULL,
@@ -37,44 +36,45 @@ vglmer_control(
 \item{iterations}{Number of iterations for the model.}
 
 \item{prior_variance}{Options are \code{hw}, \code{jeffreys},
-\code{mcmcglmm}, \code{mvD}, \code{mean_exists}, limit, and uniform. The
-default (\code{hw}) is the Huang-Wand (2013) prior whose hyper-parameters
-are nu = 2 and A = 5.
+\code{mean_exists}, \code{uniform}, and \code{gamma}. The
+ default (\code{hw}) is the Huang-Wand (2013) prior whose hyper-parameters
+ are \eqn{nu_j} = 2 and \eqn{A_{j,k}} = 5.
+ 
+ Otherwise, the prior is an Inverse Wishart with the following parameters
+ where \eqn{d_j} is the dimensionality of the random effect \eqn{j}.
+ \itemize{
+ \item mean_exists: \eqn{IW(d_j + 1, I)}
+ \item jeffreys: \eqn{IW(0, 0)}
+ \item uniform: \eqn{IW(-[d_j+1], 0)}
+ \item limit: \eqn{IW(d_j - 1, 0)}
+ }
+ Estimation may fail if an improper prior (\code{jeffreys}, \code{uniform},
+ \code{limit}) is used.}
 
-Otherwise, the prior is an Inverse Wishart with the
-following parameters where d is the dimensionality of the random effect.
-\itemize{
-\item hw: Huang and Wand (2013) with \eqn{\nu_j = 2} and \eqn{A_{j,k} = 5}
-\item mean_exists: IW(d + 1, I)
-\item jeffreys: IW(0, 0)
-\item mcmcglmm: IW(0, I)
-\item mvD: IW(-d, I)
-\item limit: IW(d - 1, 0)
-\item uniform: IW(-[d+1], 0)
-}
-The model may fail to be estimable if an improper prior is used. In that
-case, use either \code{hw} or \code{mean_exists}.}
+\item{factorization_method}{Factorization assumption for the variational
+appriximation. Default of \code{strong}, i.e. a fully factorized model.
+Described in detail in Goplerud (2022a). \code{strong}, \code{partial}, and
+\code{weak} correspond to Schemes I, II, and III respectively.}
 
-\item{factorization_method}{The factorization method to use. Default of
-\code{strong}. Described in detail in Goplerud (2022a). \code{strong},
-\code{partial}, and \code{weak} correspond to Schemes I, II, and III
-respectively. "weak" should have best performance but is slowest.}
+\item{parameter_expansion}{Default of \code{"translation"}  (see Goplerud
+2022b). Valid options are \code{"translation"}, \code{"mean"}, or
+\code{"none"}. \code{"mean"} should be employed if \code{"translation"} is
+not enabled or is too computationally expensive. For negative binomial
+estimation or any estimation where \code{factorization_method != "strong"},
+only \code{"mean"} and \code{"none"} are available options.}
 
-\item{tolerance_elbo}{Change in ELBO to stop algorithm.}
+\item{do_SQUAREM}{Accelerate method using SQUAREM (Varadhan and Roland 2008).}
 
-\item{tolerance_parameters}{Change in value of any parameter to stop
-algorithm.}
+\item{tolerance_elbo}{Convergence threshold for change in ELBO.}
 
-\item{prevent_degeneracy}{Ignored for the moment.}
+\item{tolerance_parameters}{Convergence threshold for the magnitude of change
+in any parameter.}
 
-\item{force_whole}{Require whole numbers. Set to FALSE to allow "quasi-binomial".}
+\item{force_whole}{Default (\code{TRUE}) requires integers for observed
+outcome for binomial or count models. \code{FALSE} allows for fractional
+responses.}
 
 \item{verbose_time}{Print time for each step (debugging only)}
-
-\item{parameter_expansion}{Default of \code{translation}  (see Goplerud 2022b).
-Accepts either \code{translation}, \code{mean}, or \code{none}. \code{mean}
-should be employed if \code{translation} is not enabled or is too
-computationally expensive.}
 
 \item{do_timing}{Estimate timing with tictoc}
 
@@ -90,8 +90,6 @@ computationally expensive.}
 (experimential).}
 
 \item{vi_r_val}{For fixed "r", which value?}
-
-\item{do_SQUAREM}{Accelerate method using SQUAREM (Varadhan and Roland 2008).}
 
 \item{verify_columns}{Verify that all columns are drawn from the data.frame itself.}
 
@@ -120,7 +118,7 @@ to the random effect variance. "zero" initializes the variational means at
 zero. "random" initializes randomly.}
 }
 \description{
-Provides a set of control arguments to vglmer
+This function controls various estimation options for \code{vglmer}.
 }
 \references{
 Goplerud, Max. 2022a. "Fast and Accurate Estimation of Non-Nested Binomial

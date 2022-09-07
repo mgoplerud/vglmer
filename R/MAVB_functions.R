@@ -1,16 +1,18 @@
 #' Perform MAVB after fitting vglmer
 #'
-#' Given a model from vglmer, perform marginally augmented variational Bayes
-#' (MAVB) to improve approximation quality; Goplerud (2022) provides details. At
-#' present, it is only enabled for binomial models.
+#' Given a model from vglmer, this function performs marginally augmented
+#' variational Bayes (MAVB) to improve approximation quality; Goplerud (2022)
+#' provides details. At present, it is only enabled for binomial models. This
+#' should only be used if the parameters of the model are of interest; to use
+#' MAVB when generating predictions, use \link{predict_MAVB}.
 #'
-#' This should only be used if the parameters of the model are of interest; to
-#' use MAVB when generating predictions, use \link{predict_MAVB}.
+#' @return This returns a matrix with \code{sample} rows for each fixed and
+#'   random effect: \eqn{q(\alpha,\beta)}.
 #'
-#' @param object Model fit using vglmer
-#' @param samples Samples to draw from MAVB distribution.
-#' @param var_px Default (Inf); variance of working prior. Higher is more
-#'   diffuse and thus likely better.
+#' @param object Model fit using \code{vglmer}.
+#' @param samples Number of samples to draw.
+#' @param var_px Variance of working prior for marginal augmentation. Default
+#'   (\code{Inf}) is a flat, improper, prior.
 #' @param verbose Show progress of MAVB.
 #' @import CholWishart
 #' @importFrom mvtnorm rmvnorm
@@ -128,20 +130,6 @@ MAVB <- function(object, samples, verbose = FALSE, var_px = Inf) {
   return(MAVB_sims)
 }
 
-#' @inheritParams MAVB
-#' @inheritParams vglmer_predict
-#' @rdname vglmer_predict
-#' @export
-predict_MAVB <- function(object, newdata, samples = 0, samples_only = FALSE,
-                         var_px = Inf, summary = TRUE, allow_missing_levels = FALSE) {
-  pxSamples <- MAVB(object = object, samples = samples, var_px = var_px)
-  lp <- predict.vglmer(object,
-    newdata = newdata, samples = pxSamples, samples_only = samples_only,
-    summary = summary, allow_missing_levels = allow_missing_levels
-  )
-  return(lp)
-}
-
 
 #' @import lme4
 get_RE_groups <- function(formula, data) {
@@ -232,10 +220,14 @@ custom_glmer_samples <- function(glmer, samples, ordering) {
   return(glmer_samples)
 }
 
-#' Draw samples from the (non-MAVB) posterior
+#' Draw samples from the variational distribution
 #' 
-#' @param object Model fit using vglmer.
-#' @param samples Number of samples to draw from the variational distribution.
+#' @description This function draws samples from the estimated variational
+#'   distribution that approximates the posterior. If using \code{MAVB} is
+#'   preferred to attempt to improve the quality, please use \link{MAVB} or
+#'   \link{predict_MAVB}.
+#' @param object Model fit using \code{vglmer}.
+#' @param samples Number of samples to draw.
 #' @param verbose Print progress of drawing the samples.
 #' @export
 posterior_samples.vglmer <- function (object, samples, verbose = FALSE) 

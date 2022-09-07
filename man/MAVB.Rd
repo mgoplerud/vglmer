@@ -7,23 +7,25 @@
 MAVB(object, samples, verbose = FALSE, var_px = Inf)
 }
 \arguments{
-\item{object}{Model fit using vglmer}
+\item{object}{Model fit using \code{vglmer}.}
 
-\item{samples}{Samples to draw from MAVB distribution.}
+\item{samples}{Number of samples to draw.}
 
 \item{verbose}{Show progress of MAVB.}
 
-\item{var_px}{Default (Inf); variance of working prior. Higher is more
-diffuse and thus likely better.}
+\item{var_px}{Variance of working prior for marginal augmentation. Default
+(\code{Inf}) is a flat, improper, prior.}
+}
+\value{
+This returns a matrix with \code{sample} rows for each fixed and
+  random effect: \eqn{q(\alpha,\beta)}.
 }
 \description{
-Given a model from vglmer, perform marginally augmented variational Bayes
-(MAVB) to improve approximation quality; Goplerud (2022) provides details. At
-present, it is only enabled for binomial models.
-}
-\details{
-This should only be used if the parameters of the model are of interest; to
-use MAVB when generating predictions, use \link{predict_MAVB}.
+Given a model from vglmer, this function performs marginally augmented
+variational Bayes (MAVB) to improve approximation quality; Goplerud (2022)
+provides details. At present, it is only enabled for binomial models. This
+should only be used if the parameters of the model are of interest; to use
+MAVB when generating predictions, use \link{predict_MAVB}.
 }
 \references{
 Goplerud, Max. 2022. "Fast and Accurate Estimation of Non-Nested Binomial

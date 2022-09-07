@@ -22,3 +22,4 @@ A modified version of interpret.gam0 from mgcv,
 Copied almost verbatim but adjusted to allow custom objects
 to be parsed as arguments to "v_s"
 }
+\keyword{internal}

@@ -122,9 +122,13 @@ test_that("Prediction Matches for Missing in new.data", {
 
 test_that("Prediction Matches for Simulation", {
   
-  
-  N <- 50
-  G <- 3
+  if (env_test == "local"){
+    N <- 1000
+    G <- 10
+  }else{
+    N <- 50
+    G <- 3
+  }
   x <- rnorm(N)
   g <- sample(1:G, N, replace = T)
   g2 <- sample(1:G, N, replace = T)
@@ -137,7 +141,7 @@ test_that("Prediction Matches for Simulation", {
 
   example_vglmer <- vglmer(
     formula = y ~ x + (1 + x | g) + (1 | g2), data = NULL, family = "binomial",
-    control = vglmer_control(factorization_method = "weak")
+    control = vglmer_control(factorization_method = "weak", iterations = NITER)
   )
 
   mixed_data <- data.frame(x = rnorm(20), g = rep(1:10, 2), g2 = sample(1:25, 20, replace = T))
@@ -151,20 +155,28 @@ test_that("Prediction Matches for Simulation", {
 
   point_predict <- predict(example_vglmer, newdata = test_data, allow_missing_levels = T)
 
+  if (env_test == "local"){
+    n_samples <- 2 * 10^4
+  }else{
+    n_samples <- 2
+  }
   mean_predict <- predict(example_vglmer,
     newdata = test_data,
-    samples = 2 * 10^4, allow_missing_levels = T
+    samples = n_samples, allow_missing_levels = T
   )
   # should have "clean" rownames
   expect_equal(rownames(mean_predict), as.character(1:nrow(mean_predict)))
-  # Should be very close
-  expect_equal(mean_predict$mean, point_predict, 0.01)
+  
+  if (env_test == "local"){
+    # Should be very close
+    expect_equal(mean_predict$mean, point_predict, 0.01)
+  }
 
   matrix_predict <- predict(example_vglmer,
     newdata = test_data,
     samples = 2 * 10^4, allow_missing_levels = T, samples_only = TRUE
   )
-  matrix_predict <- rowMeans(matrix_predict)
+  matrix_predict <- colMeans(matrix_predict)
   expect_equivalent(
     c(coef(example_vglmer), as.vector(example_vglmer$alpha$mean)),
     matrix_predict, 0.01
@@ -214,6 +226,11 @@ test_that("Prediction with Samples", {
   
   skip_on_cran()
   
+  if (env_test == "local"){
+    n_samples <- 2 * 10^4
+  }else{
+    n_samples <- 5
+  }
   N <- 50
   G <- 10
   x <- rnorm(N + G)
@@ -229,18 +246,20 @@ test_that("Prediction with Samples", {
   )
 
   pred_samples <- predict(example_vglmer, newdata = data.frame(x = x, g = g), samples = 10, summary = F)
-  expect_equivalent(dim(pred_samples), c(N + G, 10))
+  expect_equivalent(dim(pred_samples), c(10, N + G))
 
   draw_coef <- predict(example_vglmer,
     newdata = data.frame(x = x, g = g),
-    samples = 2 * 10^4, samples_only = T
+    samples = n_samples, samples_only = T
   )
-  expect_equivalent(dim(draw_coef), c(G + 2, 2 * 10^4))
+  expect_equivalent(dim(draw_coef), c(n_samples, G + 2))
 
-  expect_equivalent(
-    rowMeans(draw_coef), format_vglmer(example_vglmer)$mean,
-    tolerance = 0.02
-  )
+  if (env_test == "local"){
+    expect_equivalent(
+      colMeans(draw_coef), format_vglmer(example_vglmer)$mean,
+      tolerance = 0.02
+    )
+  }
   #Confirms that it works with "weak"
   example_vglmer <- vglmer(
     formula = y ~ x + (1 | g), data = NULL,
@@ -249,16 +268,18 @@ test_that("Prediction with Samples", {
   )
   
   pred_samples <- predict(example_vglmer, newdata = data.frame(x = x, g = g), samples = 10, summary = F)
-  expect_equivalent(dim(pred_samples), c(N + G, 10))
+  expect_equivalent(dim(pred_samples), c(10, N + G))
   
   draw_coef <- predict(example_vglmer,
                        newdata = data.frame(x = x, g = g),
-                       samples = 2 * 10^4, samples_only = T
+                       samples = n_samples, samples_only = T
   )
-  expect_equivalent(dim(draw_coef), c(G + 2, 2 * 10^4))
+  expect_equivalent(dim(draw_coef), c(n_samples, G + 2))
   
-  expect_equivalent(
-    rowMeans(draw_coef), format_vglmer(example_vglmer)$mean,
-    tolerance = 0.02
-  )
+  if (env_test == "local"){
+    expect_equivalent(
+      colMeans(draw_coef), format_vglmer(example_vglmer)$mean,
+      tolerance = 0.02
+    )
+  }
 })

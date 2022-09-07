@@ -18,21 +18,23 @@ formOmega <- function(a,b,intKnots){
 }
 
 
-#' Spline Creator
+#' Create splines for use in vglmer
 #' 
-#' A simple function to estimate splines, similar to "s" in "mgcv". Allows for
-#' truncated (linear) splines or O'Sullivan splines.
+#' This is a simple function to estimate splines, similar to \code{s(...)} in
+#' \code{mgcv}. It allows for truncated (linear) splines or O'Sullivan splines.
+#' Please see \link{vglmer} for more discussion and examples.
 #' 
-#' @param ... variable name
-#' @param type Spline basis: "tpf" for truncated linear splines or "o" for
-#'   O-Sullivan (see Wand and Ormerod 2008)
+#' @param ... variable name, e.g. \code{v_s(x)}
+#' @param type Spline basis. \code{"tpf"} for truncated linear splines or
+#'   \code{"o"} for O-Sullivan (see Wand and Ormerod 2008)
 #' @param knots Provide either number of knots (evenly spaced at quantiles), a
-#'   grid of knots. Default ("NULL") uses K = min(N/4, 35) where "N" is number
-#'   of unique values.
+#'   grid of knots. Default (\code{NULL}) uses \eqn{K = min(N/4, 35)} where
+#'   \code{N} is the number of unique values of the variable \code{x}.
 #' @param by Interact the spline with some covariate.
 #' @param by_re If interacted with a factor variable, should the "base"
-#'   interactions be regularized? Default is "TRUE".
-#' @param outer_okay Can values in "x" exceed the knots? Default "FALSE".
+#'   interactions be regularized? Default is \code{"TRUE"}; see "Details" in
+#'   \link{vglmer} for more discussion.
+#' @param outer_okay Default (\code{FALSE}) does not permit values in \code{x} to exceed the outer knots. 
 #' @importFrom splines bs
 #' @references 
 #' Wand, Matt P. and Ormerod, John T. 2008. On semiparametric regression with
@@ -185,6 +187,7 @@ image.spline_sparse <- function(x){image(x$x)}
 #' @param extra.special Allow extra special terms to be passed
 #' @importFrom stats reformulate terms.formula as.formula formula update.formula
 #'   quantile
+#' @keywords internal
 vglmer_interpret.gam0 <- function(gf, textra = NULL, extra.special = NULL){
   
   p.env <- environment(gf)

@@ -2,30 +2,32 @@
 % Please edit documentation in R/spline_functions.R
 \name{v_s}
 \alias{v_s}
-\title{Spline Creator}
+\title{Create splines for use in vglmer}
 \usage{
 v_s(..., type = "tpf", knots = NULL, by = NA, by_re = TRUE, outer_okay = FALSE)
 }
 \arguments{
-\item{...}{variable name}
+\item{...}{variable name, e.g. \code{v_s(x)}}
 
-\item{type}{Spline basis: "tpf" for truncated linear splines or "o" for
-O-Sullivan (see Wand and Ormerod 2008)}
+\item{type}{Spline basis. \code{"tpf"} for truncated linear splines or
+\code{"o"} for O-Sullivan (see Wand and Ormerod 2008)}
 
 \item{knots}{Provide either number of knots (evenly spaced at quantiles), a
-grid of knots. Default ("NULL") uses K = min(N/4, 35) where "N" is number
-of unique values.}
+grid of knots. Default (\code{NULL}) uses \eqn{K = min(N/4, 35)} where
+\code{N} is the number of unique values of the variable \code{x}.}
 
 \item{by}{Interact the spline with some covariate.}
 
 \item{by_re}{If interacted with a factor variable, should the "base"
-interactions be regularized? Default is "TRUE".}
+interactions be regularized? Default is \code{"TRUE"}; see "Details" in
+\link{vglmer} for more discussion.}
 
-\item{outer_okay}{Can values in "x" exceed the knots? Default "FALSE".}
+\item{outer_okay}{Default (\code{FALSE}) does not permit values in \code{x} to exceed the outer knots.}
 }
 \description{
-A simple function to estimate splines, similar to "s" in "mgcv". Allows for
-truncated (linear) splines or O'Sullivan splines.
+This is a simple function to estimate splines, similar to \code{s(...)} in
+\code{mgcv}. It allows for truncated (linear) splines or O'Sullivan splines.
+Please see \link{vglmer} for more discussion and examples.
 }
 \references{
 Wand, Matt P. and Ormerod, John T. 2008. On semiparametric regression with

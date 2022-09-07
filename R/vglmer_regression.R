@@ -3,21 +3,19 @@
 #' Estimate hierarchical models using mean-field variational inference.
 #' \code{vglmer} accepts standard syntax used for \code{lme4}, e.g., \code{y ~ X
 #' + (1 + Z | g)}. Options are described below. Goplerud (2022a; 2022b) provides
-#' details on the variational algorithm.
+#' details on the variational algorithms.
 #'
-#' @param formula \code{lme4} style-formula for random effects. Options
-#'   involving \code{||} have not been tested extensively and should be used
-#'   with caution. Typically, \code{(1 + Z | G)} indicates a random effect for
-#'   each level of variable \code{"G"} with a differing slope for the effect of
-#'   variable \code{"Z"} and an intercept (\code{1}). See, e.g., Gelman and Hill
-#'   (2006) for a discussion of these models. Splines can be estimated as
-#'   described in the "Details" section.
+#' @param formula \code{lme4} style-formula for random effects. Typically,
+#'   \code{(1 + Z | G)} indicates a random effect for each level of variable
+#'   \code{"G"} with a differing slope for the effect of variable \code{"Z"} and
+#'   an intercept (\code{1}); see "Details" for further discussion and how
+#'   splines are specified.
 #' @param data data.frame containing the outcome and variables.
 #' @param family Options are "binomial", "linear", or "negbin" (experimental).
-#'   If "binomial", outcome must be either {0,1} (binary) or cbind(success,
-#'   failure) as per standard \code{glm(er)} syntax. Non-integer values are
+#'   If "binomial", outcome must be either \eqn{\{0,1\}} (binary) or \code{cbind(success,
+#'   failure)} as per standard \code{glm(er)} syntax. Non-integer values are
 #'   permitted for binomial if \code{force_whole} is set to FALSE in
-#'   vglmer_control.
+#'   \code{vglmer_control}.
 #' @param control Adjust internal options for estimation. Must use an object
 #'   created by \link{vglmer_control}.
 #'
@@ -54,7 +52,42 @@
 #' )
 #' }
 #' 
-#' @details XX
+#' # Use a spline on x with a linear outcome
+#' \donttest{
+#' vglmer(y ~ v_s(x),
+#'   data = sim_data,
+#'   family = "linear"
+#' )
+#' }
+#' 
+#' @details
+#' 
+#' \bold{Estimation Syntax:} The \code{formula} argument takes syntax designed
+#' to be a similar as possible to \code{lme4}. That is, one can specify models
+#' using \code{y ~ x + (1 | g)} where \code{(1 | g)} indicates a random intercept. While
+#' not tested extensively, terms of \code{(1 | g / f)} should work as expected. Terms
+#' of \code{(1 + x || g)} may work, although will raise a warning about duplicated
+#' names of random effects. \code{(1 + x || g)} terms may not work with spline
+#' estimation. To get around this, one can might copy the column \code{g} to
+#' \code{g_copy} and then write \code{(1 | g) + (0 + x | g_copy)}.
+#' 
+#' \bold{Splines:} Splines can be added using the term \code{v_s(x)} for a
+#' spline on the variable \code{x}. These are transformed into hierarchical
+#' terms in a standard fashion (e.g. Ruppert et al. 2003) and then estimated
+#' using the variational algorithms. At the present, only truncated linear
+#' functions (\code{type = "tpf"}; the default) and O'Sullivan splines (Wand and
+#' Ormerod 2008) are included. The options are described in more detail at
+#' \link{v_s}.
+#'
+#' It is possible to have the spline vary across some categorical predictor by
+#' specifying the \code{"by"} argument such as \code{v_s(x, by = g)}. In effect,
+#' this adds additional hierarchical terms for the group-level deviations from
+#' the "global" spline. \emph{Note:} In contrast to the typical presentation of
+#' these splines interacted with categorical variables (e.g., Ruppert et al.
+#' 2003), the default use of \code{"by"} includes the lower order interactions
+#' that are regularized, i.e. \code{(1 + x | g)}, versus their unregularized
+#' version (e.g., \code{x * g}). Further, all group-level deviations from the
+#' global spline share the same smoothing parameter (variance component).
 #' 
 #' \bold{Default Settings:} By default, the model is estimated using the
 #' "strong" (i.e. fully factorized) variational assumption. Setting
@@ -75,52 +108,21 @@
 #' disabled or adjusted using \link{vglmer_control}. See Goplerud (2022b) for
 #' more discussion of these methods.
 #' 
-#' \bold{Estimation Syntax:} The \code{formula} argument takes syntax designed
-#' to be a similar as possible to \code{lme4}. That is, one can specify models
-#' using `y ~ x + (1 | g)` where `(1 | g)` indicates a random intercept. While
-#' not tested extensively, terms of `(1 | g / f)` should work as expected. Terms
-#' of `(1 + x || g)` may work, although will raise a warning about duplicated
-#' names of random effects. `(1 + x || g)` terms may not work with spline
-#' estimation. To get around this, one can might copy the column \code{g} to
-#' \code{g_copy} and then write \code{(1 | g) + (0 + x | g_copy)}.
-#' 
-#' Splines can be added using the term \code{v_s(x)} for a spline on the
-#' variable \code{x}.
-#' 
-#' \bold{Splines:} Splines for estimating non-linear effects of continuous
-#' predictors can be included using \code{v_s(x)}. These are transformed into
-#' hierarchical terms in a standard fashion (e.g. Ruppert et al. 2003) and then
-#' estimated using the variational algorithms. At the present, only truncated
-#' linear functions (\code{type = "tpf"}; the default) and O'Sullivan splines
-#' (Wand and Ormerod 2008) are included.
-#' 
-#' It is possible to have the spline vary across some categorical predictor by
-#' specifying the \code{"by"} argument such as \code{v_s(x, by = g)}. In effect,
-#' this adds additional hierarchical terms for the group-level deviations from
-#' the "global" spline. 
-#' 
-#' \bold{Note:} In contrast to the typical presentation of these splines
-#' interacted with categorical variables (e.g., Ruppert et al. 2003), the
-#' default use of \code{"by"} includes the lower order interactions that are
-#' regularized, i.e. \code{(1 + x | g)}, versus their unregularized version
-#' (e.g., \code{x * g}). Further, all group-level deviations from the global
-#' spline share the same smoothing parameter (variance component).
-#' 
 #' @return Returns an object of class vglmer: See the available methods (e.g.
 #'   \code{coef}) using \code{methods(class="vglmer")}.
 #' \describe{
 #' \item{beta}{Contains the approximated posterior distribution of the fixed
 #' effects (beta); \code{mean} contains the posterior means; \code{var} contains
-#' the variance matrix; \code{decomp_var} contains a matrix L such that L^T L
+#' the variance matrix; \code{decomp_var} contains a matrix \eqn{L} such that \eqn{L^T L}
 #' equals the full variance matrix.}
 #' \item{alpha}{Contains the approximated posterior distribution of each random
 #' effect. \code{mean} contains the posterior means; \code{dia.var} contains the
 #' variance of each random effect. \code{var} contains the variance
-#' matrix of each random effect (j,g). \code{decomp_var} contains a matrix L
-#' such that L^T L equals the full variance of the entire set of random
+#' matrix of each random effect (j,g). \code{decomp_var} contains a matrix \eqn{L}
+#' such that \eqn{L^T L} equals the full variance of the entire set of random
 #' effects.}
 #' \item{joint}{If \code{factorization_method="weak"}, this is a list with one
-#' element \code{decomp_var} that contains a matrix L such that L^T L equals the
+#' element \code{decomp_var} that contains a matrix \eqn{L} such that \eqn{L^T L} equals the
 #' full variance matrix between the fixed and random effects. The
 #' marginal variances are included in \code{beta} and \code{alpha}. If the
 #' factorization method is not \code{"weak"}, this is \code{NULL}.}
@@ -128,8 +130,8 @@
 #' effect error variance; all distributions are Inverse-Wishart. \code{cov}
 #' contains a list of the estimated scale matrices. \code{df} contains a list of
 #' the degrees of freedom.}
-#' \item{hw}{If a Huang-Wand prior is used (see Goplerud 2022b or Huang and Wand
-#' 2013 for more details), then the approximated posterior distribution.
+#' \item{hw}{If a Huang-Wand prior is used (see Huang and Wand 2013 or Goplerud
+#' 2022b for more details), then the approximated posterior distribution.
 #' Otherwise, it is \code{NULL}. All distributions are Inverse-Gamma. \code{a}
 #' contains a list of the scale parameters. \code{b} contains a list of the
 #' shape parameters.}
@@ -235,7 +237,6 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
   parameter_expansion <- control$parameter_expansion
   tolerance_elbo <- control$tolerance_elbo
   tolerance_parameters <- control$tolerance_parameters
-  prevent_degeneracy <- control$prevent_degeneracy
   debug_param <- control$debug_param
   linpred_method <- control$linpred_method
   vi_r_method <- control$vi_r_method
@@ -266,14 +267,6 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     stop('family must be "linear", "binomial", "negbin".')
   }
   
-  if (family %in% c('binomial', 'linear')){
-    if (control$prior_variance == 'hw' & control$prior_variance %in% c('diagonal', 'translation')){
-      message('hw and negative binomial or linear not yet implemented.')
-      control$parameter_expansion <- 'mean'
-    }
-  }
-  
-
   if (family == "binomial") {
     if (is.matrix(y)) {
       # if (!(class(y) %in% c('numeric', 'integer'))){
@@ -687,7 +680,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
   })
 
   if (anyDuplicated(unlist(outer_alpha_RE_positions)) != 0 | max(unlist(outer_alpha_RE_positions)) != ncol(Z)) {
-    stop("Issue with greating OA positions")
+    stop("Issue with creating OA positions")
   }
   ####
   # Prepare Initial Values
@@ -784,16 +777,6 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     prior_sigma_alpha_phi <- lapply(d_j, FUN = function(i) {
       diag(x = 0, nrow = i, ncol = i)
     })
-  } else if (prior_variance == "mcmcglmm") {
-    prior_sigma_alpha_nu <- rep(0, number_of_RE)
-    prior_sigma_alpha_phi <- lapply(d_j, FUN = function(i) {
-      diag(x = 0, nrow = i, ncol = i)
-    })
-  } else if (prior_variance == "mvD") {
-    prior_sigma_alpha_nu <- -d_j
-    prior_sigma_alpha_phi <- lapply(d_j, FUN = function(i) {
-      diag(x = 0, nrow = i, ncol = i)
-    })
   } else if (prior_variance == "mean_exists") {
     prior_sigma_alpha_nu <- d_j + 1 # Ensures the mean exists...
     prior_sigma_alpha_phi <- lapply(d_j, FUN = function(i) {
@@ -809,13 +792,8 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     prior_sigma_alpha_phi <- lapply(d_j, FUN = function(i) {
       diag(x = 0, nrow = i, ncol = i)
     })
-  } else if (prior_variance == "gamma") {
-    prior_sigma_alpha_nu <- rep(0.001 * 2, length(d_j))
-    prior_sigma_alpha_phi <- lapply(d_j, FUN = function(i) {
-      diag(x = 0.001 * 2, nrow = i, ncol = i)
-    })
   } else {
-    stop("Options for prior variance are jeffreys and mean_exists")
+    stop("Invalid option for prior variance provided.")
   }
 
   if (do_huangwand){
@@ -1587,10 +1565,6 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
         do_huangwand = do_huangwand, vi_a_a_jp = vi_a_a_jp, vi_a_b_jp = vi_a_b_jp,
         vi_a_nu_jp = vi_a_nu_jp, vi_a_APRIOR_jp = vi_a_APRIOR_jp
       )
-      
-      if (debug_ELBO.2$ELBO < debug_ELBO.1$ELBO){
-        browser()
-      }
     }
     if (do_timing) {
       toc(quiet = verbose_time, log = T)
@@ -1708,11 +1682,6 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
         do_huangwand = do_huangwand, vi_a_a_jp = vi_a_a_jp, vi_a_b_jp = vi_a_b_jp,
         vi_a_nu_jp = vi_a_nu_jp, vi_a_APRIOR_jp = vi_a_APRIOR_jp
       )
-      if (it > 1){
-        if (debug_ELBO.3$ELBO < debug_ELBO.2$ELBO){
-          browser()
-        }
-      }
     }
 
     if (parameter_expansion == "none" | !any_Mprime) {
@@ -2921,47 +2890,47 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
   return(output)
 }
 
-#' Control for vglmer
+#' Control for vglmer estimation
 #'
-#' Provides a set of control arguments to vglmer
+#' This function controls various estimation options for \code{vglmer}.
 #'
 #' @param iterations Number of iterations for the model.
-#' @param factorization_method The factorization method to use. Default of
-#'   \code{strong}. Described in detail in Goplerud (2022a). \code{strong},
-#'   \code{partial}, and \code{weak} correspond to Schemes I, II, and III
-#'   respectively. "weak" should have best performance but is slowest.
+#' @param factorization_method Factorization assumption for the variational
+#'   appriximation. Default of \code{strong}, i.e. a fully factorized model.
+#'   Described in detail in Goplerud (2022a). \code{strong}, \code{partial}, and
+#'   \code{weak} correspond to Schemes I, II, and III respectively.
 #' @param prior_variance Options are \code{hw}, \code{jeffreys},
-#'   \code{mcmcglmm}, \code{mvD}, \code{mean_exists}, limit, and uniform. The
+#'  \code{mean_exists}, \code{uniform}, and \code{gamma}. The
 #'   default (\code{hw}) is the Huang-Wand (2013) prior whose hyper-parameters
-#'   are nu = 2 and A = 5.
+#'   are \eqn{nu_j} = 2 and \eqn{A_{j,k}} = 5.
 #'   
-#'   Otherwise, the prior is an Inverse Wishart with the
-#'   following parameters where d is the dimensionality of the random effect.
+#'   Otherwise, the prior is an Inverse Wishart with the following parameters
+#'   where \eqn{d_j} is the dimensionality of the random effect \eqn{j}.
 #'   \itemize{
-#'   \item hw: Huang and Wand (2013) with \eqn{\nu_j = 2} and \eqn{A_{j,k} = 5}
-#'   \item mean_exists: IW(d + 1, I)
-#'   \item jeffreys: IW(0, 0)
-#'   \item mcmcglmm: IW(0, I)
-#'   \item mvD: IW(-d, I)
-#'   \item limit: IW(d - 1, 0)
-#'   \item uniform: IW(-[d+1], 0)
+#'   \item mean_exists: \eqn{IW(d_j + 1, I)}
+#'   \item jeffreys: \eqn{IW(0, 0)}
+#'   \item uniform: \eqn{IW(-[d_j+1], 0)}
+#'   \item limit: \eqn{IW(d_j - 1, 0)}
 #'   }
-#'   The model may fail to be estimable if an improper prior is used. In that
-#'   case, use either \code{hw} or \code{mean_exists}.
-#' @param tolerance_elbo Change in ELBO to stop algorithm.
-#' @param tolerance_parameters Change in value of any parameter to stop
-#'   algorithm.
-#' @param parameter_expansion Default of \code{translation}  (see Goplerud 2022b).
-#'   Accepts either \code{translation}, \code{mean}, or \code{none}. \code{mean}
-#'   should be employed if \code{translation} is not enabled or is too
-#'   computationally expensive.
+#'   Estimation may fail if an improper prior (\code{jeffreys}, \code{uniform},
+#'   \code{limit}) is used.
+#' @param tolerance_elbo Convergence threshold for change in ELBO.
+#' @param tolerance_parameters Convergence threshold for the magnitude of change
+#'   in any parameter.
+#' @param parameter_expansion Default of \code{"translation"}  (see Goplerud
+#'   2022b). Valid options are \code{"translation"}, \code{"mean"}, or
+#'   \code{"none"}. \code{"mean"} should be employed if \code{"translation"} is
+#'   not enabled or is too computationally expensive. For negative binomial
+#'   estimation or any estimation where \code{factorization_method != "strong"},
+#'   only \code{"mean"} and \code{"none"} are available options.
 #' @param px_method For \code{translation} expansion, how to update? "dynamic"
 #'   tries OSL and then backup numerical improvement via L-BFGS-B.
 #' @param px_numerical_it How many steps of L-BFGS-B are used to improve?
 #' @param hw_INNER For HW prior, how many "loops" between optimizing the
 #'   Inverse-Wishart and Inverse-Gamma parameters are done at each iteration?
-#' @param prevent_degeneracy Ignored for the moment.
-#' @param force_whole Require whole numbers. Set to FALSE to allow "quasi-binomial".
+#' @param force_whole Default (\code{TRUE}) requires integers for observed
+#'   outcome for binomial or count models. \code{FALSE} allows for fractional
+#'   responses.
 #' @param vi_r_method Type of estimate for "r"; at moment, "fixed" (provide r),
 #'   "VEM" (treat r as point estimate; default);
 #'   "Laplace" (estimate using Laplace approximation described in the Addendum on GitHub); or "delta"
@@ -3008,11 +2977,12 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
 vglmer_control <- function(iterations = 1000,
    prior_variance = "hw",
    factorization_method = c("strong", "partial", "weak"),
+   parameter_expansion = "translation", do_SQUAREM = TRUE, 
    tolerance_elbo = 1e-8, tolerance_parameters = 1e-5,
-   prevent_degeneracy = FALSE, force_whole = TRUE, verbose_time = TRUE,
-   parameter_expansion = "translation", do_timing = FALSE,
+   force_whole = TRUE, verbose_time = TRUE,
+   do_timing = FALSE,
    debug_param = FALSE, return_data = FALSE, linpred_method = "joint",
-   vi_r_method = "VEM", vi_r_val = NA, do_SQUAREM = TRUE, verify_columns = FALSE,
+   vi_r_method = "VEM", vi_r_val = NA, verify_columns = FALSE,
    debug_ELBO = FALSE, print_prog = NULL, quiet = T, quiet_rho = TRUE,
    debug_px = FALSE, px_method = 'dynamic', px_numerical_it = 10,
    hw_INNER = 10,
@@ -3020,7 +2990,7 @@ vglmer_control <- function(iterations = 1000,
   
   factorization_method <- match.arg(factorization_method)
   prior_variance <- match.arg(prior_variance, 
-    choices = c("hw", "mean_exists", "jeffreys", "mcmcglmm", "mvD", "limit", "uniform", "gamma"))
+    choices = c("hw", "mean_exists", "jeffreys", "limit", "uniform"))
   linpred_method <- match.arg(linpred_method, choices = c("joint", "cyclical", "solve_normal"))    
   parameter_expansion <- match.arg(parameter_expansion, choices = c("translation", "mean", "none"))
   vi_r_method <- match.arg(vi_r_method, choices = c("VEM", "fixed", "Laplace", "delta"))

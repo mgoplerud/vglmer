@@ -1,9 +1,8 @@
 #' SuperLearner with (Variational) Hierarchical Models
 #' 
-#' Functions to integrate \code{vglmer} (or \code{glmer}) into
+#' This contains functions to integrate \code{vglmer} (or \code{glmer}) into
 #' \code{SuperLearner}. Most of the arguments are standard for
-#' \code{SuperLearner} functions. See "Details" for how \code{formula} should be
-#' used.
+#' \code{SuperLearner} functions. It requires the specification of a formula.
 #'
 #' @param Y From SuperLearner: The outcome in the training data set.
 #' @param X From SuperLearner: The predictor variables in the training data.
@@ -20,8 +19,8 @@
 #'   \code{SL.vglmer}. A model estimated using either \code{SL.vglmer} or
 #'   \code{SL.glmer}.
 #' @param ... Not used; added for compatibility with existing methods.
-#' @param learner Character vector of model from SuperLearner. See "Details"
-#'   for how this is used.
+#' @param learner Character name of model from SuperLearner. See "Details" for
+#'   how this is used.
 #' @param env Environment to look for model. See "Details" for how this is used.
 #' @name sl_vglmer
 #' 
@@ -39,7 +38,9 @@
 #'   
 #'   With this in hand, \code{"SL.knn_f"} can be passed to SuperLearner with the
 #'   accompanying formula argument and thus one can compare models with
-#'   different formula or design on the same ensemble.
+#'   different formula or design on the same ensemble. The \code{env} may need
+#'   to be manually specified to ensure the created functions can be called by
+#'   \code{SuperLearner}.
 #'   
 #'   \bold{Estimating Hierarchical Models in SuperLearner}: Two methods for
 #'   estimating hierarchical models are provided. One allows for the use of
@@ -183,7 +184,7 @@ SL.glmer <- function(Y, X, newX, formula, family, id, obsWeights, control = NULL
 }
 
 #' @rdname sl_vglmer
-#' @param allow.new.levels From \code{lme4}, allow levels in prediction that are
+#' @param allow.new.levels From \code{lme4}: Allow levels in prediction that are
 #'   not in the training data. Default (\code{TRUE}) for \code{SuperLearner}.
 #' @export
 predict.SL.glmer <- function(object, newdata, allow.new.levels = TRUE, ...){
