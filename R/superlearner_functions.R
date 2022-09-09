@@ -1,52 +1,54 @@
 #' SuperLearner with (Variational) Hierarchical Models
 #' 
-#' This contains functions to integrate \code{vglmer} (or \code{glmer}) into
+#' These functions integrate \code{vglmer} (or \code{glmer}) into
 #' \code{SuperLearner}. Most of the arguments are standard for
-#' \code{SuperLearner} functions. It requires the specification of a formula.
+#' \code{SuperLearner} functions.
 #'
-#' @param Y From SuperLearner: The outcome in the training data set.
-#' @param X From SuperLearner: The predictor variables in the training data.
-#' @param newX From SuperLearner: The prediction variables in validation data.
-#' @param formula The formula used for estimation, e.g. for \code{vglmer} or
-#'   \code{[g]lmer}.
-#' @param family Family as character: Only "gaussian" and "binomial" accepted.
-#' @param id From SuperLearner: Passed from SuperLearner.
-#' @param obsWeights From SuperLearner: Weights for each observation. Not
+#' @param Y From \code{SuperLearner}: The outcome in the training data set.
+#' @param X From \code{SuperLearner}: The predictor variables in the training
+#'   data.
+#' @param newX From \code{SuperLearner}: The predictor variables in validation
+#'   data.
+#' @param formula The formula used for estimation.
+#' @param family From \code{SuperLearner}: Currently allows \code{gaussian} or
+#'   \code{binomial}.
+#' @param id From \code{SuperLearner}: Optional cluster identification variable.
+#'   See \code{SuperLearner} for more details.
+#' @param obsWeights From \code{SuperLearner}: Weights for each observation. Not
 #'   permitted for \code{SL.vglmer}.
-#' @param control Adjust the additional options for \code{vglmer} and
-#'   \code{[g]lmer}. See the corresponding estimation functions for details.
+#' @param control Control object for estimating \code{vglmer} (e.g.,
+#'   \link{vglmer_control}) or \code{[g]lmer}.
 #' @param object Used in \code{predict} for \code{SL.glmer} and
 #'   \code{SL.vglmer}. A model estimated using either \code{SL.vglmer} or
 #'   \code{SL.glmer}.
-#' @param ... Not used; added for compatibility with existing methods.
-#' @param learner Character name of model from SuperLearner. See "Details" for
-#'   how this is used.
-#' @param env Environment to look for model. See "Details" for how this is used.
+#' @param ... Not used; included to maintain compatability with existing
+#'   methods.
+#' @param learner Character name of model from \code{SuperLearner}. See
+#'   "Details" for how this is used.
+#' @param env Environment to assign model. See "Details" for how this is used.
 #' @name sl_vglmer
 #' 
-#' @details This documentation describes two types of function. They are
-#'   described below.
-#'   
+#' @details This documentation describes two types of function. 
+#' 
+#'   \bold{Estimating Hierarchical Models in SuperLearner}: Two methods for
+#'   estimating hierarchical models are provided one for varational methods
+#'   (\code{SL.vglmer}) and one for non-variational methods (\code{SL.glmer}).
+#'   The accompanying prediction functions are also provided.
+#' 
 #'   \bold{Formula with SuperLearner}: The \code{vglmer} package provides a way
-#'   to estimate models that require or use formula with \code{SuperLearner}.
+#'   to estimate models that require or use a formula with \code{SuperLearner}.
 #'   This allows for a design to be passed that contains variables that are
 #'   \emph{not} used in estimation. This can be used as follows (see
 #'   "Examples"). One calls the function \code{add_formula_SL} around the quoted
 #'   name of a \code{SuperLearner} model, e.g. \code{add_formula_SL(learner =
 #'   "SL.knn")}. This creates a new model and predict function with the suffix
-#'   \code{"_f"}. This \bold{requires} a formula to be provided.
+#'   \code{"_f"}. This \bold{requires} a formula to be provided for estimation.
 #'   
-#'   With this in hand, \code{"SL.knn_f"} can be passed to SuperLearner with the
+#'   With this in hand, \code{"SL.knn_f"} can be passed to \code{SuperLearner} with the
 #'   accompanying formula argument and thus one can compare models with
-#'   different formula or design on the same ensemble. The \code{env} may need
-#'   to be manually specified to ensure the created functions can be called by
-#'   \code{SuperLearner}.
-#'   
-#'   \bold{Estimating Hierarchical Models in SuperLearner}: Two methods for
-#'   estimating hierarchical models are provided. One allows for the use of
-#'   variational hierarchical models using \code{SL.vglmer}. Non-variational
-#'   hierarchical models estimated via \code{lme4} can be used in an ensemble
-#'   with \code{SL.glmer}. The accompanying predict methods are also provided.
+#'   different formula or design on the same ensemble. The \code{env} argument
+#'   may need to be manually specified to ensure the created functions can be
+#'   called by \code{SuperLearner}.
 #'   
 #' @examples
 #' 
@@ -121,8 +123,11 @@ SL.vglmer <- function(Y, X, newX, formula, family, id, obsWeights, control = vgl
 }
 
 #' @rdname sl_vglmer
-#' @param newdata Model for predicting on test data
-#' @param allow_missing_levels Allowing missing levels not in training data.
+#' @param newdata Dataset to use for predictions.
+#' @param allow_missing_levels Default (\code{TRUE}) allows prediction for
+#'   levels not observed in the estimation data; the value of \code{0} (with no
+#'   uncertainty) is used for the corresponding random effect. \bold{Note:} This
+#'   default differs from \code{predict.vglmer}.
 #' @export
 predict.SL.vglmer <- function(object, newdata, allow_missing_levels = TRUE, ...){
   if(!requireNamespace('vglmer', quietly = FALSE)) {stop("SL.vglmer requires the vglmer package, but it isn't available")} 
@@ -185,7 +190,7 @@ SL.glmer <- function(Y, X, newX, formula, family, id, obsWeights, control = NULL
 
 #' @rdname sl_vglmer
 #' @param allow.new.levels From \code{lme4}: Allow levels in prediction that are
-#'   not in the training data. Default (\code{TRUE}) for \code{SuperLearner}.
+#'   not in the training data. Default is \code{TRUE} for \code{SuperLearner}.
 #' @export
 predict.SL.glmer <- function(object, newdata, allow.new.levels = TRUE, ...){
   if(!requireNamespace('lme4', quietly = FALSE)) {stop("SL.glmer requires the lme4 package, but it isn't available")} 

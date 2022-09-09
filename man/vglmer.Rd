@@ -8,66 +8,74 @@ vglmer(formula, data, family, control = vglmer_control())
 }
 \arguments{
 \item{formula}{\code{lme4} style-formula for random effects. Typically,
-\code{(1 + Z | G)} indicates a random effect for each level of variable
-\code{"G"} with a differing slope for the effect of variable \code{"Z"} and
-an intercept (\code{1}); see "Details" for further discussion and how
-splines are specified.}
+\code{(1 + z | g)} indicates a random effect for each level of variable
+\code{"g"} with a differing slope for the effect of variable \code{"z"} and
+an intercept (\code{1}); see "Details" for further discussion and how to
+incorporate splines.}
 
-\item{data}{data.frame containing the outcome and variables.}
+\item{data}{\code{data.frame} containing the outcome and predictors.}
 
 \item{family}{Options are "binomial", "linear", or "negbin" (experimental).
-If "binomial", outcome must be either \eqn{\{0,1\}} (binary) or \code{cbind(success,
-failure)} as per standard \code{glm(er)} syntax. Non-integer values are
-permitted for binomial if \code{force_whole} is set to FALSE in
-\code{vglmer_control}.}
+If "binomial", outcome must be either binary (\eqn{\{0,1\}}) or
+\code{cbind(success, failure)} as per standard \code{glm(er)} syntax.
+Non-integer values are permitted for binomial if \code{force_whole} is set
+to \code{FALSE} in \code{vglmer_control}.}
 
 \item{control}{Adjust internal options for estimation. Must use an object
 created by \link{vglmer_control}.}
 }
 \value{
-Returns an object of class vglmer: See the available methods (e.g.
-  \code{coef}) using \code{methods(class="vglmer")}.
+This returns an object of class \code{vglmer}. The available methods
+  (e.g. \code{coef}) can be found using \code{methods(class="vglmer")}.
 \describe{
-\item{beta}{Contains the approximated posterior distribution of the fixed
-effects (beta); \code{mean} contains the posterior means; \code{var} contains
-the variance matrix; \code{decomp_var} contains a matrix \eqn{L} such that \eqn{L^T L}
-equals the full variance matrix.}
-\item{alpha}{Contains the approximated posterior distribution of each random
-effect. \code{mean} contains the posterior means; \code{dia.var} contains the
-variance of each random effect. \code{var} contains the variance
-matrix of each random effect (j,g). \code{decomp_var} contains a matrix \eqn{L}
-such that \eqn{L^T L} equals the full variance of the entire set of random
-effects.}
+\item{beta}{Contains the estimated distribution of the fixed effects
+(\eqn{\beta}). It is multivariate normal. \code{mean} contains the means;
+\code{var} contains the variance matrix; \code{decomp_var} contains a matrix
+\eqn{L} such that \eqn{L^T L} equals the full variance matrix.}
+\item{alpha}{Contains the estimated distribution of the random effects
+(\eqn{\alpha}). They are all multivariate normal. \code{mean} contains the
+means; \code{dia.var} contains the variance of each random effect. \code{var}
+contains the variance matrix of each random effect (j,g). \code{decomp_var}
+contains a matrix \eqn{L} such that \eqn{L^T L} equals the full variance of
+the entire set of random effects.}
 \item{joint}{If \code{factorization_method="weak"}, this is a list with one
-element \code{decomp_var} that contains a matrix \eqn{L} such that \eqn{L^T L} equals the
-full variance matrix between the fixed and random effects. The
-marginal variances are included in \code{beta} and \code{alpha}. If the
-factorization method is not \code{"weak"}, this is \code{NULL}.}
-\item{sigma}{Contains the approximated posterior distribution of each random
-effect error variance; all distributions are Inverse-Wishart. \code{cov}
-contains a list of the estimated scale matrices. \code{df} contains a list of
-the degrees of freedom.}
+element (\code{decomp_var}) that contains a matrix \eqn{L} such that \eqn{L^T
+L} equals the full variance matrix between the fixed and random effects
+\eqn{q(\beta,\alpha)}. The marginal variances are included in \code{beta} and
+\code{alpha}. If the factorization method is not \code{"weak"}, this is
+\code{NULL}.}
+\item{sigma}{Contains the estimated distribution of each random
+effect covariance \eqn{\Sigma_j}; all distributions are Inverse-Wishart.
+\code{cov} contains a list of the estimated scale matrices. \code{df}
+contains a list of the degrees of freedom.}
 \item{hw}{If a Huang-Wand prior is used (see Huang and Wand 2013 or Goplerud
-2022b for more details), then the approximated posterior distribution.
-Otherwise, it is \code{NULL}. All distributions are Inverse-Gamma. \code{a}
-contains a list of the scale parameters. \code{b} contains a list of the
-shape parameters.}
-\item{family}{The estimation family used.}
+2022b for more details), then the estimated distribution. Otherwise, it is
+\code{NULL}. All distributions are Inverse-Gamma. \code{a} contains a list of
+the scale parameters. \code{b} contains a list of the shape parameters.}
+\item{sigmasq}{If \code{family="linear"}, this contains a list of the
+estimated parameters for \eqn{\sigma^2}; its distribution is Inverse-Gamma.
+\code{a} contains the scale parameter; \code{b} contains the shape
+parameter.}
+\item{r}{If \code{family="negbin"}, this contains the variational parameters
+for the dispersion parameter \eqn{r}. \code{mu} contains the mean;
+\code{sigma} contains the variance.}
+\item{family}{Family of outcome.}
 \item{ELBO}{Contains the ELBO at the termination of the algorithm.}
-\item{ELBO_trajectory}{A data.frame tracking the ELBO per iteration.}
+\item{ELBO_trajectory}{\code{data.frame} tracking the ELBO per iteration.}
 \item{control}{Contains the control parameters from \code{vglmer_control}
 used in estimation.}
-\item{internal_parameters}{A variety of internal parameters used in post-estimation functions.}
+\item{internal_parameters}{Variety of internal parameters used in
+post-estimation functions.}
 \item{formula}{Contains the formula used for estimation; contains the
 original formula, fixed effects, and random effects parts separately for
-post-estimation. See \code{formula.vglmer} for more details.}
+post-estimation functions. See \code{formula.vglmer} for more details.}
 }
 }
 \description{
-Estimate hierarchical models using mean-field variational inference.
-\code{vglmer} accepts standard syntax used for \code{lme4}, e.g., \code{y ~ X
-+ (1 + Z | g)}. Options are described below. Goplerud (2022a; 2022b) provides
-details on the variational algorithms.
+This function estimates hierarchical models using mean-field variational
+inference. \code{vglmer} accepts standard syntax used for \code{lme4}, e.g.,
+\code{y ~ x + (x | g)}. Options are described below. Goplerud (2022a; 2022b)
+provides details on the variational algorithms.
 }
 \details{
 \bold{Estimation Syntax:} The \code{formula} argument takes syntax designed
@@ -94,8 +102,10 @@ the "global" spline. \emph{Note:} In contrast to the typical presentation of
 these splines interacted with categorical variables (e.g., Ruppert et al.
 2003), the default use of \code{"by"} includes the lower order interactions
 that are regularized, i.e. \code{(1 + x | g)}, versus their unregularized
-version (e.g., \code{x * g}). Further, all group-level deviations from the
-global spline share the same smoothing parameter (variance component).
+version (e.g., \code{x * g}); this can be changed using the \code{by_re}
+argument described in \link{v_s}. Further, all group-level deviations from
+the global spline share the same smoothing parameter (same prior
+distribution).
 
 \bold{Default Settings:} By default, the model is estimated using the
 "strong" (i.e. fully factorized) variational assumption. Setting
@@ -103,18 +113,17 @@ global spline share the same smoothing parameter (variance component).
 of the variance approximation but may take considerably more time to
 estimate. See Goplerud (2022a) for discussion. 
 
-By default, the prior on each variance component (\eqn{\Sigma_j}) uses a
-Huang-Wand prior (Huang and Wand 2013) with hyper-parameters \eqn{\nu_j = 2}
-and \eqn{A_{j,k} = 5}. This is designed to be proper but weakly informative.
-Other options are discussed in \link{vglmer_control} under the
-\code{prior_variance} argument.
+By default, the prior on each random effect variance (\eqn{\Sigma_j}) uses a Huang-Wand prior (Huang
+and Wand 2013) with hyper-parameters \eqn{\nu_j = 2} and \eqn{A_{j,k} = 5}.
+This is designed to be proper but weakly informative. Other options are
+discussed in \link{vglmer_control} under the \code{prior_variance} argument.
 
 By default, estimation is accelerated using SQUAREM (Varadhan and Roland
 2008) and (one-step-late) parameter expansion for variational Bayes. Under
 the default \code{"strong"} factorization, a "translation" expansion is used;
-under other factorizations a "mean" expansion is used. These can all be
-disabled or adjusted using \link{vglmer_control}. See Goplerud (2022b) for
-more discussion of these methods.
+under other factorizations a "mean" expansion is used. These can be adjusted
+using \link{vglmer_control}. See Goplerud (2022b) for more discussion of
+these methods.
 }
 \examples{
 
@@ -140,37 +149,42 @@ coef(est_vglmer); vcov(est_vglmer)
 # although ranef is formatted differently.
 ranef(est_vglmer); fixef(est_vglmer)
 
-# Run with weaker (i.e. better) approximation
 \donttest{
+# Run with weaker (i.e. better) approximation
 vglmer(y ~ x + (x | g),
   data = sim_data,
   control = vglmer_control(factorization_method = "weak"),
-  family = "binomial"
-)
+  family = "binomial")
 }
 
-# Use a spline on x with a linear outcome
 \donttest{
+# Use a spline on x with a linear outcome
 vglmer(y ~ v_s(x),
   data = sim_data,
-  family = "linear"
-)
+  family = "linear")
 }
 
 }
 \references{
 Goplerud, Max. 2022a. "Fast and Accurate Estimation of Non-Nested Binomial
-Hierarchical Models Using Variational Inference." Bayesian Analysis. 17(2):
+Hierarchical Models Using Variational Inference." \emph{Bayesian Analysis}. 17(2):
 623-650.
 
 Goplerud, Max. 2022b. "Re-Evaluating Machine Learning for MRP Given the
 Comparable Performance of (Deep) Hierarchical Models." Working paper.
 
 Huang, Alan, and Matthew P. Wand. 2013. "Simple Marginally Noninformative
-Prior Distributions for Covariance Matrices." Bayesian Analysis.
+Prior Distributions for Covariance Matrices." \emph{Bayesian Analysis}.
 8(2):439-452.
 
+Ruppert, David, Matt P. Wand, and Raymond J. Carroll. 2003.
+\emph{Semiparametric Regression}. Cambridge University Press.
+
 Varadhan, Ravi, and Christophe Roland. 2008. "Simple and Globally Convergent
-Methods for Accelerating the Convergence of any EM Algorithm." Scandinavian
-Journal of Statistics. 35(2): 335-353.
+Methods for Accelerating the Convergence of any EM Algorithm." \emph{Scandinavian
+Journal of Statistics}. 35(2): 335-353.
+
+Wand, Matt P. and Ormerod, John T. 2008. "On Semiparametric Regression with
+O'Sullivan Penalized Splines". \emph{Australian & New Zealand Journal of Statistics}.
+50(2): 179-198.
 }

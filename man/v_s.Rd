@@ -7,30 +7,32 @@
 v_s(..., type = "tpf", knots = NULL, by = NA, by_re = TRUE, outer_okay = FALSE)
 }
 \arguments{
-\item{...}{variable name, e.g. \code{v_s(x)}}
+\item{...}{Variable name, e.g. \code{v_s(x)}}
 
-\item{type}{Spline basis. \code{"tpf"} for truncated linear splines or
-\code{"o"} for O-Sullivan (see Wand and Ormerod 2008)}
+\item{type}{Default (\code{"tpf"}) uses truncated linear splines for the
+basis. The other option (\code{"o"}) uses O'Sullivan splines (Wand and
+Ormerod 2008).}
 
-\item{knots}{Provide either number of knots (evenly spaced at quantiles), a
-grid of knots. Default (\code{NULL}) uses \eqn{K = min(N/4, 35)} where
-\code{N} is the number of unique values of the variable \code{x}.}
+\item{knots}{Default (\code{NULL}) uses \eqn{K=min(N/4,35)} knots evenly
+spaced at quantiles of the covariate \code{x}. A single number specifies a
+specific number of knots; a vector can set custom locations for knots.}
 
-\item{by}{Interact the spline with some covariate.}
+\item{by}{A categorical or factor covariate to interact the spline with; for
+example, \code{v_s(x, by = g)}.}
 
-\item{by_re}{If interacted with a factor variable, should the "base"
-interactions be regularized? Default is \code{"TRUE"}; see "Details" in
-\link{vglmer} for more discussion.}
+\item{by_re}{Default (\code{TRUE}) regularizes the interactions between the
+categorical factor and the covariate. See "Details" in \link{vglmer} for
+more discussion.}
 
 \item{outer_okay}{Default (\code{FALSE}) does not permit values in \code{x} to exceed the outer knots.}
 }
 \description{
-This is a simple function to estimate splines, similar to \code{s(...)} in
+This function estimates splines in \code{vglmer}, similar to \code{s(...)} in
 \code{mgcv}. It allows for truncated (linear) splines or O'Sullivan splines.
 Please see \link{vglmer} for more discussion and examples.
 }
 \references{
-Wand, Matt P. and Ormerod, John T. 2008. On semiparametric regression with
-O'Sullivan penalized splines. Australian & New Zealand Journal of Statistics.
-50(2): 179-198.
+Wand, Matt P. and Ormerod, John T. 2008. "On Semiparametric Regression with
+O'Sullivan Penalized Splines". \emph{Australian & New Zealand Journal of
+Statistics}. 50(2): 179-198.
 }

@@ -1,25 +1,27 @@
 #' Perform MAVB after fitting vglmer
 #'
-#' Given a model from vglmer, this function performs marginally augmented
-#' variational Bayes (MAVB) to improve approximation quality; Goplerud (2022)
-#' provides details. At present, it is only enabled for binomial models. This
-#' should only be used if the parameters of the model are of interest; to use
-#' MAVB when generating predictions, use \link{predict_MAVB}.
+#' @description Given a model estimated using \code{vglmer}, this function
+#'   performs marginally augmented variational Bayes (MAVB) to improve the
+#'   approximation quality.
+#'   
+#' @details This function returns the improved estimates of the
+#'   \emph{parameters}. To use MAVB when generating predictions, one should use
+#'   \link{predict_MAVB}. At present, MAVB is only enabled for binomial models.
 #'
-#' @return This returns a matrix with \code{sample} rows for each fixed and
-#'   random effect: \eqn{q(\alpha,\beta)}.
+#' @return This function returns a matrix with \code{sample} rows and columns
+#'   for each fixed and random effect.
 #'
 #' @param object Model fit using \code{vglmer}.
 #' @param samples Number of samples to draw.
 #' @param var_px Variance of working prior for marginal augmentation. Default
 #'   (\code{Inf}) is a flat, improper, prior.
-#' @param verbose Show progress of MAVB.
+#' @param verbose Show progress in drawing samples.
 #' @import CholWishart
 #' @importFrom mvtnorm rmvnorm
 #' 
 #' @references 
-#' Goplerud, Max. 2022. "Fast and Accurate Estimation of Non-Nested Binomial
-#' Hierarchical Models Using Variational Inference." Bayesian Analysis. 17(2):
+#' Goplerud, Max. 2022a. "Fast and Accurate Estimation of Non-Nested Binomial
+#' Hierarchical Models Using Variational Inference." \emph{Bayesian Analysis}. 17(2):
 #' 623-650.
 #' @export
 MAVB <- function(object, samples, verbose = FALSE, var_px = Inf) {
@@ -223,12 +225,11 @@ custom_glmer_samples <- function(glmer, samples, ordering) {
 #' Draw samples from the variational distribution
 #' 
 #' @description This function draws samples from the estimated variational
-#'   distribution that approximates the posterior. If using \code{MAVB} is
-#'   preferred to attempt to improve the quality, please use \link{MAVB} or
-#'   \link{predict_MAVB}.
+#'   distributions. If using \code{MAVB} to improve the quality of the
+#'   approximating distribution, please use \link{MAVB} or \link{predict_MAVB}.
 #' @param object Model fit using \code{vglmer}.
 #' @param samples Number of samples to draw.
-#' @param verbose Print progress of drawing the samples.
+#' @param verbose Show progress in drawing samples.
 #' @export
 posterior_samples.vglmer <- function (object, samples, verbose = FALSE) 
 {

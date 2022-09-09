@@ -1,10 +1,9 @@
 #' Predict after vglmer
 #'
-#' @description These functions return the estimated linear predictor using the
-#'   estimated variational distributions. \code{predict.vglmer} draws
-#'   predictions using the estimated variational distributions;
-#'   \code{predict_MAVB} does so using the MAVB procedure described in Goplerud
-#'   (2022a).
+#' @description These functions calculate the estimated linear predictor using
+#'   the variational distributions. \code{predict.vglmer} draws predictions
+#'   using the estimated variational distributions; \code{predict_MAVB} does so
+#'   using the MAVB procedure described in Goplerud (2022a).
 #' @name vglmer_predict
 #' @param object Model fit using \code{vglmer}.
 #' @param newdata Dataset to use for predictions. It cannot be missing.
@@ -13,12 +12,12 @@
 #'   \code{samples} samples from the variational distributions and calculates
 #'   the linear predictor.
 #' @param samples_only Default (\code{FALSE}) returns the samples from the
-#'   variational posterior, \bold{not} the prediction. Each row is a sample and
-#'   each column is an parameter.
-#' @param summary Default (\code{TRUE}) returns the posterior mean and variance
-#'   for each observation. \code{FALSE} returns a matrix of the sampled linear
-#'   predictor for each observation. Each row is a sample and each column is an
-#'   observation.
+#'   variational distributions, \bold{not} the prediction. Each row is a sample and
+#'   each column is a parameter.
+#' @param summary Default (\code{TRUE}) returns the mean and variance of the
+#'   samples for each observation. \code{FALSE} returns a matrix of the sampled
+#'   linear predictor for each observation. Each row is a sample and each column
+#'   is an observation.
 #' @param allow_missing_levels Default (\code{FALSE}) does not allow prediction
 #'   for levels not observed in the original data. \code{TRUE} allows for
 #'   prediction on unseen levels; the value of \code{0} (with no uncertainty) is
@@ -49,19 +48,17 @@
 #'   allow_missing_levels = TRUE
 #' )
 #' @return This function returns an estimate of the linear predictor. The
-#'   default returns the predicted posterior mean, i.e.
-#'   \eqn{E_{q(\alpha,\beta)}[x_i^T \beta + z_i^T\alpha]}. 
-#'   
-#'   If \code{samples > 0}, the functions return a summary of the prediction for
-#'   each observation, i.e. the estimated mean and variance. If \code{summary =
-#'   FALSE}, the sampled values of the linear predictor are returned as a
-#'   matrix. \code{predict_MAVB} performs MAVB as described in Goplerud (2022a)
-#'   before returning the linear predictor. 
+#'   default returns the expected mean, i.e. \eqn{E_{q(\alpha,\beta)}[x_i^T
+#'   \beta + z_i^T\alpha]}. If \code{samples > 0}, these functions return a
+#'   summary of the prediction for each observation, i.e. the estimated mean and
+#'   variance. If \code{summary = FALSE}, the sampled values of the linear
+#'   predictor are returned as a matrix. \code{predict_MAVB} performs MAVB as
+#'   described in Goplerud (2022a) before returning the linear predictor.
 #'   
 #'   If \code{allow_missing_levels = TRUE}, then observations with a new
 #'   (unseen) level for the random effect are given a value of zero for that
 #'   term of the prediction.
-#' @importFrom stats delete.response terms
+#' @importFrom stats delete.response terms na.pass
 #' @export
 predict.vglmer <- function(object, newdata,
                            samples = 0, samples_only = FALSE,
@@ -81,9 +78,13 @@ predict.vglmer <- function(object, newdata,
     )
   }
   fmla <- formula(object, form = 'original')
-  # Extract X (FE design matrix)
-  X <- model.matrix(delete.response(terms(nobars(formula(object, form = 'fe')))), data = newdata)
-
+  
+  newdata_FE <- model.frame(delete.response(object$formula$fe_terms), 
+      data = newdata, xlev = object$formula$fe_Xlevels, na.action = na.pass)
+  X <- model.matrix(
+    delete.response(object$formula$fe_terms), newdata_FE, 
+      contrasts.arg = object$formula$fe_contrasts)
+  
   orig_X_names <- rownames(object$beta$mean)
   if (!identical(colnames(X), orig_X_names)) {
     print(all.equal(colnames(X), orig_X_names))
@@ -281,7 +282,6 @@ predict.vglmer <- function(object, newdata,
     X[match(obs_in_both, rownames(X)), , drop = F],
     Z[match(obs_in_both, rownames(Z)), , drop = F]
   )
-
   factorization_method <- object$control$factorization_method
   if (is.matrix(samples)) {
     if (ncol(samples) != ncol(XZ)) {

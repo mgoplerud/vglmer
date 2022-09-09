@@ -1,21 +1,21 @@
 #' Variational Inference for Hierarchical Generalized Linear Models
 #'
-#' Estimate hierarchical models using mean-field variational inference.
-#' \code{vglmer} accepts standard syntax used for \code{lme4}, e.g., \code{y ~ X
-#' + (1 + Z | g)}. Options are described below. Goplerud (2022a; 2022b) provides
-#' details on the variational algorithms.
+#' This function estimates hierarchical models using mean-field variational
+#' inference. \code{vglmer} accepts standard syntax used for \code{lme4}, e.g.,
+#' \code{y ~ x + (x | g)}. Options are described below. Goplerud (2022a; 2022b)
+#' provides details on the variational algorithms.
 #'
 #' @param formula \code{lme4} style-formula for random effects. Typically,
-#'   \code{(1 + Z | G)} indicates a random effect for each level of variable
-#'   \code{"G"} with a differing slope for the effect of variable \code{"Z"} and
-#'   an intercept (\code{1}); see "Details" for further discussion and how
-#'   splines are specified.
-#' @param data data.frame containing the outcome and variables.
+#'   \code{(1 + z | g)} indicates a random effect for each level of variable
+#'   \code{"g"} with a differing slope for the effect of variable \code{"z"} and
+#'   an intercept (\code{1}); see "Details" for further discussion and how to
+#'   incorporate splines.
+#' @param data \code{data.frame} containing the outcome and predictors.
 #' @param family Options are "binomial", "linear", or "negbin" (experimental).
-#'   If "binomial", outcome must be either \eqn{\{0,1\}} (binary) or \code{cbind(success,
-#'   failure)} as per standard \code{glm(er)} syntax. Non-integer values are
-#'   permitted for binomial if \code{force_whole} is set to FALSE in
-#'   \code{vglmer_control}.
+#'   If "binomial", outcome must be either binary (\eqn{\{0,1\}}) or
+#'   \code{cbind(success, failure)} as per standard \code{glm(er)} syntax.
+#'   Non-integer values are permitted for binomial if \code{force_whole} is set
+#'   to \code{FALSE} in \code{vglmer_control}.
 #' @param control Adjust internal options for estimation. Must use an object
 #'   created by \link{vglmer_control}.
 #'
@@ -43,21 +43,19 @@
 #' # although ranef is formatted differently.
 #' ranef(est_vglmer); fixef(est_vglmer)
 #'
-#' # Run with weaker (i.e. better) approximation
 #' \donttest{
+#' # Run with weaker (i.e. better) approximation
 #' vglmer(y ~ x + (x | g),
 #'   data = sim_data,
 #'   control = vglmer_control(factorization_method = "weak"),
-#'   family = "binomial"
-#' )
+#'   family = "binomial")
 #' }
 #' 
-#' # Use a spline on x with a linear outcome
 #' \donttest{
+#' # Use a spline on x with a linear outcome
 #' vglmer(y ~ v_s(x),
 #'   data = sim_data,
-#'   family = "linear"
-#' )
+#'   family = "linear")
 #' }
 #' 
 #' @details
@@ -86,8 +84,10 @@
 #' these splines interacted with categorical variables (e.g., Ruppert et al.
 #' 2003), the default use of \code{"by"} includes the lower order interactions
 #' that are regularized, i.e. \code{(1 + x | g)}, versus their unregularized
-#' version (e.g., \code{x * g}). Further, all group-level deviations from the
-#' global spline share the same smoothing parameter (variance component).
+#' version (e.g., \code{x * g}); this can be changed using the \code{by_re}
+#' argument described in \link{v_s}. Further, all group-level deviations from
+#' the global spline share the same smoothing parameter (same prior
+#' distribution).
 #' 
 #' \bold{Default Settings:} By default, the model is estimated using the
 #' "strong" (i.e. fully factorized) variational assumption. Setting
@@ -95,84 +95,102 @@
 #' of the variance approximation but may take considerably more time to
 #' estimate. See Goplerud (2022a) for discussion. 
 #' 
-#' By default, the prior on each variance component (\eqn{\Sigma_j}) uses a
-#' Huang-Wand prior (Huang and Wand 2013) with hyper-parameters \eqn{\nu_j = 2}
-#' and \eqn{A_{j,k} = 5}. This is designed to be proper but weakly informative.
-#' Other options are discussed in \link{vglmer_control} under the
-#' \code{prior_variance} argument.
+#' By default, the prior on each random effect variance (\eqn{\Sigma_j}) uses a Huang-Wand prior (Huang
+#' and Wand 2013) with hyper-parameters \eqn{\nu_j = 2} and \eqn{A_{j,k} = 5}.
+#' This is designed to be proper but weakly informative. Other options are
+#' discussed in \link{vglmer_control} under the \code{prior_variance} argument.
 #' 
 #' By default, estimation is accelerated using SQUAREM (Varadhan and Roland
 #' 2008) and (one-step-late) parameter expansion for variational Bayes. Under
 #' the default \code{"strong"} factorization, a "translation" expansion is used;
-#' under other factorizations a "mean" expansion is used. These can all be
-#' disabled or adjusted using \link{vglmer_control}. See Goplerud (2022b) for
-#' more discussion of these methods.
+#' under other factorizations a "mean" expansion is used. These can be adjusted
+#' using \link{vglmer_control}. See Goplerud (2022b) for more discussion of
+#' these methods.
 #' 
-#' @return Returns an object of class vglmer: See the available methods (e.g.
-#'   \code{coef}) using \code{methods(class="vglmer")}.
+#' @return This returns an object of class \code{vglmer}. The available methods
+#'   (e.g. \code{coef}) can be found using \code{methods(class="vglmer")}.
 #' \describe{
-#' \item{beta}{Contains the approximated posterior distribution of the fixed
-#' effects (beta); \code{mean} contains the posterior means; \code{var} contains
-#' the variance matrix; \code{decomp_var} contains a matrix \eqn{L} such that \eqn{L^T L}
-#' equals the full variance matrix.}
-#' \item{alpha}{Contains the approximated posterior distribution of each random
-#' effect. \code{mean} contains the posterior means; \code{dia.var} contains the
-#' variance of each random effect. \code{var} contains the variance
-#' matrix of each random effect (j,g). \code{decomp_var} contains a matrix \eqn{L}
-#' such that \eqn{L^T L} equals the full variance of the entire set of random
-#' effects.}
+#' \item{beta}{Contains the estimated distribution of the fixed effects
+#' (\eqn{\beta}). It is multivariate normal. \code{mean} contains the means;
+#' \code{var} contains the variance matrix; \code{decomp_var} contains a matrix
+#' \eqn{L} such that \eqn{L^T L} equals the full variance matrix.}
+#' \item{alpha}{Contains the estimated distribution of the random effects
+#' (\eqn{\alpha}). They are all multivariate normal. \code{mean} contains the
+#' means; \code{dia.var} contains the variance of each random effect. \code{var}
+#' contains the variance matrix of each random effect (j,g). \code{decomp_var}
+#' contains a matrix \eqn{L} such that \eqn{L^T L} equals the full variance of
+#' the entire set of random effects.}
 #' \item{joint}{If \code{factorization_method="weak"}, this is a list with one
-#' element \code{decomp_var} that contains a matrix \eqn{L} such that \eqn{L^T L} equals the
-#' full variance matrix between the fixed and random effects. The
-#' marginal variances are included in \code{beta} and \code{alpha}. If the
-#' factorization method is not \code{"weak"}, this is \code{NULL}.}
-#' \item{sigma}{Contains the approximated posterior distribution of each random
-#' effect error variance; all distributions are Inverse-Wishart. \code{cov}
-#' contains a list of the estimated scale matrices. \code{df} contains a list of
-#' the degrees of freedom.}
+#' element (\code{decomp_var}) that contains a matrix \eqn{L} such that \eqn{L^T
+#' L} equals the full variance matrix between the fixed and random effects
+#' \eqn{q(\beta,\alpha)}. The marginal variances are included in \code{beta} and
+#' \code{alpha}. If the factorization method is not \code{"weak"}, this is
+#' \code{NULL}.}
+#' \item{sigma}{Contains the estimated distribution of each random
+#' effect covariance \eqn{\Sigma_j}; all distributions are Inverse-Wishart.
+#' \code{cov} contains a list of the estimated scale matrices. \code{df}
+#' contains a list of the degrees of freedom.}
 #' \item{hw}{If a Huang-Wand prior is used (see Huang and Wand 2013 or Goplerud
-#' 2022b for more details), then the approximated posterior distribution.
-#' Otherwise, it is \code{NULL}. All distributions are Inverse-Gamma. \code{a}
-#' contains a list of the scale parameters. \code{b} contains a list of the
-#' shape parameters.}
-#' \item{family}{The estimation family used.}
+#' 2022b for more details), then the estimated distribution. Otherwise, it is
+#' \code{NULL}. All distributions are Inverse-Gamma. \code{a} contains a list of
+#' the scale parameters. \code{b} contains a list of the shape parameters.}
+#' \item{sigmasq}{If \code{family="linear"}, this contains a list of the
+#' estimated parameters for \eqn{\sigma^2}; its distribution is Inverse-Gamma.
+#' \code{a} contains the scale parameter; \code{b} contains the shape
+#' parameter.}
+#' \item{r}{If \code{family="negbin"}, this contains the variational parameters
+#' for the dispersion parameter \eqn{r}. \code{mu} contains the mean;
+#' \code{sigma} contains the variance.}
+#' \item{family}{Family of outcome.}
 #' \item{ELBO}{Contains the ELBO at the termination of the algorithm.}
-#' \item{ELBO_trajectory}{A data.frame tracking the ELBO per iteration.}
+#' \item{ELBO_trajectory}{\code{data.frame} tracking the ELBO per iteration.}
 #' \item{control}{Contains the control parameters from \code{vglmer_control}
 #' used in estimation.}
-#' \item{internal_parameters}{A variety of internal parameters used in post-estimation functions.}
+#' \item{internal_parameters}{Variety of internal parameters used in
+#' post-estimation functions.}
 #' \item{formula}{Contains the formula used for estimation; contains the
 #' original formula, fixed effects, and random effects parts separately for
-#' post-estimation. See \code{formula.vglmer} for more details.}
+#' post-estimation functions. See \code{formula.vglmer} for more details.}
 #' }
 #' @importFrom lme4 mkReTrms findbars subbars
 #' @importFrom stats model.response model.matrix model.frame rnorm rWishart
-#'   qlogis optim residuals lm plogis setNames
+#'   qlogis optim residuals lm plogis setNames .getXlevels
 #' @importFrom graphics plot
 #' @importFrom Rcpp sourceCpp
 #' 
 #' @references
 #' Goplerud, Max. 2022a. "Fast and Accurate Estimation of Non-Nested Binomial
-#' Hierarchical Models Using Variational Inference." Bayesian Analysis. 17(2):
+#' Hierarchical Models Using Variational Inference." \emph{Bayesian Analysis}. 17(2):
 #' 623-650.
 #' 
 #' Goplerud, Max. 2022b. "Re-Evaluating Machine Learning for MRP Given the
 #' Comparable Performance of (Deep) Hierarchical Models." Working paper.
 #'
 #' Huang, Alan, and Matthew P. Wand. 2013. "Simple Marginally Noninformative
-#' Prior Distributions for Covariance Matrices." Bayesian Analysis.
+#' Prior Distributions for Covariance Matrices." \emph{Bayesian Analysis}.
 #' 8(2):439-452.
 #' 
+#' Ruppert, David, Matt P. Wand, and Raymond J. Carroll. 2003.
+#' \emph{Semiparametric Regression}. Cambridge University Press.
+#' 
 #' Varadhan, Ravi, and Christophe Roland. 2008. "Simple and Globally Convergent
-#' Methods for Accelerating the Convergence of any EM Algorithm." Scandinavian
-#' Journal of Statistics. 35(2): 335-353.
+#' Methods for Accelerating the Convergence of any EM Algorithm." \emph{Scandinavian
+#' Journal of Statistics}. 35(2): 335-353.
+#' 
+#' Wand, Matt P. and Ormerod, John T. 2008. "On Semiparametric Regression with
+#' O'Sullivan Penalized Splines". \emph{Australian & New Zealand Journal of Statistics}.
+#' 50(2): 179-198.
+#' 
 #' @useDynLib vglmer
 #' @export
 vglmer <- function(formula, data, family, control = vglmer_control()) {
 
   # Verify integrity of parameter arguments
   family <- match.arg(family, choices = c("negbin", "binomial", "linear"))
-  
+  if (family == "negbin" & !(control$parameter_expansion %in% c('none', 'mean'))){
+    message('Setting parameter_expansion to mean for negative binomial estimation')
+    control$parameter_expansion <- 'mean'
+  }
   checkdf <- inherits(data, 'data.frame')
   if (is.null(data)){
     checkdf <- TRUE
@@ -207,6 +225,8 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
   data <- model.frame(parse_formula$fake.formula, data,
                       drop.unused.levels = TRUE)
   
+  tt <- terms(data)
+
   nobs_complete <- nrow(data)
   missing_obs <- nobs_init - nobs_complete
   if (length(missing_obs) == 0) {
@@ -240,9 +260,16 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
   debug_param <- control$debug_param
   linpred_method <- control$linpred_method
   vi_r_method <- control$vi_r_method
-  vi_r_val <- control$vi_r_val
+  if (is.numeric(vi_r_method)){
+    if (length(vi_r_method) > 1){stop('If "vi_r_method" is numeric, it must be a single number.')}
+    vi_r_val <- as.numeric(vi_r_method)
+    vi_r_method <- "fixed"
+  }else{
+    vi_r_val <- NA
+  }
   debug_ELBO <- control$debug_ELBO
-  verbose_time <- control$verbose_time
+  # Flip given that "tictoc" accepts "quiet=quiet_time"
+  quiet_time <- !control$verbose_time
 
   if (do_timing) {
     if (!requireNamespace("tictoc", quietly = TRUE)) {
@@ -364,6 +391,9 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
   
   # Create the FE design
   X <- model.matrix(fe_fmla, data = data)
+  fe_terms <- terms(fe_fmla)
+  fe_Xlevels <- .getXlevels(fe_terms, data)
+  fe_contrasts <- attr(X, 'contrasts')
   
   # Extract the Z (Random Effect) design matrix.
   re_fmla <- findbars(formula)
@@ -765,7 +795,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
   if (prior_variance == 'hw') {
     
     do_huangwand <- TRUE
-    INNER_IT <- control$hw_INNER
+    INNER_IT <- control$hw_inner
     vi_a_nu_jp <- rep(2, length(d_j))
     names(vi_a_nu_jp) <- names(names_of_RE)
     vi_a_APRIOR_jp <- lapply(d_j, FUN=function(i){rep(5, i)})
@@ -1036,7 +1066,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     
     gc()
     if (do_timing){
-      toc(quiet = verbose_time, log = T)
+      toc(quiet = quiet_time, log = T)
     }
   }
   store_parameter_traj <- store_vi <- store_ELBO <- data.frame()
@@ -1050,7 +1080,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     }
   }
   if (do_timing) {
-    toc(quiet = verbose_time, log = TRUE)
+    toc(quiet = quiet_time, log = TRUE)
     tic.clear()
   }
   ## Begin VI algorithm:
@@ -1156,7 +1186,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     }
 
     if (do_timing) {
-      toc(quiet = verbose_time, log = TRUE)
+      toc(quiet = quiet_time, log = TRUE)
       tic("Prepare Sigma")
     }
 
@@ -1193,7 +1223,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     }
     
     if (do_timing) {
-      toc(quiet = verbose_time, log = T)
+      toc(quiet = quiet_time, log = T)
       tic("Update Beta")
     }
     if (factorization_method == "weak") {
@@ -1391,7 +1421,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
         # vi_alpha_mean <- Matrix(chol.update.joint$mean[-1:-p.X], dimnames = list(fmt_names_Z, NULL))
 
         if (do_timing) {
-          toc(quiet = verbose_time, log = T)
+          toc(quiet = quiet_time, log = T)
           tic("ux_var")
         }
         
@@ -1422,7 +1452,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
         log_det_alpha_var <- sum(running_log_det_alpha_var)
         
         if (do_timing){
-          toc(quiet = verbose_time, log = T)
+          toc(quiet = quiet_time, log = T)
         }
       } else if (linpred_method == "solve_normal") {
         bind_rhs_j <- list()
@@ -1567,7 +1597,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
       )
     }
     if (do_timing) {
-      toc(quiet = verbose_time, log = T)
+      toc(quiet = quiet_time, log = T)
       tic("Update Sigma")
     }
     ###
@@ -1617,7 +1647,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     }
 
     if (do_timing) {
-      toc(quiet = verbose_time, log = T)
+      toc(quiet = quiet_time, log = T)
       tic("Update Aux")
     }
 
@@ -1656,7 +1686,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     }
 
     if (do_timing) {
-      toc(quiet = verbose_time, log = T)
+      toc(quiet = quiet_time, log = T)
     }
     ### PARAMETER EXPANSIONS!
     if (debug_ELBO) {
@@ -1802,7 +1832,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
       
       
       if (do_timing){
-        toc(quiet = verbose_time, log = TRUE)
+        toc(quiet = quiet_time, log = TRUE)
         tic('px_fit')
       }
       #If a DIAGONAL expansion, then only update the diagonal elements
@@ -1901,7 +1931,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
       }
       
       if (do_timing){
-        toc(quiet = verbose_time, log = TRUE)
+        toc(quiet = quiet_time, log = TRUE)
         tic('px_propose')
       }
       
@@ -2157,7 +2187,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
       accepted_times <- accept.PX + accepted_times
 
       if (do_timing){
-        toc(quiet = verbose_time, log = TRUE)
+        toc(quiet = quiet_time, log = TRUE)
       }
       rm(prop_vi_beta_mean, prop_vi_alpha_mean, prop_vi_sigma_alpha, prop_vi_alpha_decomp,
          prop_log_det_alpha_var, prop_variance_by_alpha_jg, prop_vi_sigma_outer_alpha)
@@ -2190,7 +2220,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     )
 
     if (do_timing) {
-      toc(quiet = verbose_time, log = TRUE)
+      toc(quiet = quiet_time, log = TRUE)
       tic("Update Squarem")
     }
     
@@ -2671,7 +2701,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     }
     
     if (do_timing) {
-      toc(quiet = verbose_time, log = T)
+      toc(quiet = quiet_time, log = T)
       tic("Final Cleanup")
     }
 
@@ -2735,7 +2765,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     change_vi_r_mu <- vi_r_mu - lagged_vi_r_mu
 
     if (do_timing) {
-      toc(quiet = verbose_time, log = T)
+      toc(quiet = quiet_time, log = T)
     }
     if (debug_param) {
       store_beta[it, ] <- as.vector(vi_beta_mean)
@@ -2846,7 +2876,9 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
   
   output$formula <- list(formula = formula, 
      re = re_fmla, fe = fe_fmla,
-     interpret_gam = parse_formula)
+     interpret_gam = parse_formula,
+     tt = tt, fe_Xlevels = fe_Xlevels,
+     fe_contrasts = fe_contrasts, fe_terms = fe_terms)
   
   output$alpha$dia.var <- unlist(lapply(variance_by_alpha_jg$variance_jg, FUN = function(i) {
     as.vector(sapply(i, diag))
@@ -2894,17 +2926,18 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
 #'
 #' This function controls various estimation options for \code{vglmer}.
 #'
-#' @param iterations Number of iterations for the model.
+#' @param iterations Default of 1000; this sets the maximum number of iterations
+#'   used in estimation.
 #' @param factorization_method Factorization assumption for the variational
-#'   appriximation. Default of \code{strong}, i.e. a fully factorized model.
-#'   Described in detail in Goplerud (2022a). \code{strong}, \code{partial}, and
-#'   \code{weak} correspond to Schemes I, II, and III respectively.
-#' @param prior_variance Options are \code{hw}, \code{jeffreys},
-#'  \code{mean_exists}, \code{uniform}, and \code{gamma}. The
-#'   default (\code{hw}) is the Huang-Wand (2013) prior whose hyper-parameters
-#'   are \eqn{nu_j} = 2 and \eqn{A_{j,k}} = 5.
-#'   
-#'   Otherwise, the prior is an Inverse Wishart with the following parameters
+#'   approximation. Default of \code{"strong"}, i.e. a fully factorized model.
+#'   Described in detail in Goplerud (2022a). \code{"strong"}, \code{"partial"},
+#'   and \code{"weak"} correspond to Schemes I, II, and III respectively in that
+#'   paper.
+#' @param prior_variance Prior distribution on the random effect variance
+#'   \eqn{\Sigma_j}. Options are \code{hw}, \code{jeffreys}, \code{mean_exists},
+#'   \code{uniform}, and \code{gamma}. The default (\code{hw}) is the Huang-Wand
+#'   (2013) prior whose hyper-parameters are \eqn{\nu_j} = 2 and \eqn{A_{j,k}} =
+#'   5. Otherwise, the prior is an Inverse Wishart with the following parameters
 #'   where \eqn{d_j} is the dimensionality of the random effect \eqn{j}.
 #'   \itemize{
 #'   \item mean_exists: \eqn{IW(d_j + 1, I)}
@@ -2914,78 +2947,104 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
 #'   }
 #'   Estimation may fail if an improper prior (\code{jeffreys}, \code{uniform},
 #'   \code{limit}) is used.
-#' @param tolerance_elbo Convergence threshold for change in ELBO.
-#' @param tolerance_parameters Convergence threshold for the magnitude of change
-#'   in any parameter.
+#' @param tolerance_elbo Default (\code{1e-8}) sets a convergence threshold if
+#'   the change in the ELBO is below the tolerance.
+#' @param tolerance_parameters Default (\code{1e-5}) sets a convergence
+#'   threshold that is achieved if no parameter changes by more than the
+#'   tolerance from the prior estimated value.
 #' @param parameter_expansion Default of \code{"translation"}  (see Goplerud
 #'   2022b). Valid options are \code{"translation"}, \code{"mean"}, or
 #'   \code{"none"}. \code{"mean"} should be employed if \code{"translation"} is
 #'   not enabled or is too computationally expensive. For negative binomial
 #'   estimation or any estimation where \code{factorization_method != "strong"},
-#'   only \code{"mean"} and \code{"none"} are available options.
-#' @param px_method For \code{translation} expansion, how to update? "dynamic"
-#'   tries OSL and then backup numerical improvement via L-BFGS-B.
-#' @param px_numerical_it How many steps of L-BFGS-B are used to improve?
-#' @param hw_INNER For HW prior, how many "loops" between optimizing the
-#'   Inverse-Wishart and Inverse-Gamma parameters are done at each iteration?
+#'   only \code{"mean"} and \code{"none"} are available.
+#' @param px_method When code \code{parameter_expansion="translation"}, default
+#'   (\code{"dynamic"}) tries a one-step late update and, if this fails, a
+#'   numerical improvement by L-BFGS-B. For an Inverse-Wishart prior on
+#'   \eqn{\Sigma_j}, this is set to \code{"osl"} that only attempts a
+#'   one-step-late update.
+#' @param px_numerical_it Default of 10; if L-BFGS_B is needed for a parameter
+#'   expansion, this sets the number of steps used.
+#' @param hw_inner If \code{prior_variance="hw"}, this sets the number of
+#'   repeated iterations between estimating \eqn{\Sigma_j} and \eqn{a_{j,k}}
+#'   variational distributions at each iteration. A larger number approximates
+#'   jointly updating both parameters. Default (10) typically performs well.
 #' @param force_whole Default (\code{TRUE}) requires integers for observed
 #'   outcome for binomial or count models. \code{FALSE} allows for fractional
 #'   responses.
-#' @param vi_r_method Type of estimate for "r"; at moment, "fixed" (provide r),
-#'   "VEM" (treat r as point estimate; default);
-#'   "Laplace" (estimate using Laplace approximation described in the Addendum on GitHub); or "delta"
-#'   (experimential).
-#' @param vi_r_val For fixed "r", which value?
-#'
-#' @param init Initialization method can be one of four options: "EM_FE" sets
-#'   the random effects to zero, estimates the fixed effects and initializes the
-#'   model. "EM" initializes the model with a ridge regression with a guess as
-#'   to the random effect variance. "zero" initializes the variational means at
-#'   zero. "random" initializes randomly.
-#'
-#' @param debug_param Debug parameter convergence.
-#' @param debug_ELBO Debug ELBO trajectory.
-#' @param quiet_rho Debug parameter expansion by printing updates
-#' @param debug_px Debug parameter expansion by verifying ELBO
-#'
-#' @param linpred_method Method for updating means of beta and alpha. "joint" is best.
-#' @param print_prog Print after print_prog iterations to show progress.
-#' @param quiet Don't print noisy intermediate output.
-#' @param return_data Return the design (X,Z) for debugging afterwards.
-#'
-#' @param verbose_time Print time for each step (debugging only)
-#' @param do_timing Estimate timing with tictoc
-#' @param do_SQUAREM Accelerate method using SQUAREM (Varadhan and Roland 2008).
-#' @param verify_columns Verify that all columns are drawn from the data.frame itself.
+#' @param vi_r_method Default (\code{"VEM"}) uses a variational EM algorithm for
+#'   updating \eqn{r} if \code{family="negbin"}. This assumes a point mass
+#'   distribution on \eqn{r}. Other options are \code{"Laplace"} or
+#'   \code{"delta"} for alternative variational approximations. They are more
+#'   experimental and may not ensure the ELBO is increased at each iteration.
+#'   Alternatively, a positive number can be provided to fix the value of
+#'   \eqn{r}.
+#' @param init Default (\code{"EM_FE"}) initializes the mean variational
+#'   parameters for \eqn{q(\beta, \alpha)} by setting the random effects to zero
+#'   and estimating the fixed effects using a short-running EM algorithm.
+#'   \code{"EM"} initializes the model with a ridge regression with a guess as
+#'   to the random effect variance. \code{"random"} initializes the means
+#'   randomly. \code{"zero"} initializes them at zero.
+#' @param debug_param Default (\code{FALSE}) does not store parameters before
+#'   the final iteration. Set to \code{TRUE} to debug convergence issues.
+#' @param debug_ELBO Default (\code{FALSE}) does not store the ELBO after each
+#'   parameter update. Set to \code{TRUE} to debug convergence issues.
+#' @param quiet_rho Default (\code{FALSE}) does not print information about
+#'   parameter expansions. Set to \code{TRUE} to debug convergence issues.
+#' @param debug_px Default (\code{FALSE}) does not store information about
+#'   whether parameter expansion worked. Set to \code{TRUE} to convergence
+#'   issues.
+#' @param linpred_method Default (\code{"joint"}) updates the mean parameters
+#'   for the fixed and random effects simultaneously. This can improve the speed
+#'   of estimation but may be costly for large datasets; use \code{"cyclical"}
+#'   to update each parameter block separately.
+#' @param print_prog Default (\code{NULL}) prints a \code{"."} to indicate once
+#'   5\% of the total iterations have elapsed. Set to a positive integer
+#'   \code{int} to print a \code{"."} every \code{int} iterations.
+#' @param quiet Default (\code{FALSE}) does not print intermediate output about
+#'   convergence. Set to \code{TRUE} to debug.
+#' @param return_data Default (\code{FALSE}) does not return the original
+#'   design. Set to \code{TRUE} to debug convergence issues.
+#' @param verbose_time Default (\code{FALSE}) does not print the time elapsed
+#'   for each parameter update. Set to \code{TRUE}, in conjunction with
+#'   \code{do_timing=TRUE}, to see the time taken for each parameter update.
+#' @param do_timing Default (\code{FALSE}) does not estimate timing of each
+#'   variational update; \code{TRUE} requires the package \code{tictoc}.
+#' @param do_SQUAREM Default (\code{TRUE}) accelerates estimation using SQUAREM
+#'   (Varadhan and Roland 2008).
+#' @param verify_columns Default (\code{FALSE}) \bold{does not} verify that all
+#'   columns are drawn from the data.frame itself versus the environment. Set to
+#'   \code{TRUE} to debug potential issues.
 #' 
 #' @references 
 #' Goplerud, Max. 2022a. "Fast and Accurate Estimation of Non-Nested Binomial
-#' Hierarchical Models Using Variational Inference." Bayesian Analysis. 17(2):
-#' 623-650.
+#' Hierarchical Models Using Variational Inference." \emph{Bayesian Analysis}.
+#' 17(2): 623-650.
 #'
 #' Goplerud, Max. 2022b. "Re-Evaluating Machine Learning for MRP Given the
 #' Comparable Performance of (Deep) Hierarchical Models." Working Paper.
-#' 
+#'
 #' Huang, Alan, and Matthew P. Wand. 2013. "Simple Marginally Noninformative
-#' Prior Distributions for Covariance Matrices." Bayesian Analysis.
+#' Prior Distributions for Covariance Matrices." \emph{Bayesian Analysis}.
 #' 8(2):439-452.
-#' 
+#'
 #' Varadhan, Ravi, and Christophe Roland. 2008. "Simple and Globally Convergent
-#' Methods for Accelerating the Convergence of any EM Algorithm." Scandinavian
-#' Journal of Statistics. 35(2): 335-353.
+#' Methods for Accelerating the Convergence of any EM Algorithm."
+#' \emph{Scandinavian Journal of Statistics}. 35(2): 335-353.
 #' @export
 vglmer_control <- function(iterations = 1000,
    prior_variance = "hw",
    factorization_method = c("strong", "partial", "weak"),
    parameter_expansion = "translation", do_SQUAREM = TRUE, 
    tolerance_elbo = 1e-8, tolerance_parameters = 1e-5,
-   force_whole = TRUE, verbose_time = TRUE,
-   do_timing = FALSE,
-   debug_param = FALSE, return_data = FALSE, linpred_method = "joint",
-   vi_r_method = "VEM", vi_r_val = NA, verify_columns = FALSE,
-   debug_ELBO = FALSE, print_prog = NULL, quiet = T, quiet_rho = TRUE,
-   debug_px = FALSE, px_method = 'dynamic', px_numerical_it = 10,
-   hw_INNER = 10,
+   force_whole = TRUE, print_prog = NULL,
+   do_timing = FALSE, verbose_time = FALSE,
+   return_data = FALSE, linpred_method = "joint",
+   vi_r_method = "VEM", verify_columns = FALSE,
+   debug_param = FALSE, debug_ELBO = FALSE, debug_px = FALSE, 
+   quiet = T, quiet_rho = TRUE,
+   px_method = 'dynamic', px_numerical_it = 10,
+   hw_inner = 10,
    init = "EM_FE") {
   
   factorization_method <- match.arg(factorization_method)
@@ -3011,9 +3070,6 @@ vglmer_control <- function(iterations = 1000,
   if (prior_variance != 'hw' & px_method != 'OSL' & parameter_expansion %in% c('diagonal', 'translation')){
     px_method <- 'OSL'
     message('Setting px_method to "OSL" if translation & non-HW prior.')
-  }
-  if (vi_r_method == "fixed" & is.na(vi_r_val)) {
-    stop('vi_r_val must not be NA if vi_r_method = "fixed"')
   }
 
   output <- mget(ls())

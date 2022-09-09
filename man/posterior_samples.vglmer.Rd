@@ -11,11 +11,10 @@ posterior_samples.vglmer(object, samples, verbose = FALSE)
 
 \item{samples}{Number of samples to draw.}
 
-\item{verbose}{Print progress of drawing the samples.}
+\item{verbose}{Show progress in drawing samples.}
 }
 \description{
 This function draws samples from the estimated variational
-  distribution that approximates the posterior. If using \code{MAVB} is
-  preferred to attempt to improve the quality, please use \link{MAVB} or
-  \link{predict_MAVB}.
+  distributions. If using \code{MAVB} to improve the quality of the
+  approximating distribution, please use \link{MAVB} or \link{predict_MAVB}.
 }

@@ -13,126 +13,154 @@ vglmer_control(
   tolerance_elbo = 1e-08,
   tolerance_parameters = 1e-05,
   force_whole = TRUE,
-  verbose_time = TRUE,
+  print_prog = NULL,
   do_timing = FALSE,
-  debug_param = FALSE,
+  verbose_time = FALSE,
   return_data = FALSE,
   linpred_method = "joint",
   vi_r_method = "VEM",
-  vi_r_val = NA,
   verify_columns = FALSE,
+  debug_param = FALSE,
   debug_ELBO = FALSE,
-  print_prog = NULL,
+  debug_px = FALSE,
   quiet = T,
   quiet_rho = TRUE,
-  debug_px = FALSE,
   px_method = "dynamic",
   px_numerical_it = 10,
-  hw_INNER = 10,
+  hw_inner = 10,
   init = "EM_FE"
 )
 }
 \arguments{
-\item{iterations}{Number of iterations for the model.}
+\item{iterations}{Default of 1000; this sets the maximum number of iterations
+used in estimation.}
 
-\item{prior_variance}{Options are \code{hw}, \code{jeffreys},
-\code{mean_exists}, \code{uniform}, and \code{gamma}. The
- default (\code{hw}) is the Huang-Wand (2013) prior whose hyper-parameters
- are \eqn{nu_j} = 2 and \eqn{A_{j,k}} = 5.
- 
- Otherwise, the prior is an Inverse Wishart with the following parameters
- where \eqn{d_j} is the dimensionality of the random effect \eqn{j}.
- \itemize{
- \item mean_exists: \eqn{IW(d_j + 1, I)}
- \item jeffreys: \eqn{IW(0, 0)}
- \item uniform: \eqn{IW(-[d_j+1], 0)}
- \item limit: \eqn{IW(d_j - 1, 0)}
- }
- Estimation may fail if an improper prior (\code{jeffreys}, \code{uniform},
- \code{limit}) is used.}
+\item{prior_variance}{Prior distribution on the random effect variance
+\eqn{\Sigma_j}. Options are \code{hw}, \code{jeffreys}, \code{mean_exists},
+\code{uniform}, and \code{gamma}. The default (\code{hw}) is the Huang-Wand
+(2013) prior whose hyper-parameters are \eqn{\nu_j} = 2 and \eqn{A_{j,k}} =
+5. Otherwise, the prior is an Inverse Wishart with the following parameters
+where \eqn{d_j} is the dimensionality of the random effect \eqn{j}.
+\itemize{
+\item mean_exists: \eqn{IW(d_j + 1, I)}
+\item jeffreys: \eqn{IW(0, 0)}
+\item uniform: \eqn{IW(-[d_j+1], 0)}
+\item limit: \eqn{IW(d_j - 1, 0)}
+}
+Estimation may fail if an improper prior (\code{jeffreys}, \code{uniform},
+\code{limit}) is used.}
 
 \item{factorization_method}{Factorization assumption for the variational
-appriximation. Default of \code{strong}, i.e. a fully factorized model.
-Described in detail in Goplerud (2022a). \code{strong}, \code{partial}, and
-\code{weak} correspond to Schemes I, II, and III respectively.}
+approximation. Default of \code{"strong"}, i.e. a fully factorized model.
+Described in detail in Goplerud (2022a). \code{"strong"}, \code{"partial"},
+and \code{"weak"} correspond to Schemes I, II, and III respectively in that
+paper.}
 
 \item{parameter_expansion}{Default of \code{"translation"}  (see Goplerud
 2022b). Valid options are \code{"translation"}, \code{"mean"}, or
 \code{"none"}. \code{"mean"} should be employed if \code{"translation"} is
 not enabled or is too computationally expensive. For negative binomial
 estimation or any estimation where \code{factorization_method != "strong"},
-only \code{"mean"} and \code{"none"} are available options.}
+only \code{"mean"} and \code{"none"} are available.}
 
-\item{do_SQUAREM}{Accelerate method using SQUAREM (Varadhan and Roland 2008).}
+\item{do_SQUAREM}{Default (\code{TRUE}) accelerates estimation using SQUAREM
+(Varadhan and Roland 2008).}
 
-\item{tolerance_elbo}{Convergence threshold for change in ELBO.}
+\item{tolerance_elbo}{Default (\code{1e-8}) sets a convergence threshold if
+the change in the ELBO is below the tolerance.}
 
-\item{tolerance_parameters}{Convergence threshold for the magnitude of change
-in any parameter.}
+\item{tolerance_parameters}{Default (\code{1e-5}) sets a convergence
+threshold that is achieved if no parameter changes by more than the
+tolerance from the prior estimated value.}
 
 \item{force_whole}{Default (\code{TRUE}) requires integers for observed
 outcome for binomial or count models. \code{FALSE} allows for fractional
 responses.}
 
-\item{verbose_time}{Print time for each step (debugging only)}
+\item{print_prog}{Default (\code{NULL}) prints a \code{"."} to indicate once
+5\% of the total iterations have elapsed. Set to a positive integer
+\code{int} to print a \code{"."} every \code{int} iterations.}
 
-\item{do_timing}{Estimate timing with tictoc}
+\item{do_timing}{Default (\code{FALSE}) does not estimate timing of each
+variational update; \code{TRUE} requires the package \code{tictoc}.}
 
-\item{debug_param}{Debug parameter convergence.}
+\item{verbose_time}{Default (\code{FALSE}) does not print the time elapsed
+for each parameter update. Set to \code{TRUE}, in conjunction with
+\code{do_timing=TRUE}, to see the time taken for each parameter update.}
 
-\item{return_data}{Return the design (X,Z) for debugging afterwards.}
+\item{return_data}{Default (\code{FALSE}) does not return the original
+design. Set to \code{TRUE} to debug convergence issues.}
 
-\item{linpred_method}{Method for updating means of beta and alpha. "joint" is best.}
+\item{linpred_method}{Default (\code{"joint"}) updates the mean parameters
+for the fixed and random effects simultaneously. This can improve the speed
+of estimation but may be costly for large datasets; use \code{"cyclical"}
+to update each parameter block separately.}
 
-\item{vi_r_method}{Type of estimate for "r"; at moment, "fixed" (provide r),
-"VEM" (treat r as point estimate; default);
-"Laplace" (estimate using Laplace approximation described in the Addendum on GitHub); or "delta"
-(experimential).}
+\item{vi_r_method}{Default (\code{"VEM"}) uses a variational EM algorithm for
+updating \eqn{r} if \code{family="negbin"}. This assumes a point mass
+distribution on \eqn{r}. Other options are \code{"Laplace"} or
+\code{"delta"} for alternative variational approximations. They are more
+experimental and may not ensure the ELBO is increased at each iteration.
+Alternatively, a positive number can be provided to fix the value of
+\eqn{r}.}
 
-\item{vi_r_val}{For fixed "r", which value?}
+\item{verify_columns}{Default (\code{FALSE}) \bold{does not} verify that all
+columns are drawn from the data.frame itself versus the environment. Set to
+\code{TRUE} to debug potential issues.}
 
-\item{verify_columns}{Verify that all columns are drawn from the data.frame itself.}
+\item{debug_param}{Default (\code{FALSE}) does not store parameters before
+the final iteration. Set to \code{TRUE} to debug convergence issues.}
 
-\item{debug_ELBO}{Debug ELBO trajectory.}
+\item{debug_ELBO}{Default (\code{FALSE}) does not store the ELBO after each
+parameter update. Set to \code{TRUE} to debug convergence issues.}
 
-\item{print_prog}{Print after print_prog iterations to show progress.}
+\item{debug_px}{Default (\code{FALSE}) does not store information about
+whether parameter expansion worked. Set to \code{TRUE} to convergence
+issues.}
 
-\item{quiet}{Don't print noisy intermediate output.}
+\item{quiet}{Default (\code{FALSE}) does not print intermediate output about
+convergence. Set to \code{TRUE} to debug.}
 
-\item{quiet_rho}{Debug parameter expansion by printing updates}
+\item{quiet_rho}{Default (\code{FALSE}) does not print information about
+parameter expansions. Set to \code{TRUE} to debug convergence issues.}
 
-\item{debug_px}{Debug parameter expansion by verifying ELBO}
+\item{px_method}{When code \code{parameter_expansion="translation"}, default
+(\code{"dynamic"}) tries a one-step late update and, if this fails, a
+numerical improvement by L-BFGS-B. For an Inverse-Wishart prior on
+\eqn{\Sigma_j}, this is set to \code{"osl"} that only attempts a
+one-step-late update.}
 
-\item{px_method}{For \code{translation} expansion, how to update? "dynamic"
-tries OSL and then backup numerical improvement via L-BFGS-B.}
+\item{px_numerical_it}{Default of 10; if L-BFGS_B is needed for a parameter
+expansion, this sets the number of steps used.}
 
-\item{px_numerical_it}{How many steps of L-BFGS-B are used to improve?}
+\item{hw_inner}{If \code{prior_variance="hw"}, this sets the number of
+repeated iterations between estimating \eqn{\Sigma_j} and \eqn{a_{j,k}}
+variational distributions at each iteration. A larger number approximates
+jointly updating both parameters. Default (10) typically performs well.}
 
-\item{hw_INNER}{For HW prior, how many "loops" between optimizing the
-Inverse-Wishart and Inverse-Gamma parameters are done at each iteration?}
-
-\item{init}{Initialization method can be one of four options: "EM_FE" sets
-the random effects to zero, estimates the fixed effects and initializes the
-model. "EM" initializes the model with a ridge regression with a guess as
-to the random effect variance. "zero" initializes the variational means at
-zero. "random" initializes randomly.}
+\item{init}{Default (\code{"EM_FE"}) initializes the mean variational
+parameters for \eqn{q(\beta, \alpha)} by setting the random effects to zero
+and estimating the fixed effects using a short-running EM algorithm.
+\code{"EM"} initializes the model with a ridge regression with a guess as
+to the random effect variance. \code{"random"} initializes the means
+randomly. \code{"zero"} initializes them at zero.}
 }
 \description{
 This function controls various estimation options for \code{vglmer}.
 }
 \references{
 Goplerud, Max. 2022a. "Fast and Accurate Estimation of Non-Nested Binomial
-Hierarchical Models Using Variational Inference." Bayesian Analysis. 17(2):
-623-650.
+Hierarchical Models Using Variational Inference." \emph{Bayesian Analysis}.
+17(2): 623-650.
 
 Goplerud, Max. 2022b. "Re-Evaluating Machine Learning for MRP Given the
 Comparable Performance of (Deep) Hierarchical Models." Working Paper.
 
 Huang, Alan, and Matthew P. Wand. 2013. "Simple Marginally Noninformative
-Prior Distributions for Covariance Matrices." Bayesian Analysis.
+Prior Distributions for Covariance Matrices." \emph{Bayesian Analysis}.
 8(2):439-452.
 
 Varadhan, Ravi, and Christophe Roland. 2008. "Simple and Globally Convergent
-Methods for Accelerating the Convergence of any EM Algorithm." Scandinavian
-Journal of Statistics. 35(2): 335-353.
+Methods for Accelerating the Convergence of any EM Algorithm."
+\emph{Scandinavian Journal of Statistics}. 35(2): 335-353.
 }

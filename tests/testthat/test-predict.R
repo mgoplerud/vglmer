@@ -283,3 +283,36 @@ test_that("Prediction with Samples", {
     )
   }
 })
+
+test_that("Prediction with factor/categorical", {
+  
+  N <- 50
+  G <- 10
+  x <- rnorm(N + G)
+  g <- c(sample(1:G, N, replace = T), 1:G)
+  alpha <- rnorm(G)
+  
+  y <- rbinom(n = N + G, size = 1, prob = plogis(-1 + x + alpha[g]))
+  l <- sample(letters[1:3], length(x), replace = T)
+  
+  example_vglmer <- vglmer(
+    formula = y ~ x + l + (1  | g), data = NULL,
+    control = vglmer_control(iterations = 2, factorization_method = 'strong'), 
+    family = "binomial"
+  )
+  
+  pred1a <- predict(example_vglmer, newdata = data.frame(x = 3, g = 2, l = 'a', stringsAsFactors = TRUE))
+  expect_equivalent(pred1a, sum(coef(example_vglmer)  * c(1, 3, 0, 0)) + ranef(example_vglmer)$g[2,2])
+  
+  pred1b <- predict(example_vglmer, newdata = data.frame(x = 3, g = 2, l = 'a', stringsAsFactors = FALSE))
+  expect_equivalent(pred1b, sum(coef(example_vglmer)  * c(1, 3, 0, 0)) + ranef(example_vglmer)$g[2,2])
+  
+  pred2a <- predict(example_vglmer, newdata = data.frame(x = -1, g = 100, l = 'c', stringsAsFactors = TRUE), allow_missing_levels = TRUE)
+  expect_equivalent(pred2a, sum(coef(example_vglmer)  * c(1, -1, 0, 1)) )
+  pred2b <- predict(example_vglmer, newdata = data.frame(x = -1, g = 100, l = 'c', stringsAsFactors = FALSE), allow_missing_levels = TRUE)
+  expect_equivalent(pred2b, sum(coef(example_vglmer)  * c(1, -1, 0, 1)) )
+  
+  expect_error(predict(example_vglmer, 
+    newdata = data.frame(x = -1, g = 100, l = 'd'), 
+    allow_missing_levels = TRUE), regexp = 'has new level d')
+})

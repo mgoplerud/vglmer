@@ -37,13 +37,13 @@ expectation of the linear predictor. A positive integer draws
 the linear predictor.}
 
 \item{samples_only}{Default (\code{FALSE}) returns the samples from the
-variational posterior, \bold{not} the prediction. Each row is a sample and
-each column is an parameter.}
+variational distributions, \bold{not} the prediction. Each row is a sample and
+each column is a parameter.}
 
-\item{summary}{Default (\code{TRUE}) returns the posterior mean and variance
-for each observation. \code{FALSE} returns a matrix of the sampled linear
-predictor for each observation. Each row is a sample and each column is an
-observation.}
+\item{summary}{Default (\code{TRUE}) returns the mean and variance of the
+samples for each observation. \code{FALSE} returns a matrix of the sampled
+linear predictor for each observation. Each row is a sample and each column
+is an observation.}
 
 \item{allow_missing_levels}{Default (\code{FALSE}) does not allow prediction
 for levels not observed in the original data. \code{TRUE} allows for
@@ -58,25 +58,22 @@ methods.}
 }
 \value{
 This function returns an estimate of the linear predictor. The
-  default returns the predicted posterior mean, i.e.
-  \eqn{E_{q(\alpha,\beta)}[x_i^T \beta + z_i^T\alpha]}. 
-  
-  If \code{samples > 0}, the functions return a summary of the prediction for
-  each observation, i.e. the estimated mean and variance. If \code{summary =
-  FALSE}, the sampled values of the linear predictor are returned as a
-  matrix. \code{predict_MAVB} performs MAVB as described in Goplerud (2022a)
-  before returning the linear predictor. 
+  default returns the expected mean, i.e. \eqn{E_{q(\alpha,\beta)}[x_i^T
+  \beta + z_i^T\alpha]}. If \code{samples > 0}, these functions return a
+  summary of the prediction for each observation, i.e. the estimated mean and
+  variance. If \code{summary = FALSE}, the sampled values of the linear
+  predictor are returned as a matrix. \code{predict_MAVB} performs MAVB as
+  described in Goplerud (2022a) before returning the linear predictor.
   
   If \code{allow_missing_levels = TRUE}, then observations with a new
   (unseen) level for the random effect are given a value of zero for that
   term of the prediction.
 }
 \description{
-These functions return the estimated linear predictor using the
-  estimated variational distributions. \code{predict.vglmer} draws
-  predictions using the estimated variational distributions;
-  \code{predict_MAVB} does so using the MAVB procedure described in Goplerud
-  (2022a).
+These functions calculate the estimated linear predictor using
+  the variational distributions. \code{predict.vglmer} draws predictions
+  using the estimated variational distributions; \code{predict_MAVB} does so
+  using the MAVB procedure described in Goplerud (2022a).
 }
 \examples{
 
