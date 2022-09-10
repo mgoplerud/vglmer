@@ -56,9 +56,9 @@ the scale parameters. \code{b} contains a list of the shape parameters.}
 estimated parameters for \eqn{\sigma^2}; its distribution is Inverse-Gamma.
 \code{a} contains the scale parameter; \code{b} contains the shape
 parameter.}
-\item{r}{If \code{family="negbin"}, this contains the variational parameters
-for the dispersion parameter \eqn{r}. \code{mu} contains the mean;
-\code{sigma} contains the variance.}
+\item{ln_r}{If \code{family="negbin"}, this contains the variational
+parameters for the log dispersion parameter \eqn{\ln(r)}. \code{mu} contains
+the mean; \code{sigma} contains the variance.}
 \item{family}{Family of outcome.}
 \item{ELBO}{Contains the ELBO at the termination of the algorithm.}
 \item{ELBO_trajectory}{\code{data.frame} tracking the ELBO per iteration.}

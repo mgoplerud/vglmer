@@ -138,9 +138,9 @@
 #' estimated parameters for \eqn{\sigma^2}; its distribution is Inverse-Gamma.
 #' \code{a} contains the scale parameter; \code{b} contains the shape
 #' parameter.}
-#' \item{r}{If \code{family="negbin"}, this contains the variational parameters
-#' for the dispersion parameter \eqn{r}. \code{mu} contains the mean;
-#' \code{sigma} contains the variance.}
+#' \item{ln_r}{If \code{family="negbin"}, this contains the variational
+#' parameters for the log dispersion parameter \eqn{\ln(r)}. \code{mu} contains
+#' the mean; \code{sigma} contains the variance.}
 #' \item{family}{Family of outcome.}
 #' \item{ELBO}{Contains the ELBO at the termination of the algorithm.}
 #' \item{ELBO_trajectory}{\code{data.frame} tracking the ELBO per iteration.}
@@ -157,7 +157,7 @@
 #'   qlogis optim residuals lm plogis setNames .getXlevels
 #' @importFrom graphics plot
 #' @importFrom Rcpp sourceCpp
-#' 
+#' @importFrom mgcv interpret.gam
 #' @references
 #' Goplerud, Max. 2022a. "Fast and Accurate Estimation of Non-Nested Binomial
 #' Hierarchical Models Using Variational Inference." \emph{Bayesian Analysis}. 17(2):
@@ -205,9 +205,15 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
   # (i.e. sub out the random effects, do model.frame)
   #
   nobs_init <- nrow(data)
-  
-  parse_formula <- vglmer_interpret.gam0(subbars(formula), extra.special = 'v_s')
 
+  # Interpret gam using mgcv::interpret.gam
+  parse_formula <- tryCatch(
+    interpret.gam(subbars(formula), extra.special = 'v_s'), error = function(e){NULL})
+  if (is.null(parse_formula)){
+    # If this fails, usually when there is custom argument in environment, use this instead
+    parse_formula <- fallback_interpret.gam0(subbars(formula), extra.special = 'v_s')
+  }
+  
   if (any(!sapply(parse_formula$smooth.spec, inherits, what = 'vglmer_spline'))){
     stop('gam specials are not permitted; use v_s(...) and see documentation.')
   }
@@ -367,7 +373,12 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
   }
 
   # Extract X (FE design matrix)
-  fe_fmla <- vglmer_interpret.gam0(nobars(formula), extra.special = 'v_s')
+  fe_fmla <- tryCatch(
+    interpret.gam(nobars(formula), extra.special = 'v_s'), error = function(e){NULL})
+  if (is.null(fe_fmla)){
+    # If this fails, usually when there is custom argument in environment, use this instead
+    fe_fmla <- fallback_interpret.gam0(nobars(formula), extra.special = 'v_s')
+  }
   
   if (length(fe_fmla$smooth.spec) > 0){
     
@@ -723,7 +734,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
   
   if (family == "linear") {
 
-    vi_sigmasq_a <- (length(y) + sum(d_j * g_j))/2 + vi_sigmasq_prior_a
+    vi_sigmasq_a <- (nrow(X) + sum(d_j * g_j))/2 + vi_sigmasq_prior_a
     vi_sigmasq_b <- sum(residuals(lm(y ~ 1))^2)/2 + vi_sigmasq_prior_b
     
     s <- y
@@ -2887,7 +2898,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
   output$beta$decomp_var <- vi_beta_decomp
 
   if (family == "negbin") {
-    output$r <- list(mu = vi_r_mu, sigma = vi_r_sigma, method = vi_r_method)
+    output$ln_r <- list(mu = vi_r_mu, sigma = vi_r_sigma, method = vi_r_method)
   }
   if (do_huangwand){
     output$hw <- list(a = vi_a_a_jp, b = vi_a_b_jp)
@@ -2974,11 +2985,8 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
 #'   responses.
 #' @param vi_r_method Default (\code{"VEM"}) uses a variational EM algorithm for
 #'   updating \eqn{r} if \code{family="negbin"}. This assumes a point mass
-#'   distribution on \eqn{r}. Other options are \code{"Laplace"} or
-#'   \code{"delta"} for alternative variational approximations. They are more
-#'   experimental and may not ensure the ELBO is increased at each iteration.
-#'   Alternatively, a positive number can be provided to fix the value of
-#'   \eqn{r}.
+#'   distribution on \eqn{r}. A number can be provided to fix \eqn{r}. These are
+#'   the only available options.
 #' @param init Default (\code{"EM_FE"}) initializes the mean variational
 #'   parameters for \eqn{q(\beta, \alpha)} by setting the random effects to zero
 #'   and estimating the fixed effects using a short-running EM algorithm.
@@ -3052,7 +3060,7 @@ vglmer_control <- function(iterations = 1000,
     choices = c("hw", "mean_exists", "jeffreys", "limit", "uniform"))
   linpred_method <- match.arg(linpred_method, choices = c("joint", "cyclical", "solve_normal"))    
   parameter_expansion <- match.arg(parameter_expansion, choices = c("translation", "mean", "none"))
-  vi_r_method <- match.arg(vi_r_method, choices = c("VEM", "fixed", "Laplace", "delta"))
+  # vi_r_method <- match.arg(vi_r_method, choices = c("VEM", "fixed", "Laplace", "delta"))
   init <- match.arg(init, choices = c("EM_FE", "EM", "random", "zero"))
   if (!is.null(print_prog)){
     if (print_prog < 0){stop('print_prog must be non-negative integer or NULL.')}

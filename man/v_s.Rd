@@ -24,15 +24,20 @@ example, \code{v_s(x, by = g)}.}
 categorical factor and the covariate. See "Details" in \link{vglmer} for
 more discussion.}
 
-\item{outer_okay}{Default (\code{FALSE}) does not permit values in \code{x} to exceed the outer knots.}
+\item{outer_okay}{Default (\code{FALSE}) does not permit values in \code{x}
+to exceed the outer knots.}
 }
 \description{
 This function estimates splines in \code{vglmer}, similar to \code{s(...)} in
-\code{mgcv}. It allows for truncated (linear) splines or O'Sullivan splines.
-Please see \link{vglmer} for more discussion and examples.
+\code{mgcv} albeit with many fewer options than \code{mgcv}. It allows for
+truncated (linear) splines or O'Sullivan splines. Please see \link{vglmer}
+for more discussion and examples.
 }
 \references{
 Wand, Matt P. and Ormerod, John T. 2008. "On Semiparametric Regression with
 O'Sullivan Penalized Splines". \emph{Australian & New Zealand Journal of
 Statistics}. 50(2): 179-198.
+
+Wood, Simon N. 2017. \emph{Generalized Additive Models: An Introduction with
+R}. Chapman and Hall/CRC.
 }

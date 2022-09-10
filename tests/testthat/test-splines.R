@@ -28,7 +28,8 @@ test_that("fit with non-default options", {
   dat$y <- rbinom(100, 1, plogis(dat$x * runif(5)[match(dat$f, letters)]))
   
   # Custom knots as argument
-  fit_knots <- vglmer(y ~ v_s(x, knots = quantile(dat$x, c(0.25, 0.75, 0.6))),
+  custom_knots <- quantile(dat$x, c(0.25, 0.75, 0.6))
+  fit_knots <- vglmer(y ~ v_s(x, knots = custom_knots),
                       data = dat, family = 'binomial',
                       control = vglmer_control(iterations = 15))
   

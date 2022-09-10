@@ -125,8 +125,11 @@ test_that("Compare VI r methods", {
   list_output <- list()
   list_r <- list()
   
-  for (v in c("VEM", "delta", "Laplace")) {
+  for (v in c("VEM", "fixed")) {
     
+    if (v == 'fixed'){
+      v <- 1
+    }
     example_vglmer <- suppressWarnings(vglmer(
       formula = y ~ x + (1 | g), data = data,
       family = "negbin",

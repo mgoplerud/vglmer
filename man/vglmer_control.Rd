@@ -98,11 +98,8 @@ to update each parameter block separately.}
 
 \item{vi_r_method}{Default (\code{"VEM"}) uses a variational EM algorithm for
 updating \eqn{r} if \code{family="negbin"}. This assumes a point mass
-distribution on \eqn{r}. Other options are \code{"Laplace"} or
-\code{"delta"} for alternative variational approximations. They are more
-experimental and may not ensure the ELBO is increased at each iteration.
-Alternatively, a positive number can be provided to fix the value of
-\eqn{r}.}
+distribution on \eqn{r}. A number can be provided to fix \eqn{r}. These are
+the only available options.}
 
 \item{verify_columns}{Default (\code{FALSE}) \bold{does not} verify that all
 columns are drawn from the data.frame itself versus the environment. Set to

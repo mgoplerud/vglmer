@@ -21,8 +21,9 @@ formOmega <- function(a,b,intKnots){
 #' Create splines for use in vglmer
 #' 
 #' This function estimates splines in \code{vglmer}, similar to \code{s(...)} in
-#' \code{mgcv}. It allows for truncated (linear) splines or O'Sullivan splines.
-#' Please see \link{vglmer} for more discussion and examples.
+#' \code{mgcv} albeit with many fewer options than \code{mgcv}. It allows for
+#' truncated (linear) splines or O'Sullivan splines. Please see \link{vglmer}
+#' for more discussion and examples.
 #' 
 #' @param ... Variable name, e.g. \code{v_s(x)}
 #' @param type Default (\code{"tpf"}) uses truncated linear splines for the
@@ -36,12 +37,17 @@ formOmega <- function(a,b,intKnots){
 #' @param by_re Default (\code{TRUE}) regularizes the interactions between the
 #'   categorical factor and the covariate. See "Details" in \link{vglmer} for
 #'   more discussion.
-#' @param outer_okay Default (\code{FALSE}) does not permit values in \code{x} to exceed the outer knots. 
+#' @param outer_okay Default (\code{FALSE}) does not permit values in \code{x}
+#'   to exceed the outer knots.
 #' @importFrom splines bs
+#' 
 #' @references 
 #' Wand, Matt P. and Ormerod, John T. 2008. "On Semiparametric Regression with
 #' O'Sullivan Penalized Splines". \emph{Australian & New Zealand Journal of
 #' Statistics}. 50(2): 179-198.
+#' 
+#' Wood, Simon N. 2017. \emph{Generalized Additive Models: An Introduction with
+#' R}. Chapman and Hall/CRC.
 #' @export
 v_s <- function(..., type = 'tpf', knots = NULL, by = NA,
                 by_re = TRUE,
@@ -125,9 +131,6 @@ vglmer_build_spline <- function(x, knots = NULL, Boundary.knots = NULL,
     # eigen decompose
     eD <- eigen(D)
     # transform spline design
-
-    # x <- splineDesign(knots = sort(c(rep(Boundary.knots, 4), intKnots)), 
-    #     x = x, sparse = FALSE, outer.ok = outer_okay, ord = 4)
     if (override_warn){
       wrapper_bs <- function(x){suppressWarnings(x)}
     }else{
@@ -139,8 +142,9 @@ vglmer_build_spline <- function(x, knots = NULL, Boundary.knots = NULL,
     x <- x %*% eD$vectors[,seq_len(ncol(D)-2)] %*% 
       Diagonal(x = 1/sqrt(eD$values[seq_len(ncol(D) - 2)]))
     
-    spline_attr <- list(D = Diagonal(n = ncol(x)), Boundary.knots = Boundary.knots,
-                        knots = intKnots, eigen_D = eD)
+    spline_attr <- list(D = Diagonal(n = ncol(x)), 
+      Boundary.knots = Boundary.knots,
+      knots = intKnots, eigen_D = eD)
 
   }else{stop('splines only set up for tpf and o')}
   
@@ -180,17 +184,16 @@ print.spline_sparse <- function(x){
 }
 image.spline_sparse <- function(x){image(x$x)}
 
-#' Interpret a vglmer formula
-#' A modified version of interpret.gam0 from mgcv,
-#' Copied almost verbatim but adjusted to allow custom objects
-#' to be parsed as arguments to "v_s"
+#' Interpret a vglmer formula for splines
+#' @description A modified version of interpret.gam0 from mgcv. Used when mgcv's
+#'   interpret.gam fails; usually when some environment object is passed to v_s.
 #' @param gf A vglmer formula
 #' @param textra Unused internal argument
 #' @param extra.special Allow extra special terms to be passed
 #' @importFrom stats reformulate terms.formula as.formula formula update.formula
 #'   quantile
 #' @keywords internal
-vglmer_interpret.gam0 <- function(gf, textra = NULL, extra.special = NULL){
+fallback_interpret.gam0 <- function(gf, textra = NULL, extra.special = NULL){
   
   p.env <- environment(gf)
   
