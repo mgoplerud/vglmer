@@ -1,13 +1,13 @@
-# vglmer: Variational Generalized Linear Mixed Effects Regression [![R-CMD-check](https://github.com/mgoplerud/vglmer/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/mgoplerud/vglmer/actions/workflows/R-CMD-check.yaml) [![codecov](https://codecov.io/gh/mgoplerud/vglmer/branch/master/graph/badge.svg?token=L8C4260BUW)](https://codecov.io/gh/mgoplerud/vglmer)
+# vglmer: Variational Generalized Linear Mixed Effects Regression [![R-CMD-check](https://github.com/mgoplerud/vglmer/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/mgoplerud/vglmer/actions/workflows/R-CMD-check.yaml) [![codecov](https://codecov.io/gh/mgoplerud/vglmer/branch/master/graph/badge.svg?token=L8C4260BUW)](https://app.codecov.io/gh/mgoplerud/vglmer)
 
-A package to estimate non-linear hierarchical models using the variational algorithms described in [Goplerud (2022a)](https://arxiv.org/abs/2007.12300) and in [Goplerud (2022b)](https://www.dropbox.com/s/wb98qa7dqledw0i/Goplerud_MMM.pdf?dl=0). It also provides the option to improve an initial approximation using marginally augmented variational Bayes (MAVB) also described in Goplerud (2022a). It can be installed using `devtools`.
+A package to estimate non-linear hierarchical models using the variational algorithms described in [Goplerud (2022a)](https://arxiv.org/abs/2007.12300) and in [Goplerud (2022b)](https://mgoplerud.com/papers/Goplerud_MMM_Full.pdf). It also provides the option to improve an initial approximation using marginally augmented variational Bayes (MAVB) also described in Goplerud (2022a). It can be installed using `devtools`.
 
 ```
 library(devtools)
 devtools::install_github("mgoplerud/vglmer", dependencies = TRUE)
 ```
 
-At present, it can fit logistic, linear, and negative binomial outcomes with an arbitrary number of random effects. Details on negative binomial inference can be found [here](https://j.mp/goplerud_MAVB_extra) and are more experimential at the moment.
+At present, it can fit logistic, linear, and negative binomial outcomes with an arbitrary number of random effects. Details on negative binomial inference can be found [here](https://github.com/mgoplerud/vglmer/blob/master/.github/model_addendum.pdf) and are more experimential at the moment.
 
 This package accepts "standard" glmer syntax of the form:
 

@@ -1,3 +1,9 @@
+## Resubmission
+
+This is a resubmission. In this version I have:
+  
+  - Addressed the issues with the two links noted in the previous submission.
+  
 ## R CMD check results
 
 There were no ERRORs or WARNINGs. 
