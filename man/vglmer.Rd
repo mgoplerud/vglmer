@@ -127,6 +127,7 @@ these methods.
 }
 \examples{
 
+set.seed(234)
 sim_data <- data.frame(
   x = rnorm(100),
   y = rbinom(100, 1, 0.5),

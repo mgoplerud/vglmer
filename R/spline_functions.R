@@ -41,6 +41,10 @@ formOmega <- function(a,b,intKnots){
 #'   to exceed the outer knots.
 #' @importFrom splines bs
 #' 
+#' @return This function returns a list of class of \code{vglmer_spline} that is
+#'   passed to unexported functions. It contains the arguments noted above where
+#'   \code{...} is parsed into an argument called \code{term}.
+#'   
 #' @references 
 #' Wand, Matt P. and Ormerod, John T. 2008. "On Semiparametric Regression with
 #' O'Sullivan Penalized Splines". \emph{Australian & New Zealand Journal of

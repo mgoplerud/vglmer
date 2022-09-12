@@ -77,6 +77,7 @@ These functions calculate the estimated linear predictor using
 }
 \examples{
 
+set.seed(123)
 sim_data <- data.frame(
   x = rnorm(100),
   y = rbinom(100, 1, 0.5),
@@ -90,9 +91,8 @@ est_vglmer <- vglmer(y ~ x + (x | g), data = sim_data, family = "binomial")
 predict(est_vglmer, newdata = sim_data)
 # Return 10 posterior draws of the linear predictor for each observation.
 predict_MAVB(est_vglmer, newdata = sim_data, summary = FALSE, samples = 10)
-# The following would fail!
-# predict(est_vglmer, newdata = data.frame(g = "AB", x = 0))
-# Works
+# Predict with a new level; note this would fail if 
+# allow_missing_levels = FALSE (the default)
 predict(est_vglmer,
   newdata = data.frame(g = "AB", x = 0),
   allow_missing_levels = TRUE

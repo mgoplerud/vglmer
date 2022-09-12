@@ -13,6 +13,10 @@ posterior_samples.vglmer(object, samples, verbose = FALSE)
 
 \item{verbose}{Show progress in drawing samples.}
 }
+\value{
+This function returns a matrix with \code{samples} rows and columns
+  for each fixed and random effect.
+}
 \description{
 This function draws samples from the estimated variational
   distributions. If using \code{MAVB} to improve the quality of the

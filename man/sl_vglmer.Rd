@@ -73,6 +73,14 @@ not in the training data. Default is \code{TRUE} for \code{SuperLearner}.}
 
 \item{env}{Environment to assign model. See "Details" for how this is used.}
 }
+\value{
+The functions here return different types of output. \code{SL.vglmer}
+  and \code{SL.glmer} return fitted models with the in-sample predictions as
+  standard for \code{SuperLearner}. The \code{predict} methods return vectors
+  of predicted values. \code{add_formula_SL} creates two objects in the
+  environment (one for estimation \code{model_f} and one for prediction
+  \code{predict.model_f}) used for \code{SuperLearner}.
+}
 \description{
 These functions integrate \code{vglmer} (or \code{glmer}) into
 \code{SuperLearner}. Most of the arguments are standard for
@@ -102,6 +110,8 @@ This documentation describes two types of function.
   called by \code{SuperLearner}.
 }
 \examples{
+
+set.seed(456)
 
 if (requireNamespace('SuperLearner', quietly = TRUE)){
 require(SuperLearner)

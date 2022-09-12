@@ -23,7 +23,7 @@ vglmer_control(
   debug_param = FALSE,
   debug_ELBO = FALSE,
   debug_px = FALSE,
-  quiet = T,
+  quiet = TRUE,
   quiet_rho = TRUE,
   px_method = "dynamic",
   px_numerical_it = 10,
@@ -141,6 +141,11 @@ and estimating the fixed effects using a short-running EM algorithm.
 \code{"EM"} initializes the model with a ridge regression with a guess as
 to the random effect variance. \code{"random"} initializes the means
 randomly. \code{"zero"} initializes them at zero.}
+}
+\value{
+This function returns a named list with class \code{vglmer_control}.
+  It is passed to \code{vglmer} in the argument \code{control}. This argument
+  only accepts objects created using \code{vglmer_control}.
 }
 \description{
 This function controls various estimation options for \code{vglmer}.

@@ -27,6 +27,11 @@ more discussion.}
 \item{outer_okay}{Default (\code{FALSE}) does not permit values in \code{x}
 to exceed the outer knots.}
 }
+\value{
+This function returns a list of class of \code{vglmer_spline} that is
+  passed to unexported functions. It contains the arguments noted above where
+  \code{...} is parsed into an argument called \code{term}.
+}
 \description{
 This function estimates splines in \code{vglmer}, similar to \code{s(...)} in
 \code{mgcv} albeit with many fewer options than \code{mgcv}. It allows for

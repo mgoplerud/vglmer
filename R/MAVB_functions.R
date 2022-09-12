@@ -8,7 +8,7 @@
 #'   \emph{parameters}. To use MAVB when generating predictions, one should use
 #'   \link{predict_MAVB}. At present, MAVB is only enabled for binomial models.
 #'
-#' @return This function returns a matrix with \code{sample} rows and columns
+#' @return This function returns a matrix with \code{samples} rows and columns
 #'   for each fixed and random effect.
 #'
 #' @param object Model fit using \code{vglmer}.
@@ -230,9 +230,12 @@ custom_glmer_samples <- function(glmer, samples, ordering) {
 #' @param object Model fit using \code{vglmer}.
 #' @param samples Number of samples to draw.
 #' @param verbose Show progress in drawing samples.
+#' 
+#' @return This function returns a matrix with \code{samples} rows and columns
+#'   for each fixed and random effect.
+#' 
 #' @export
-posterior_samples.vglmer <- function (object, samples, verbose = FALSE) 
-{
+posterior_samples.vglmer <- function(object, samples, verbose = FALSE) {
   if (!inherits(object, "vglmer")) {
     stop("Must provide object from vglmer")
   }

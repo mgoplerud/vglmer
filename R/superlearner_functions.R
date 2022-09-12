@@ -49,8 +49,16 @@
 #'   different formula or design on the same ensemble. The \code{env} argument
 #'   may need to be manually specified to ensure the created functions can be
 #'   called by \code{SuperLearner}.
-#'   
+#' 
+#' @return The functions here return different types of output. \code{SL.vglmer}
+#'   and \code{SL.glmer} return fitted models with the in-sample predictions as
+#'   standard for \code{SuperLearner}. The \code{predict} methods return vectors
+#'   of predicted values. \code{add_formula_SL} creates two objects in the
+#'   environment (one for estimation \code{model_f} and one for prediction
+#'   \code{predict.model_f}) used for \code{SuperLearner}.
 #' @examples
+#' 
+#' set.seed(456)
 #' 
 #' if (requireNamespace('SuperLearner', quietly = TRUE)){
 #' require(SuperLearner)

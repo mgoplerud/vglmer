@@ -37,6 +37,10 @@
 #' @name vglmer-class
 #' @param object Model fit using vglmer
 #'
+#' @return The functions here return a variety of different objects depending on
+#'   the specific function. "Details" describes the behavior of each one. Their
+#'   output is similar to the typical behavior for the corresponding generic
+#'   functions.
 
 #' @rdname vglmer-class
 #' @export

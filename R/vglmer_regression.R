@@ -20,7 +20,8 @@
 #'   created by \link{vglmer_control}.
 #'
 #' @examples
-#'
+#' 
+#' set.seed(234)
 #' sim_data <- data.frame(
 #'   x = rnorm(100),
 #'   y = rbinom(100, 1, 0.5),
@@ -3024,6 +3025,10 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
 #'   columns are drawn from the data.frame itself versus the environment. Set to
 #'   \code{TRUE} to debug potential issues.
 #' 
+#' @return This function returns a named list with class \code{vglmer_control}.
+#'   It is passed to \code{vglmer} in the argument \code{control}. This argument
+#'   only accepts objects created using \code{vglmer_control}.
+#' 
 #' @references 
 #' Goplerud, Max. 2022a. "Fast and Accurate Estimation of Non-Nested Binomial
 #' Hierarchical Models Using Variational Inference." \emph{Bayesian Analysis}.
@@ -3050,7 +3055,7 @@ vglmer_control <- function(iterations = 1000,
    return_data = FALSE, linpred_method = "joint",
    vi_r_method = "VEM", verify_columns = FALSE,
    debug_param = FALSE, debug_ELBO = FALSE, debug_px = FALSE, 
-   quiet = T, quiet_rho = TRUE,
+   quiet = TRUE, quiet_rho = TRUE,
    px_method = 'dynamic', px_numerical_it = 10,
    hw_inner = 10,
    init = "EM_FE") {

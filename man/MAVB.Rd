@@ -17,7 +17,7 @@ MAVB(object, samples, verbose = FALSE, var_px = Inf)
 (\code{Inf}) is a flat, improper, prior.}
 }
 \value{
-This function returns a matrix with \code{sample} rows and columns
+This function returns a matrix with \code{samples} rows and columns
   for each fixed and random effect.
 }
 \description{
