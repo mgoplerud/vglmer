@@ -40,7 +40,7 @@ ELBO(object, type = c("final", "trajectory"))
 \arguments{
 \item{object}{Model fit using \code{vglmer}.}
 
-\item{...}{Not used; included to maintain compatability with existing
+\item{...}{Not used; included to maintain compatibility with existing
 methods.}
 
 \item{x}{Model fit using \code{vglmer}.}

@@ -21,7 +21,7 @@
 #' @param object Used in \code{predict} for \code{SL.glmer} and
 #'   \code{SL.vglmer}. A model estimated using either \code{SL.vglmer} or
 #'   \code{SL.glmer}.
-#' @param ... Not used; included to maintain compatability with existing
+#' @param ... Not used; included to maintain compatibility with existing
 #'   methods.
 #' @param learner Character name of model from \code{SuperLearner}. See
 #'   "Details" for how this is used.
@@ -31,7 +31,7 @@
 #' @details This documentation describes two types of function. 
 #' 
 #'   \bold{Estimating Hierarchical Models in SuperLearner}: Two methods for
-#'   estimating hierarchical models are provided one for varational methods
+#'   estimating hierarchical models are provided one for variational methods
 #'   (\code{SL.vglmer}) and one for non-variational methods (\code{SL.glmer}).
 #'   The accompanying prediction functions are also provided.
 #' 

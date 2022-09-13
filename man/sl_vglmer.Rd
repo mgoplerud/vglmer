@@ -62,7 +62,7 @@ levels not observed in the estimation data; the value of \code{0} (with no
 uncertainty) is used for the corresponding random effect. \bold{Note:} This
 default differs from \code{predict.vglmer}.}
 
-\item{...}{Not used; included to maintain compatability with existing
+\item{...}{Not used; included to maintain compatibility with existing
 methods.}
 
 \item{allow.new.levels}{From \code{lme4}: Allow levels in prediction that are
@@ -90,7 +90,7 @@ These functions integrate \code{vglmer} (or \code{glmer}) into
 This documentation describes two types of function. 
 
   \bold{Estimating Hierarchical Models in SuperLearner}: Two methods for
-  estimating hierarchical models are provided one for varational methods
+  estimating hierarchical models are provided one for variational methods
   (\code{SL.vglmer}) and one for non-variational methods (\code{SL.glmer}).
   The accompanying prediction functions are also provided.
 

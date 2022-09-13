@@ -134,7 +134,7 @@ vcov.vglmer <- function(object, ...) {
 
 #' @rdname vglmer-class
 #' @param x Model fit using \code{vglmer}.
-#' @param ... Not used; included to maintain compatability with existing
+#' @param ... Not used; included to maintain compatibility with existing
 #'   methods.
 #' @method print vglmer
 #' @export

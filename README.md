@@ -7,7 +7,7 @@ library(devtools)
 devtools::install_github("mgoplerud/vglmer", dependencies = TRUE)
 ```
 
-At present, it can fit logistic, linear, and negative binomial outcomes with an arbitrary number of random effects. Details on negative binomial inference can be found [here](https://github.com/mgoplerud/vglmer/blob/master/.github/model_addendum.pdf) and are more experimential at the moment.
+At present, it can fit logistic, linear, and negative binomial outcomes with an arbitrary number of random effects. Details on negative binomial inference can be found [here](https://github.com/mgoplerud/vglmer/blob/master/.github/model_addendum.pdf) and are more experimental at the moment.
 
 This package accepts "standard" glmer syntax of the form:
 

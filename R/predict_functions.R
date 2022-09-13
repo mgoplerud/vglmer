@@ -22,7 +22,7 @@
 #'   for levels not observed in the original data. \code{TRUE} allows for
 #'   prediction on unseen levels; the value of \code{0} (with no uncertainty) is
 #'   used for the corresponding random effect.
-#' @param ... Not used; included to maintain compatability with existing
+#' @param ... Not used; included to maintain compatibility with existing
 #'   methods.
 #'
 #' @examples
