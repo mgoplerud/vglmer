@@ -280,7 +280,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
 
   if (do_timing) {
     if (!requireNamespace("tictoc", quietly = TRUE)) {
-      stop("tictoc must be installe to do timing")
+      stop("tictoc must be installed to do timing")
     }
     tic <- tictoc::tic
     toc <- tictoc::toc
@@ -292,25 +292,25 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     tic("Prepare Model")
   }
   if (!(factorization_method %in% c("weak", "strong", "partial", "collapsed"))) {
-    stop("factorization_method must be in weak, strong, partial or collapsed.")
+    stop("factorization_method must be 'weak', 'strong', or 'partial'.")
   }
   if (is.null(print_prog)) {
     print_prog <- max(c(1, floor(iterations / 20)))
   }
   if (!(family %in% c("binomial", "negbin", "linear"))) {
-    stop('family must be "linear", "binomial", "negbin".')
+    stop('family must be one of "linear", "binomial", "negbin".')
   }
   
   if (family == "binomial") {
     if (is.matrix(y)) {
       # if (!(class(y) %in% c('numeric', 'integer'))){
       if (min(y) < 0) {
-        stop("Negative Numbers not Permitted in outcome")
+        stop("Negative numbers not permitted in outcome")
       }
       is.wholenumber <- function(x, tol = .Machine$double.eps^0.5) abs(x - round(x)) < tol
       if (any(is.wholenumber(y) == FALSE)) {
         if (control$force_whole) {
-          stop("If force_whole = TRUE, must provide whole numbers")
+          stop("If force_whole = TRUE, must provide whole numbers as outcome")
         } else {
           warning("Non-integer numbers in y")
         }
@@ -338,7 +338,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     }
 
     if (min(y) < 0) {
-      stop("Negative numbers not Permitted in outcome")
+      stop("Negative numbers not permitted in outcome")
     }
 
     is.wholenumber <- function(x, tol = .Machine$double.eps^0.5) abs(x - round(x)) < tol
@@ -765,7 +765,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
       vi_r_sigma <- 0
     } else if (vi_r_method == "VEM") {
       if (!requireNamespace("MASS", quietly = TRUE)) {
-        stop("Install MASS for negbin")
+        stop("Install MASS to use negbin")
       }
       vi_r_mean <- MASS::glm.nb(y ~ 1)$theta
       vi_r_mu <- log(vi_r_mean)
@@ -780,7 +780,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
 
       vi_r_mean <- exp(vi_r_mu + vi_r_sigma / 2)
     } else {
-      stop("vi_r_method must be VEM, fixed, delta, or Laplace.")
+      stop("vi_r_method must be 'VEM' or 'fixed'.")
     }
     s <- (y - vi_r_mean) / 2
     vi_pg_b <- y + vi_r_mean
@@ -967,7 +967,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     })
     # if (do_huangwand){stop('Setup init for zero')}
   } else {
-    stop("Provide init = EM or random")
+    stop("Invalid initialization method")
   }
 
   zero_mat <- sparseMatrix(i = 1, j = 1, x = 0, dims = c(ncol(X), ncol(X)))
