@@ -23,4 +23,4 @@ vglmer(formula = y ~ v_s(x) + (x | g), data = data, family = 'binomial')
 
 Many standard methods from `lme4` work, e.g. `fixef`, `coef`, `vcov`, `ranef`, `predict`. Use `format_vglmer` to parse all parameters into a single data.frame. Estimation can be controlled via the numerous arguments to `control` using `vglmer_control`. At the moment, Schemes I, II, and III in Goplerud (2022a) correspond to `strong`, `partial`, and `weak`. The default is `strong` which correspond to the strongest (worst) approximation. If the variance of the parameters is of interest, then `weak` will return better results.
 
-The package is still "experimental" so some of the inputs and outputs may change! Please make an issue with any concerns you have.
+Please make an issue on GitHub with any concerns you have.

@@ -52,7 +52,7 @@ Rcpp::List prepare_Z_for_px(
         IntegerVector M_i = Mmap.row(i);
         for(int g=0; g < n_unique; g++) {
           IntegerVector umap_g = umap.row(g);
-          if ( (umap_g(0) == M_i(0)) & (umap_g(1) == M_i(1)) ){
+          if ( (umap_g(0) == M_i(0)) && (umap_g(1) == M_i(1)) ){
             position_index(i) = g;
             break;
           }
