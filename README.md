@@ -1,8 +1,12 @@
-# vglmer: Variational Generalized Linear Mixed Effects Regression [![R-CMD-check](https://github.com/mgoplerud/vglmer/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/mgoplerud/vglmer/actions/workflows/R-CMD-check.yaml) [![codecov](https://codecov.io/gh/mgoplerud/vglmer/branch/master/graph/badge.svg?token=L8C4260BUW)](https://app.codecov.io/gh/mgoplerud/vglmer)
+# vglmer: Variational Generalized Linear Mixed Effects Regression   
+[![CRAN status](https://www.r-pkg.org/badges/version/vglmer)](https://CRAN.R-project.org/package=vglmer) [![R-CMD-check](https://github.com/mgoplerud/vglmer/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/mgoplerud/vglmer/actions/workflows/R-CMD-check.yaml) [![codecov](https://codecov.io/gh/mgoplerud/vglmer/branch/master/graph/badge.svg?token=L8C4260BUW)](https://app.codecov.io/gh/mgoplerud/vglmer)
 
-A package to estimate non-linear hierarchical models using the variational algorithms described in [Goplerud (2022a)](https://arxiv.org/abs/2007.12300) and in [Goplerud (2022b)](https://mgoplerud.com/papers/Goplerud_MMM_Full.pdf). It also provides the option to improve an initial approximation using marginally augmented variational Bayes (MAVB) also described in Goplerud (2022a). It can be installed using `devtools`.
+A package to estimate non-linear hierarchical models using the variational algorithms described in [Goplerud (2022a)](https://arxiv.org/abs/2007.12300) and in [Goplerud (2022b)](https://mgoplerud.com/papers/Goplerud_MMM_Full.pdf). It also provides the option to improve an initial approximation using marginally augmented variational Bayes (MAVB) also described in Goplerud (2022a). It can be installed from CRAN or the most-to-update version can be installed using `devtools`.
 
 ```
+# CRAN
+install.packages("vglmer")
+# Up-to-Date GitHub Version
 library(devtools)
 devtools::install_github("mgoplerud/vglmer", dependencies = TRUE)
 ```
