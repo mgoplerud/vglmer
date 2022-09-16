@@ -3,6 +3,7 @@
 This is a patch on vglmer 1.0.0 to address issues noted on CRAN. In this version I have:
 
 - Resolved the `clang` warning about `&`
+- Added links to the corresponding GitHub repo to `DESCRIPTION`
 
 ## R CMD check results
 

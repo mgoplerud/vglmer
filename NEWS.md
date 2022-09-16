@@ -1,6 +1,7 @@
 # vglmer 1.0.1
 
 * Patch to address compiler issues on CRAN
+* Add links to GitHub to description
 
 # vglmer 1.0.0
 
