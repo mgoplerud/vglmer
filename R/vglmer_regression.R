@@ -604,6 +604,8 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
   # Extract the Specials
   if (length(parse_formula$smooth.spec) > 0){
     
+    any_Mprime <- TRUE
+    
     base_specials <- length(parse_formula$smooth.spec)
     
     # Number of splines + one for each "by"...
@@ -1007,24 +1009,25 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
   accepted_times <- 0
   attempted_expansion <- 0
   
-  if (parameter_expansion %in%  c("translation", "diagonal") & any_Mprime) {
+  spline_REs <- grepl(names(d_j), pattern='^spline-')
+  zeromat_beta <- drop0(Diagonal(x = rep(0, ncol(X))))
+  stationary_rho <- do.call('c', lapply(d_j[!spline_REs], FUN=function(i){as.vector(diag(x = i))}))
+  
+  if (parameter_expansion %in%  c("translation", "diagonal") & any_Mprime & any(!spline_REs)) {
     
     if (do_timing){
       tic('Build PX R Terms')
     }
     
     
-    spline_REs <- grepl(names(d_j), pattern='^spline-')
     
     nonspline_positions <- sort(unlist(outer_alpha_RE_positions[!spline_REs]))
     
     size_splines <- sum((d_j * g_j)[spline_REs])
     
-    stationary_rho <- do.call('c', lapply(d_j[!spline_REs], FUN=function(i){as.vector(diag(x = i))}))
     est_rho <- stationary_rho
     diag_rho <- which(stationary_rho == 1)
     
-    zeromat_beta <- drop0(Diagonal(x = rep(0, ncol(X))))
 
     # parsed_RE_groups <- get_RE_groups(formula = formula, data = data)
     # parsed_RE_groups <- parsed_RE_groups
@@ -1801,11 +1804,15 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
         tic('px_r')
       }
       
-      raw_R <- R_ridge <- vecR_ridge_new(L = vi_alpha_decomp[,nonspline_positions], pg_mean = diag(diag_vi_pg_mean),
-        mapping_J = mapping_J, d = d_j[!spline_REs],
-        store_id = store_id, store_re_id = store_re_id,
-        store_design = store_design, 
-        diag_only = (factorization_method == 'strong'))
+      if (any(!spline_REs)){
+        raw_R <- R_ridge <- vecR_ridge_new(L = vi_alpha_decomp[,nonspline_positions], pg_mean = diag(diag_vi_pg_mean),
+                                           mapping_J = mapping_J, d = d_j[!spline_REs],
+                                           store_id = store_id, store_re_id = store_re_id,
+                                           store_design = store_design, 
+                                           diag_only = (factorization_method == 'strong'))
+      }else{
+        raw_R <- R_ridge <- matrix(0, ncol = 0, nrow = 0)
+      }
 
       if (factorization_method == 'weak'){
         stop('no Translation PX for weak yet...')
@@ -1813,9 +1820,13 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
       
       if (!quiet_rho){cat('r')}
 
-      R_design <- vecR_design(alpha_mu = as.vector(vi_alpha_mean), Z = mapping_new_Z, 
-        M = Mmap, mapping_J = mapping_J, d = d_j[!spline_REs],
-        start_z = start_base_Z)
+      if (any(!spline_REs)){
+        R_design <- vecR_design(alpha_mu = as.vector(vi_alpha_mean), Z = mapping_new_Z, 
+                                M = Mmap, mapping_J = mapping_J, d = d_j[!spline_REs],
+                                start_z = start_base_Z)
+      }else{
+        R_design <- matrix(0, nrow = N, ncol = 0)
+      }
 
       if (sum(spline_REs)){
         R_spline_design <- sapply(cyclical_pos[spline_REs], FUN=function(i){
@@ -1936,9 +1947,12 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
         
         update_expansion_bX <- Matrix(update_expansion_XR[1:p.X])
         update_expansion_splines <- as.list(update_expansion_XR[-(1:p.X)][seq_len(sum(spline_REs))])
-        update_expansion_R <- mapply(split(update_expansion_XR[-1:-(p.X + sum(spline_REs))], 
-          rep(1:(number_of_RE - sum(spline_REs)), d_j[!spline_REs]^2)), d_j[!spline_REs], 
-          SIMPLIFY = FALSE, FUN=function(i,d){matrix(i, nrow = d)})
+        
+        if (any(!spline_REs)){
+          update_expansion_R <- mapply(split(update_expansion_XR[-1:-(p.X + sum(spline_REs))], 
+                                             rep(1:(number_of_RE - sum(spline_REs)), d_j[!spline_REs]^2)), d_j[!spline_REs], 
+                                       SIMPLIFY = FALSE, FUN=function(i,d){matrix(i, nrow = d)})
+        }
         
       }
       
@@ -1974,7 +1988,10 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
           skip_translate <- TRUE
         }
       }else{
-        if (!is.na(px_improve) & (max(abs(est_rho - stationary_rho)) < 1e-6) & (max(abs(est_rho_spline - 1)) < 1e-6) ){
+        if (length(est_rho) > 0){
+          diff_rho <- max(abs(est_rho - stationary_rho))
+        }else{diff_rho <- 0}
+        if (!is.na(px_improve) & (diff_rho < 1e-6) & (max(abs(est_rho_spline - 1)) < 1e-6) ){
           if (!quiet_rho){print('No further improvements')}
           skip_translate <- TRUE
         }
@@ -1994,12 +2011,16 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
           update_diag_R[!spline_REs] <- old_update_diag_R
         }
         
-        old_update_expansion_R <- update_expansion_R
-        update_expansion_R <- lapply(d_j, FUN=function(i){diag(i)})
-        update_expansion_R[!spline_REs] <- old_update_expansion_R
+        if (any(!spline_REs)){
+          old_update_expansion_R <- update_expansion_R
+          update_expansion_R <- lapply(d_j, FUN=function(i){diag(i)})
+          update_expansion_R[!spline_REs] <- old_update_expansion_R
+          rm(old_update_expansion_R)
+        }else{
+          update_expansion_R <- as.list(rep(NA, length(spline_REs)))
+        }
         update_expansion_R[spline_REs] <- lapply(update_expansion_splines, FUN=function(i){matrix(i)})
         
-        rm(old_update_expansion_R)
       }
       
       prop_vi_sigma_alpha <- mapply(vi_sigma_alpha, update_expansion_R, SIMPLIFY = FALSE,
@@ -2907,6 +2928,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
 
   output$internal_parameters <- list(
     it_used = it, it_max = iterations,
+    lp = as.vector(X %*% vi_beta_mean + Z %*% vi_alpha_mean - vi_r_mu),
     parameter.change = change_all,
     parameter.vi = store_vi,
     parameter.path = store_parameter_traj,

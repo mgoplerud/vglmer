@@ -15,6 +15,9 @@
 #' posterior mean and variance in a list of data.frames with one entry per
 #' random effect \eqn{j}.
 #' 
+#' \code{fitted} extracts the estimated expected \emph{linear predictor}, i.e.
+#' \eqn{E_{q(\theta)}[x_i^T \beta + z_i^T \alpha]} at convergence.
+#' 
 #' \code{summary} reports the estimates for all fixed effects as in \code{lm} as
 #' well as some summaries of the random effects (if \code{display_re=TRUE}).
 #' 
@@ -130,6 +133,16 @@ vcov.vglmer <- function(object, ...) {
     stop("... not used for vcov.vglmer")
   }
   return(as.matrix(object$beta$var))
+}
+
+#' @rdname vglmer-class
+#' @method fitted vglmer
+#' @export
+fitted.vglmer <- function(object, ...){
+  if (length(list(...)) > 0) {
+    stop("... not used for vcov.vglmer")
+  }
+  return(object$internal_parameters$lp)
 }
 
 #' @rdname vglmer-class

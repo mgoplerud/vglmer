@@ -17,7 +17,6 @@ formOmega <- function(a,b,intKnots){
   return(Omega)
 }
 
-
 #' Create splines for use in vglmer
 #' 
 #' This function estimates splines in \code{vglmer}, similar to \code{s(...)} in
@@ -93,8 +92,9 @@ vglmer_build_spline <- function(x, knots = NULL, Boundary.knots = NULL,
     # Keeps the size of the problem feasible.
     numIntKnots <- floor(c(min(ux/4, 35)))
 
-    intKnots <- quantile(unique(x),seq(0,1,length=
-                                         (numIntKnots+2))[-c(1,(numIntKnots+2))])
+    intKnots <- quantile(unique(x),
+      seq(0,1,length=(numIntKnots+2)
+    )[-c(1,(numIntKnots+2))])
     names(intKnots) <- NULL
   }else if (length(knots) == 1){
     numIntKnots <- knots
@@ -143,6 +143,7 @@ vglmer_build_spline <- function(x, knots = NULL, Boundary.knots = NULL,
     x <- wrapper_bs(splines::bs(x = x, knots = intKnots, 
                      degree = 3, intercept = TRUE,
                      Boundary.knots = Boundary.knots))
+    
     x <- x %*% eD$vectors[,seq_len(ncol(D)-2)] %*% 
       Diagonal(x = 1/sqrt(eD$values[seq_len(ncol(D) - 2)]))
     

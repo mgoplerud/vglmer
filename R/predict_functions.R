@@ -95,7 +95,8 @@ predict.vglmer <- function(object, newdata,
                       data = newdata, drop.unused.levels = TRUE)
   rownames_Z <- rownames(mk_Z)
   
-  if (!is.null(object$formula$re)){
+
+  if (!is.null(object$formula$re) & (length(object$formula$re) > 0) ){
     
     # Extract the Z (Random Effect) design matrix.
     mk_Z <- mkReTrms(formula(object, form = 're'), mk_Z, reorder.terms = FALSE, reorder.vars = FALSE)
@@ -159,7 +160,7 @@ predict.vglmer <- function(object, newdata,
   }
   
   # Extract the Specials
-  if (length(parse_formula$smooth.spec) > 1){
+  if (length(parse_formula$smooth.spec) > 0){
     base_specials <- length(parse_formula$smooth.spec)
     # Number of splines + one for each "by"...
     n.specials <- base_specials +
@@ -185,6 +186,7 @@ predict.vglmer <- function(object, newdata,
       spline_counter <- 1
       
       for (spline_i in all_splines_i){
+        
         stopifnot(spline_counter %in% 1:2)
         
         colnames(spline_i$x) <- paste0('spline @ ', special_i$term, ' @ ', colnames(spline_i$x))

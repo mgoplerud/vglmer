@@ -7,6 +7,7 @@
 \alias{ranef.vglmer}
 \alias{coef.vglmer}
 \alias{vcov.vglmer}
+\alias{fitted.vglmer}
 \alias{print.vglmer}
 \alias{summary.vglmer}
 \alias{formula.vglmer}
@@ -24,6 +25,8 @@
 \method{coef}{vglmer}(object, ...)
 
 \method{vcov}{vglmer}(object, ...)
+
+\method{fitted}{vglmer}(object, ...)
 
 \method{print}{vglmer}(x, ...)
 
@@ -77,6 +80,9 @@ The accompanying functions are briefly described below.
 although slightly different format, to \code{lme4}. It includes the estimated
 posterior mean and variance in a list of data.frames with one entry per
 random effect \eqn{j}.
+
+\code{fitted} extracts the estimated expected \emph{linear predictor}, i.e.
+\eqn{E_{q(\theta)}[x_i^T \beta + z_i^T \alpha]} at convergence.
 
 \code{summary} reports the estimates for all fixed effects as in \code{lm} as
 well as some summaries of the random effects (if \code{display_re=TRUE}).

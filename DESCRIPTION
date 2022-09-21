@@ -1,7 +1,7 @@
 Package: vglmer
 Type: Package
 Title: Variational Inference for Hierarchical Generalized Linear Models
-Version: 1.0.1
+Version: 1.0.2
 Authors@R: person("Max", "Goplerud", email = "mgoplerud@pitt.edu", 
     role = c("aut", "cre"))
 Encoding: UTF-8

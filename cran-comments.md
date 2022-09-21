@@ -1,9 +1,6 @@
 ## Resubmission
 
-This is a patch on vglmer 1.0.0 to address issues noted on CRAN. In this version I have:
-
-- Resolved the `clang` warning about `&`
-- Added links to the corresponding GitHub repo to `DESCRIPTION`
+This is a patch on vglmer 1.0.1 to address issues bug fix noted in `NEWS.md`.
 
 ## R CMD check results
 
