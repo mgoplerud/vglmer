@@ -172,15 +172,17 @@ test_that("Prediction Matches for Simulation", {
     expect_equal(mean_predict$mean, point_predict, 0.01)
   }
 
-  matrix_predict <- predict(example_vglmer,
-    newdata = test_data,
-    samples = 2 * 10^4, allow_missing_levels = T, samples_only = TRUE
-  )
-  matrix_predict <- colMeans(matrix_predict)
-  expect_equivalent(
-    c(coef(example_vglmer), as.vector(example_vglmer$alpha$mean)),
-    matrix_predict, 0.01
-  )
+  if (env_test == "local"){
+    matrix_predict <- predict(example_vglmer,
+                              newdata = test_data,
+                              samples = 2 * 10^4, allow_missing_levels = T, samples_only = TRUE
+    )
+    matrix_predict <- colMeans(matrix_predict)
+    expect_equivalent(
+      c(coef(example_vglmer), as.vector(example_vglmer$alpha$mean)),
+      matrix_predict, 0.01
+    )
+  }
 })
 
 

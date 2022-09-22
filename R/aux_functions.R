@@ -1,5 +1,3 @@
-
-
 update_rho <- function(XR, y, omega, prior_precision, 
                        moments_sigma_alpha,
                        prior_sigma_alpha_nu, prior_sigma_alpha_phi,
@@ -133,7 +131,7 @@ update_rho <- function(XR, y, omega, prior_precision,
       # print(c(NA, improvement))
     }else{
       # print('max')
-      opt_rho <- optim(par = null_rho, fn = eval_profiled_rho, 
+      opt_rho <- tryCatch(optim(par = null_rho, fn = eval_profiled_rho, 
                        gr = eval_grad_profiled_rho,
                        method = 'L-BFGS-B', control = ctrl_opt,
                        tXy = tXy, tXX = tXX,
@@ -141,7 +139,20 @@ update_rho <- function(XR, y, omega, prior_precision,
                        nu = nu, Phi = Phi, ESigma = ESigma, dim_rho = dim_rho, p.X = p.X,
                        sum_d = sum_d, hw_a = hw_a, A_prior = A_prior,
                        nu_prior = nu_prior
-      )
+      ), error = function(e){NULL})
+      if (is.null(opt_rho)){
+        message('optimization failed; trying with BFGS instead of L-BFGS-B')
+        warning('optimization failed; trying with BFGS instead of L-BFGS-B')
+        opt_rho <- optim(par = null_rho, fn = eval_profiled_rho, 
+              gr = eval_grad_profiled_rho,
+              method = 'BFGS', control = ctrl_opt,
+              tXy = tXy, tXX = tXX,
+              ridge = prior_precision, rho_idx = rho_idx,
+              nu = nu, Phi = Phi, ESigma = ESigma, dim_rho = dim_rho, p.X = p.X,
+              sum_d = sum_d, hw_a = hw_a, A_prior = A_prior,
+              nu_prior = nu_prior
+        )
+      }
       improvement <- opt_rho$value - null_eval
       
       # compare_improvement <- c(improvement, OSL_improvement)

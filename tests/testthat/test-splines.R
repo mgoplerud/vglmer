@@ -238,7 +238,7 @@ test_that("Prediction spline test", {
                  control = vglmer_control(iterations = NITER))
     
     # Check that prediction works for simple spline case
-    predict_dat <- expand.grid(x = seq(-3, 3, length.out=100), x2 = 0)
+    predict_dat <- expand.grid(x = seq(min(dat$x), max(dat$x), length.out=100), x2 = 0)
     predict_vglmer <- predict(m1, newdata = predict_dat)
     # Check that *fitted* aligns with *predict*  
     expect_equivalent(fitted(m1), predict(m1, newdata = dat))
@@ -262,7 +262,7 @@ test_that("Prediction spline test", {
                    control = vglmer_control(iterations = NITER))
       
       # Check that prediction works for simple spline case
-      predict_dat <- expand.grid(x = seq(-3, 3, length.out=100), x2 = 0, f = c('a', 'd', 'e', 'c'))
+      predict_dat <- expand.grid(x = seq(min(dat$x), max(dat$x), length.out=100), x2 = 0, f = c('a', 'd', 'e', 'c'))
       predict_vglmer <- predict(m1, newdata = predict_dat)
       # Check that *fitted* aligns with *predict*  
       expect_equivalent(fitted(m1), predict(m1, newdata = dat))
@@ -308,8 +308,8 @@ test_that("Compare against mgcv", {
     est_gam <- mgcv::gam(y ~ s(x) + s(f, bs = 're'), data = dat %>% mutate(f = factor(f)), family = binomial())  
     est_vglmer <- vglmer(y ~ v_s(x, type = 'o') + (1 | f), data = dat, family = 'binomial')
     
-    pred_estgam <- predict(est_gam, newdata = data.frame(x = seq(-3, 3, length.out=100), f = 'b'))
-    pred_estvglmer <- predict(est_vglmer, newdata = data.frame(x = seq(-3, 3, length.out=100), f = 'b'))
+    pred_estgam <- predict(est_gam, newdata = data.frame(x = seq(min(dat$x), max(dat$x), length.out=100), f = 'b'))
+    pred_estvglmer <- predict(est_vglmer, newdata = data.frame(x = seq(min(dat$x), max(dat$x), length.out=100), f = 'b'))
     
     expect_gte(cor(pred_estvglmer, pred_estgam), 0.95)
   }
@@ -317,5 +317,3 @@ test_that("Compare against mgcv", {
 # TO-DO tests
 # check decomposition of D and then re-transformation
 # test with custom knots and prediction outside of knots/etc.
-
-
