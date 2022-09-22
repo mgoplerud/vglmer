@@ -305,15 +305,70 @@ test_that("Compare against mgcv", {
     
     dat$y <- rbinom(N, 1, plogis(2 * sin(3 * dat$x) + rnorm(5)[match(dat$f, letters)]))
     
-    est_gam <- mgcv::gam(y ~ s(x) + s(f, bs = 're'), data = dat %>% mutate(f = factor(f)), family = binomial())  
+    dat$f <- factor(dat$f)
+    est_gam <- mgcv::gam(y ~ s(x) + s(f, bs = 're'), data = dat, family = binomial())  
     est_vglmer <- vglmer(y ~ v_s(x, type = 'o') + (1 | f), data = dat, family = 'binomial')
     
     pred_estgam <- predict(est_gam, newdata = data.frame(x = seq(min(dat$x), max(dat$x), length.out=100), f = 'b'))
     pred_estvglmer <- predict(est_vglmer, newdata = data.frame(x = seq(min(dat$x), max(dat$x), length.out=100), f = 'b'))
     
     expect_gte(cor(pred_estvglmer, pred_estgam), 0.95)
+    
+    est_gam <- mgcv::gam(y ~ s(x), data = dat, family = binomial())  
+    est_vglmer <- vglmer(y ~ v_s(x, type = 'o'), data = dat, family = 'binomial')
+    
+    knots_custom <- seq(-3, 3, length.out=35)
+    est_vglmer_2 <- vglmer(y ~ v_s(x, knots = knots_custom, type = 'tpf'), data = dat, family = 'binomial')
+    
+    grid_x <- seq(min(dat$x), max(dat$x), length.out=100)
+    pred_estgam <- predict(est_gam, newdata = data.frame(x = grid_x, f = 'b'))
+    pred_estvglmer <- predict(est_vglmer, newdata = data.frame(x = grid_x, f = 'b'))
+    pred_estvglmer_2 <- predict(est_vglmer_2, newdata = data.frame(x = grid_x, f = 'b'))
+    
+    expect_gte(cor(pred_estvglmer, pred_estgam), 0.95)
+    expect_gte(cor(pred_estgam, pred_estvglmer_2), 0.95)
+    
   }
 })
+
+test_that("Predict tests for tpf; predict outside of boundary", {
+  
+  N <- 100
+  dat <- data.frame(x = rnorm(N), x2 = rexp(N),
+                    g = sample(state.abb[1:5], N, replace = T),
+                    f = sample(letters[1:5], N, replace = T))
+  
+  dat$y <- rbinom(N, 1, plogis(2 * sin(3 * dat$x) + rnorm(5)[match(dat$f, letters)]))
+  
+  est_vglmer_2 <- vglmer(y ~ v_s(x, type = 'tpf'), 
+                         data = dat, family = 'linear', control = vglmer_control(iterations = NITER))
+  knots_custom <- est_vglmer_2$internal_parameters$spline$attr[[1]]$knots
+  predict_at_knots <- predict(est_vglmer_2, newdata = data.frame(x = knots_custom))
+  
+  sum(est_vglmer_2$alpha$mean)
+  
+  diff_rhs <- diff(predict(est_vglmer_2, newdata = data.frame(x = 5:10)))
+  expect_lte(max(abs(diff(diff_rhs))), sqrt(.Machine$double.eps))
+  
+  diff_lhs <- diff(predict(est_vglmer_2, newdata = data.frame(x = -15:-10)))
+  expect_lte(max(abs(diff(diff_lhs))), sqrt(.Machine$double.eps))
+  # to the "left", the extrapolated value should be the slope of the linear part
+  expect_equivalent(mean(diff_lhs), coef(est_vglmer_2)[2])
+  # to the right, extrapolated value should be the sum of all 
+  # the RE slopes + the baseline slope
+  expect_equivalent(
+    coef(est_vglmer_2)[2] + sum(ranef(est_vglmer_2)[[1]][,2]),
+    mean(diff_rhs)
+  )
+  # The slope between any two knots should be the cumulative sum
+  # of the intermediate slopes from the RE
+  diff_predict_at_knots <- diff(predict_at_knots)
+  slope_predict_at_knots <- diff_predict_at_knots/diff(knots_custom)
+  expect_equivalent(slope_predict_at_knots, coef(est_vglmer_2)[2] + cumsum(est_vglmer_2$alpha$mean[-nrow(est_vglmer_2$alpha$mean),1]))
+  
+  
+})
+
 # TO-DO tests
-# check decomposition of D and then re-transformation
-# test with custom knots and prediction outside of knots/etc.
+# check decomposition of D and then re-transformation when
+# implemented
