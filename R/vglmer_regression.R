@@ -625,7 +625,8 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
 
       all_splines_i <- vglmer_build_spline(x = data[[special_i$term]], 
           by = data[[special_i$by]],
-          knots = special_i$knots, type = special_i$type,
+          knots = special_i$knots, type = special_i$type, 
+          force_vector = special_i$force_vector,
           outer_okay = special_i$outer_okay, by_re = special_i$by_re)
       
       Z.spline.attr[[i]] <- c(all_splines_i[[1]]$attr, 
@@ -1830,7 +1831,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
 
       if (sum(spline_REs)){
         R_spline_design <- sapply(cyclical_pos[spline_REs], FUN=function(i){
-          as.vector(Z[,i] %*% vi_alpha_mean[i,])
+          as.vector(Z[,i,drop=F] %*% vi_alpha_mean[i,])
         })
         
         R_spline_ridge <- sapply(cyclical_pos[spline_REs], FUN=function(s){vi_alpha_decomp[,s, drop = F]})

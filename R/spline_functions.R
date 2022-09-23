@@ -36,6 +36,9 @@ formOmega <- function(a,b,intKnots){
 #' @param by_re Default (\code{TRUE}) regularizes the interactions between the
 #'   categorical factor and the covariate. See "Details" in \link{vglmer} for
 #'   more discussion.
+#' @param force_vector Force that argument to \code{knots} is treated as vector.
+#'   This is usually not needed unless \code{knots} is a single integer that
+#'   should be treated as a single knot (vs. the number of knots).
 #' @param outer_okay Default (\code{FALSE}) does not permit values in \code{x}
 #'   to exceed the outer knots.
 #' @importFrom splines bs
@@ -53,7 +56,7 @@ formOmega <- function(a,b,intKnots){
 #' R}. Chapman and Hall/CRC.
 #' @export
 v_s <- function(..., type = 'tpf', knots = NULL, by = NA,
-                by_re = TRUE,
+                by_re = TRUE, force_vector = FALSE,
                 outer_okay = FALSE){
   if (!(type %in% c('tpf', 'o'))){stop('non tpf not set up yet...')}
   # Using mgcv's syntax for "s" to make it work with "interpret.gam"
@@ -73,7 +76,7 @@ v_s <- function(..., type = 'tpf', knots = NULL, by = NA,
 
   label <- paste0("v_s(", term[1], ")")
   
-  ret <- list(term = term, outer_okay = outer_okay,
+  ret <- list(term = term, outer_okay = outer_okay, force_vector = force_vector,
               by = by.var, type = type, knots = knots,
               by_re = by_re)
   class(ret) <- 'vglmer_spline'
@@ -83,7 +86,8 @@ v_s <- function(..., type = 'tpf', knots = NULL, by = NA,
 
 #' @importFrom splines spline.des
 vglmer_build_spline <- function(x, knots = NULL, Boundary.knots = NULL, 
-  by, type, override_warn = FALSE, outer_okay = FALSE, by_re = NULL){
+  by, type, override_warn = FALSE, 
+  outer_okay = FALSE, by_re = NULL, force_vector = FALSE){
 
   if (is.null(knots)){
     ux <- length(unique(x))
@@ -96,7 +100,17 @@ vglmer_build_spline <- function(x, knots = NULL, Boundary.knots = NULL,
       seq(0,1,length=(numIntKnots+2)
     )[-c(1,(numIntKnots+2))])
     names(intKnots) <- NULL
-  }else if (length(knots) == 1){
+  }else if (length(knots) == 1 & !force_vector){
+
+    if (knots < 1){
+      stop('If an integer, at least one knot must be provided. force_vector=TRUE may be useful here.')
+    }
+    if (as.integer(knots) != knots){
+      warning('knots appears to be not be an integer. Using "as.integer"')
+      knots <- as.integer(knots)
+      message(paste0('knots argument turned into ', knots, ' by coercion.'))
+    }
+
     numIntKnots <- knots
     
     intKnots <- quantile(unique(x),seq(0,1,length=

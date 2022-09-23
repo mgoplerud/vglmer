@@ -46,6 +46,52 @@ test_that("fit with non-default options", {
   expect_gt(min(diff(ELBO(fit_o, 'trajectory'))), -sqrt(.Machine$double.eps))
   expect_gt(min(diff(ELBO(fit_knots, 'trajectory'))), -sqrt(.Machine$double.eps))
   
+  fit_tpf <- vglmer(y ~ v_s(x, knots = 2, type = 'tpf'),
+      data = dat, family = 'binomial', 
+      control = vglmer_control(iterations = NITER))
+  expect_length(fit_tpf$internal_parameters$spline$attr[[1]]$knots, 2)
+  expect_equivalent(fit_tpf$internal_parameters$spline$attr[[1]]$knots, 
+    quantile(dat$x, seq(0,1,length.out=4)[-c(1,4)]))
+})
+
+test_that("fit splines works with one knot", {
+  
+  
+  dat <- data.frame(x = rnorm(100))
+  dat$y <- rbinom(100, 1, plogis(exp(dat$x)))
+
+  for (loop_type in c('tpf', 'o')){
+    m1 <- vglmer(y ~ v_s(x, type = loop_type, knots = 1), dat = dat, 
+                 control = vglmer_control(iterations = NITER),
+                 family = 'linear')
+    pred_m1 <- predict(m1, newdata = data.frame(x = seq(-5, 5, length.out=100)))  
+    expect_equal(length(m1$internal_parameters$spline$attr[[1]]$knots), 1)
+    if (loop_type == "tpf"){
+      # Expect only one "bend"
+      expect_equal(sum( abs(diff(diff(pred_m1))) > sqrt(.Machine$double.eps)), 2)
+    }
+  }
+  
+  expect_error(vglmer(y ~ v_s(x, knots = 0.5), data = dat, family = 'linear'), regexp = 'If an integer')
+  est_vglmer <- vglmer(y ~ v_s(x, knots = 0.5, force_vector = T), 
+    data = dat, control = vglmer_control(iterations = 2), family = 'linear')
+  expect_equivalent(0.5, est_vglmer$internal_parameters$spline$attr[[1]]$knots)
+  
+  est_vglmer <- vglmer(y ~ v_s(x, knots = 1.2, force_vector = T),
+         control = vglmer_control(iterations = 2),
+         data = dat, family = 'linear')
+  expect_equivalent(est_vglmer$internal_parameters$spline$attr[[1]]$knots, 1.2)
+  expect_vector(predict(est_vglmer, newdata = data.frame(x = seq(-3,3,length.out=5))), 5)
+  expect_warning(vglmer(y ~ v_s(x, knots = 1.2),
+         control = vglmer_control(iterations = 2),
+         data = dat, family = 'linear'), regexp = 'as.integer')
+  
+  est_vglmer <- vglmer(y ~ v_s(x, knots = 3), control = vglmer_control(iterations = 2), 
+         data = dat, family = 'linear')
+  expect_length(est_vglmer$internal_parameters$spline$attr[[1]]$knots, 3)
+  est_vglmer <- vglmer(y ~ v_s(x), control = vglmer_control(iterations = 2), 
+                       data = dat, family = 'linear')
+  expect_length(est_vglmer$internal_parameters$spline$attr[[1]]$knots, floor(length(unique(dat$x))/4))
 })
 
 test_that("fit splines with missing data", {

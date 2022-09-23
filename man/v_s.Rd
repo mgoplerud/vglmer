@@ -4,7 +4,15 @@
 \alias{v_s}
 \title{Create splines for use in vglmer}
 \usage{
-v_s(..., type = "tpf", knots = NULL, by = NA, by_re = TRUE, outer_okay = FALSE)
+v_s(
+  ...,
+  type = "tpf",
+  knots = NULL,
+  by = NA,
+  by_re = TRUE,
+  force_vector = FALSE,
+  outer_okay = FALSE
+)
 }
 \arguments{
 \item{...}{Variable name, e.g. \code{v_s(x)}}
@@ -23,6 +31,10 @@ example, \code{v_s(x, by = g)}.}
 \item{by_re}{Default (\code{TRUE}) regularizes the interactions between the
 categorical factor and the covariate. See "Details" in \link{vglmer} for
 more discussion.}
+
+\item{force_vector}{Force that argument to \code{knots} is treated as vector.
+This is usually not needed unless \code{knots} is a single integer that
+should be treated as a single knot (vs. the number of knots).}
 
 \item{outer_okay}{Default (\code{FALSE}) does not permit values in \code{x}
 to exceed the outer knots.}

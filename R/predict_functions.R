@@ -181,7 +181,8 @@ predict.vglmer <- function(object, newdata,
          knots = Z.spline.attr[[i]]$knots, 
          Boundary.knots =  Z.spline.attr[[i]]$Boundary.knots,
          by = newdata[[Z.spline.attr[[i]]$by]], outer_okay = TRUE,
-         type = Z.spline.attr[[i]]$type, override_warn = TRUE)
+         type = Z.spline.attr[[i]]$type, override_warn = TRUE,
+         force_vector = TRUE)
       
       spline_counter <- 1
       
