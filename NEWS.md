@@ -1,7 +1,7 @@
 # vglmer 1.0.2
 
-* IMPORTANT: Bug fix where prediction with only one spline was incorrect; the non-linear part was ignored.
-* Smaller bug fixes around splines have been added as well as updated tests.
+* IMPORTANT: Fixes bug where prediction with only one spline  (and no random effects) was wrong; the non-linear part of the spline was ignored.
+* Smaller bug fixes around splines (e.g., for using a single knot) have been added as well as updated tests.
 
 # vglmer 1.0.1
 
