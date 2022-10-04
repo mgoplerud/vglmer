@@ -152,7 +152,7 @@ predict.vglmer <- function(object, newdata,
   }
   
   # Extract the Specials
-  if (length(parse_formula$smooth.spec) > 1){
+  if (length(parse_formula$smooth.spec) > 0){
     base_specials <- length(parse_formula$smooth.spec)
     # Number of splines + one for each "by"...
     n.specials <- base_specials +
@@ -161,7 +161,7 @@ predict.vglmer <- function(object, newdata,
     
     Z.spline <- as.list(rep(NA, n.specials))
     Z.spline.size <- rep(NA, n.specials)
-    Z.spline.attr <- object$internal_parameters$spline$attr
+    Z.spline.attr <- object$internal_parameters$special$attr
     
     special_counter <- 1
     store_spline_type <- rep(NA, n.specials)
@@ -180,7 +180,7 @@ predict.vglmer <- function(object, newdata,
       for (spline_i in all_splines_i){
         stopifnot(spline_counter %in% 1:2)
         
-        colnames(spline_i$x) <- paste0('spline @ ', special_i$term, ' @ ', colnames(spline_i$x))
+        colnames(spline_i$x) <- paste0('special @ ', special_i$term, ' @ ', colnames(spline_i$x))
         
         if (spline_counter > 1){
           spline_name <- paste0('spline-',special_i$term,'-', i, '-int')
@@ -221,7 +221,7 @@ predict.vglmer <- function(object, newdata,
       stop('Names of REs do not match estimation data. This may occur when REs have to be re-named.')
     }
     
-    if (!isTRUE(identical(object$internal_parameters$spline$size[store_spline_type %in% 1], 
+    if (!isTRUE(identical(object$internal_parameters$special$size[store_spline_type %in% 1], 
                           Z.spline.size[store_spline_type  %in% 1]))){
       stop('Misalignment of splines in prediction.')
     }
@@ -347,6 +347,7 @@ predict.vglmer <- function(object, newdata,
     return(samples)
   }
 
+  
   lp <- XZ %*% samples
   if (summary) {
     if (!only.lp) {

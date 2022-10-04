@@ -42,7 +42,7 @@ formOmega <- function(a,b,intKnots){
 v_s <- function(..., type = 'tpf', knots = NULL, by = NA,
                 by_re = TRUE,
                 outer_okay = FALSE){
-  if (!(type %in% c('tpf', 'o'))){stop('non tpf not set up yet...')}
+  if (!(type %in% c('tpf', 'o', 'fe'))){stop('type must be "tpf", "o", or "fe".')}
   # Using mgcv's syntax for "s" to make it work with "interpret.gam"
   vars <- as.list(substitute(list(...)))[-1]
   d <- length(vars)
@@ -60,10 +60,14 @@ v_s <- function(..., type = 'tpf', knots = NULL, by = NA,
 
   label <- paste0("v_s(", term[1], ")")
   
-  ret <- list(term = term, outer_okay = outer_okay,
-              by = by.var, type = type, knots = knots,
-              by_re = by_re)
-  class(ret) <- 'vglmer_spline'
+  if (type == 'fe'){
+    ret <- list(term = term, by = by.var, type = type, by_re = FALSE)
+  }else{
+    ret <- list(term = term, outer_okay = outer_okay,
+                by = by.var, type = type, knots = knots,
+                by_re = by_re)
+  }
+  class(ret) <- 'vglmer_special'
   
   return(ret)
 }
@@ -98,6 +102,7 @@ vglmer_build_spline <- function(x, knots = NULL, Boundary.knots = NULL,
       }
     }
     intKnots <- knots
+    Boundary.knots <- range(c(x, knots), na.rm=T)
   }
   
   if (is.null(Boundary.knots)){

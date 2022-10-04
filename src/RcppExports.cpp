@@ -7,8 +7,8 @@
 using namespace Rcpp;
 
 // LinRegChol
-List LinRegChol(const Eigen::MappedSparseMatrix<double> X, const Eigen::MappedSparseMatrix<double> omega, const Eigen::MappedSparseMatrix<double> prior_precision, const Eigen::Map<Eigen::VectorXd> y, const bool save_chol);
-RcppExport SEXP _vglmer_LinRegChol(SEXP XSEXP, SEXP omegaSEXP, SEXP prior_precisionSEXP, SEXP ySEXP, SEXP save_cholSEXP) {
+List LinRegChol(const Eigen::MappedSparseMatrix<double> X, const Eigen::MappedSparseMatrix<double> omega, const Eigen::MappedSparseMatrix<double> prior_precision, const Eigen::Map<Eigen::VectorXd> y, const Eigen::Map<Eigen::VectorXd> adj_y, const bool save_chol);
+RcppExport SEXP _vglmer_LinRegChol(SEXP XSEXP, SEXP omegaSEXP, SEXP prior_precisionSEXP, SEXP ySEXP, SEXP adj_ySEXP, SEXP save_cholSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -16,8 +16,9 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< const Eigen::MappedSparseMatrix<double> >::type omega(omegaSEXP);
     Rcpp::traits::input_parameter< const Eigen::MappedSparseMatrix<double> >::type prior_precision(prior_precisionSEXP);
     Rcpp::traits::input_parameter< const Eigen::Map<Eigen::VectorXd> >::type y(ySEXP);
+    Rcpp::traits::input_parameter< const Eigen::Map<Eigen::VectorXd> >::type adj_y(adj_ySEXP);
     Rcpp::traits::input_parameter< const bool >::type save_chol(save_cholSEXP);
-    rcpp_result_gen = Rcpp::wrap(LinRegChol(X, omega, prior_precision, y, save_chol));
+    rcpp_result_gen = Rcpp::wrap(LinRegChol(X, omega, prior_precision, y, adj_y, save_chol));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -150,7 +151,7 @@ END_RCPP
 }
 
 static const R_CallMethodDef CallEntries[] = {
-    {"_vglmer_LinRegChol", (DL_FUNC) &_vglmer_LinRegChol, 5},
+    {"_vglmer_LinRegChol", (DL_FUNC) &_vglmer_LinRegChol, 6},
     {"_vglmer_calculate_expected_outer_alpha", (DL_FUNC) &_vglmer_calculate_expected_outer_alpha, 3},
     {"_vglmer_unique_rows", (DL_FUNC) &_vglmer_unique_rows, 1},
     {"_vglmer_prepare_Z_for_px", (DL_FUNC) &_vglmer_prepare_Z_for_px, 1},

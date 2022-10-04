@@ -24,6 +24,7 @@ using namespace Rcpp;
 //' @param omega Polya-Gamma weights
 //' @param prior_precision Prior Precision for Regression
 //' @param y Outcome
+//' @param adjustment vector
 //' @param save_chol Save cholesky factor
 // [[Rcpp::export]]
 List LinRegChol(
@@ -31,11 +32,22 @@ List LinRegChol(
      const Eigen::MappedSparseMatrix<double> omega,
      const Eigen::MappedSparseMatrix<double> prior_precision,
      const Eigen::Map<Eigen::VectorXd> y,
+     const Eigen::Map<Eigen::VectorXd> adj_y,
      const bool save_chol = true
   ){
   Eigen::SparseMatrix<double> adj_X = X.adjoint();
   Eigen::SimplicialLLT<Eigen::SparseMatrix<double> > Ch(adj_X * omega * X + prior_precision);
-  Eigen::VectorXd mean = Ch.solve(adj_X * y);
+  Eigen::VectorXd mean(X.cols());
+  
+  // If some vector of "adjustment" is provided, then
+  // Adjust the estimation by this vector
+  int rows_adj = adj_y.rows();
+  if (rows_adj == 0){
+    mean = Ch.solve(adj_X * y);
+  }else{
+    mean = Ch.solve(adj_X * y + adj_y);
+  }
+  
   if (save_chol == false){
     return List::create(
       Rcpp::Named("mean") = mean

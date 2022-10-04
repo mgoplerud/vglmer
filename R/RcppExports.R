@@ -12,9 +12,10 @@
 #' @param omega Polya-Gamma weights
 #' @param prior_precision Prior Precision for Regression
 #' @param y Outcome
+#' @param adjustment vector
 #' @param save_chol Save cholesky factor
-LinRegChol <- function(X, omega, prior_precision, y, save_chol = TRUE) {
-    .Call('_vglmer_LinRegChol', PACKAGE = 'vglmer', X, omega, prior_precision, y, save_chol)
+LinRegChol <- function(X, omega, prior_precision, y, adj_y, save_chol = TRUE) {
+    .Call('_vglmer_LinRegChol', PACKAGE = 'vglmer', X, omega, prior_precision, y, adj_y, save_chol)
 }
 
 calculate_expected_outer_alpha <- function(L, alpha_mu, re_position_list) {
