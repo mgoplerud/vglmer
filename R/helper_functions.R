@@ -211,7 +211,7 @@ make_log_invwishart_constant <- function(nu, Phi) {
 calculate_ELBO <- function(family, ELBO_type, factorization_method,
      # Fixed constants or priors
      d_j, g_j, prior_sigma_alpha_phi, prior_sigma_alpha_nu, 
-     iw_prior_constant, choose_term, regularized_RE,
+     iw_prior_constant, choose_term, any_RE, any_FE,
      # Data
      X, Z, s, y,
      # Polya-Gamma or Weighting Parameters
@@ -232,7 +232,11 @@ calculate_ELBO <- function(family, ELBO_type, factorization_method,
      vi_sigmasq_prior_a = NULL, vi_sigmasq_prior_b = NULL,
      # huang_wand parameters
      do_huangwand = NULL, vi_a_a_jp = NULL, vi_a_b_jp = NULL,
-     vi_a_nu_jp = NULL, vi_a_APRIOR_jp = NULL
+     vi_a_nu_jp = NULL, vi_a_APRIOR_jp = NULL,
+     # FE parameters
+     vi_FE_mean = NULL, vi_FE_var = NULL, vi_FE_lndet = NULL,
+     FE_data = NULL, FE_lookup = NULL, FE_rowtensor = NULL,
+     dim_all_FE = NULL
   ) {
   ####
   ## PREPARE INTERMEDIATE QUANTITES
@@ -244,6 +248,14 @@ calculate_ELBO <- function(family, ELBO_type, factorization_method,
     ex_XBZA <- (X %*% vi_beta_mean + Z %*% vi_alpha_mean) - vi_r_mu
   }else{
     ex_XBZA <- (X %*% vi_beta_mean + Z %*% vi_alpha_mean)
+  }
+  if (any_FE){
+    adjust_fe <- calculate_FE(X = FE_data, Z = FE_lookup, 
+        FS_XX = FE_rowtensor, mean = vi_FE_mean, var = vi_FE_var)
+    adjust_fe_mean <- adjust_fe[,1]
+    adjust_fe_var <- adjust_fe[,2]
+    
+    ex_XBZA <- ex_XBZA + adjust_fe_mean
   }
   # quadratic var, i.e. Var(x_i^T beta + z_i^T alpha)
   if (factorization_method %in% c("weak", "collapsed")) {
@@ -264,25 +276,30 @@ calculate_ELBO <- function(family, ELBO_type, factorization_method,
       var_XBZA <- var_XBZA + vi_r_sigma 
     }
   }
-  # Prepare vi_sigma_alpha
-  moments_sigma_alpha <- mapply(vi_sigma_alpha, vi_sigma_alpha_nu, d_j[regularized_RE], SIMPLIFY = FALSE, FUN = function(phi, nu, d) {
-    inv_phi <- solve(phi)
-
-    sigma.inv <- nu * inv_phi
-
-    # ln.det <- - (multi_digamma(a = nu/2, p = d) + d * log(2) + log(det(inv_phi)) )
-    ln.det <- log(det(phi)) - sum(digamma((nu - 1:d + 1) / 2)) - d * log(2)
-    return(list(sigma.inv = sigma.inv, ln.det = ln.det))
-  })
-
-  ln_det_sigma_alpha <- sapply(moments_sigma_alpha, FUN = function(i) {
-    i$ln.det
-  })
-  inv_sigma_alpha <- lapply(moments_sigma_alpha, FUN = function(i) {
-    i$sigma.inv
-  })
-  if (length(ln_det_sigma_alpha) == 0){
-    ln_det_sigma_alpha <- vector(mode = 'double', length = 0) 
+  if (any_FE){
+    var_XBZA <- var_XBZA + adjust_fe_var
+  }
+  
+  if (any_RE){
+    # Prepare vi_sigma_alpha
+    moments_sigma_alpha <- mapply(vi_sigma_alpha, vi_sigma_alpha_nu, d_j, SIMPLIFY = FALSE, FUN = function(phi, nu, d) {
+      inv_phi <- solve(phi)
+      
+      sigma.inv <- nu * inv_phi
+      
+      # ln.det <- - (multi_digamma(a = nu/2, p = d) + d * log(2) + log(det(inv_phi)) )
+      ln.det <- log(det(phi)) - sum(digamma((nu - 1:d + 1) / 2)) - d * log(2)
+      return(list(sigma.inv = sigma.inv, ln.det = ln.det))
+    })
+    
+    ln_det_sigma_alpha <- sapply(moments_sigma_alpha, FUN = function(i) {
+      i$ln.det
+    })
+    inv_sigma_alpha <- lapply(moments_sigma_alpha, FUN = function(i) {
+      i$sigma.inv
+    })
+  }else{
+    ln_det_sigma_alpha <- vector(length = 0, mode = 'numeric')
   }
   ## GET the terms for the expectation
   ## of the log-complete data given the variational distribution.
@@ -309,24 +326,22 @@ calculate_ELBO <- function(family, ELBO_type, factorization_method,
         -1 / 2 * sum(var_XBZA * vi_pg_mean)
     }
     # Get the terms for p(alpha | Sigma)
-
-    sum_logcomplete_2 <- mapply(inv_sigma_alpha, vi_sigma_outer_alpha, FUN = function(a, b) {
-      sum(diag(a %*% b))
-    })
-    if (length(sum_logcomplete_2) == 0){
-      sum_logcomplete_2 <- 0
+    if (any_RE){
+      sum_logcomplete_2 <- sum(mapply(inv_sigma_alpha, vi_sigma_outer_alpha, FUN = function(a, b) {
+        sum(diag(a %*% b))
+      }))
     }else{
-      sum_logcomplete_2 <- sum(sum_logcomplete_2)
+      sum_logcomplete_2 <- 0
     }
     if (family == 'linear'){
       e_ln_sigmasq <- log(vi_sigmasq_b) - digamma(vi_sigmasq_a)
       
-      logcomplete_2 <- sum(-(d_j * g_j)[regularized_RE] / 2 * log(2 * pi) - g_j[regularized_RE] / 2 * ln_det_sigma_alpha) +
+      logcomplete_2 <- sum(-(d_j * g_j) / 2 * log(2 * pi) - g_j / 2 * ln_det_sigma_alpha) +
         -e_inv_sigmasq * 1 / 2 * sum_logcomplete_2
       logcomplete_2 <-  logcomplete_2 +
-        -1/2 * sum( (d_j * g_j)[regularized_RE] ) * (e_ln_sigmasq)
+        -1/2 * sum( (d_j * g_j) ) * (e_ln_sigmasq)
     }else{
-      logcomplete_2 <- sum(- (d_j * g_j)[regularized_RE] / 2 * log(2 * pi) - g_j[regularized_RE] / 2 * ln_det_sigma_alpha) +
+      logcomplete_2 <- sum(- (d_j * g_j) / 2 * log(2 * pi) - g_j / 2 * ln_det_sigma_alpha) +
         -1 / 2 * sum_logcomplete_2
     }
 
@@ -336,8 +351,13 @@ calculate_ELBO <- function(family, ELBO_type, factorization_method,
       entropy_1 <- ncol(vi_joint_decomp) / 2 * log(2 * pi * exp(1)) +
         1 / 2 * log_det_joint_var
     } else {
-      entropy_1 <- nrow(vi_beta_mean) / 2 * log(2 * pi * exp(1)) + 1 / 2 * log_det_beta_var +
-        ncol(vi_alpha_decomp) / 2 * log(2 * pi * exp(1)) + 1 / 2 * log_det_alpha_var
+      entropy_1 <- nrow(vi_beta_mean) / 2 * log(2 * pi * exp(1)) + 1 / 2 * log_det_beta_var
+      if (any_RE){
+        entropy_1 <- entropy_1 + ncol(vi_alpha_decomp) / 2 * log(2 * pi * exp(1)) + 1 / 2 * log_det_alpha_var
+      }
+      if (any_FE){
+        entropy_1 <- entropy_1 + 1/2 * sum(vi_FE_lndet) + dim_all_FE / 2 * log(2 * pi * exp(1))
+      }
     }
     #ENTROPY FOR LINK SPECIFIC PARAMETERS
     if (family == 'poisson'){
@@ -354,7 +374,7 @@ calculate_ELBO <- function(family, ELBO_type, factorization_method,
       entropy_3 <- -mapply(vi_sigma_alpha_nu, vi_sigma_alpha, FUN = function(nu, Phi) {
         make_log_invwishart_constant(nu = nu, Phi = Phi)
       }) +
-        (vi_sigma_alpha_nu + d_j[regularized_RE] + 1) / 2 * ln_det_sigma_alpha +
+        (vi_sigma_alpha_nu + d_j + 1) / 2 * ln_det_sigma_alpha +
         1 / 2 * mapply(vi_sigma_alpha, inv_sigma_alpha, FUN = function(a, b) {
           sum(diag(a %*% b))
         })
@@ -365,6 +385,7 @@ calculate_ELBO <- function(family, ELBO_type, factorization_method,
 
   } else if (ELBO_type == "profiled") {
     
+    if (any_FE){stop('set up ELBO for NB with FE')}
     vi_r_var <- (exp(vi_r_sigma) - 1) * vi_r_mean^2
 
     psi <- ex_XBZA + vi_r_mu
@@ -405,7 +426,7 @@ calculate_ELBO <- function(family, ELBO_type, factorization_method,
   ###############
   logcomplete_3 <- entropy_3 <- entropy_4 <- 0
   
-  if (sum(regularized_RE) > 0){
+  if (any_RE){
     if (do_huangwand){
       E_ln_vi_a <- mapply(vi_a_a_jp, vi_a_b_jp, FUN=function(tilde.a, tilde.b){
         sum(log(tilde.b) - digamma(tilde.a))
@@ -416,13 +437,13 @@ calculate_ELBO <- function(family, ELBO_type, factorization_method,
       logcomplete_3 <- 0 + # flat prior on beta
         sum(
           iw_prior_constant +
-            - (vi_a_nu_jp + d_j[regularized_RE] - 1)/2 * (d_j[regularized_RE] * log(2 * vi_a_nu_jp) + E_ln_vi_a) +
-            -(2 * d_j[regularized_RE] + vi_a_nu_jp) / 2 * ln_det_sigma_alpha +
+            - (vi_a_nu_jp + d_j - 1)/2 * (d_j * log(2 * vi_a_nu_jp) + E_ln_vi_a) +
+            -(2 * d_j + vi_a_nu_jp) / 2 * ln_det_sigma_alpha +
             -1 / 2 * mapply(E_inv_v_a, inv_sigma_alpha, FUN = function(a, b) {
               sum(diag(a %*% b))
             })
         )
-      logcomplete_3_a <- mapply(d_j[regularized_RE], vi_a_a_jp, vi_a_b_jp, E_ln_vi_a, 
+      logcomplete_3_a <- mapply(d_j, vi_a_a_jp, vi_a_b_jp, E_ln_vi_a, 
                                 vi_a_APRIOR_jp, 
                                 FUN=function(d, tilde.a, tilde.b, E_ln_vi_a.j, APRIOR.j){
                                   1/2 * sum(log(1/APRIOR.j^2)) - d * lgamma(1/2) - 3/2 * E_ln_vi_a.j +
@@ -433,7 +454,7 @@ calculate_ELBO <- function(family, ELBO_type, factorization_method,
       logcomplete_3 <- 0 + # flat prior on beta
         sum(
           iw_prior_constant +
-          -(prior_sigma_alpha_nu + d_j[regularized_RE] + 1) / 2 * ln_det_sigma_alpha +
+          -(prior_sigma_alpha_nu + d_j + 1) / 2 * ln_det_sigma_alpha +
           -1 / 2 * mapply(prior_sigma_alpha_phi, inv_sigma_alpha, FUN = function(a, b) {
             sum(diag(a %*% b))
           })
@@ -443,7 +464,7 @@ calculate_ELBO <- function(family, ELBO_type, factorization_method,
     entropy_3 <- -mapply(vi_sigma_alpha_nu, vi_sigma_alpha, FUN = function(nu, Phi) {
       make_log_invwishart_constant(nu = nu, Phi = Phi)
     }) +
-      (vi_sigma_alpha_nu + d_j[regularized_RE] + 1) / 2 * ln_det_sigma_alpha +
+      (vi_sigma_alpha_nu + d_j + 1) / 2 * ln_det_sigma_alpha +
       1 / 2 * mapply(vi_sigma_alpha, inv_sigma_alpha, FUN = function(a, b) {
         sum(diag(a %*% b))
       })
@@ -462,7 +483,6 @@ calculate_ELBO <- function(family, ELBO_type, factorization_method,
   }
 
   ###Combine all of the terms together
-  
   logcomplete <- logcomplete_1 + logcomplete_2 + logcomplete_3 +
     choose_term
   

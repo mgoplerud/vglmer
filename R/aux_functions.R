@@ -7,12 +7,12 @@ update_rho <- function(XR, y, omega, prior_precision,
                        vi_a_APRIOR_jp, 
                        spline_REs, vi_beta_mean,
                        p.X, d_j, stationary_rho,
-                       do_huangwand, offset, regularized_RE,
+                       do_huangwand, offset,
                        px_it = NULL, init_rho = NULL,
                        method){
   
   if (do_huangwand){
-    prior_weight <- vi_a_nu_jp + d_j[regularized_RE] - 1
+    prior_weight <- vi_a_nu_jp + d_j - 1
     diag_weight <- mapply(vi_a_a_jp, vi_a_b_jp, vi_a_nu_jp, SIMPLIFY = FALSE, 
       FUN = function(tilde.a, tilde.b, nu) {
         Diagonal(x = tilde.a/tilde.b) * 2 * nu
@@ -22,8 +22,8 @@ update_rho <- function(XR, y, omega, prior_precision,
     prior_weight <- prior_sigma_alpha_nu
   }
   
-  # Splines (regularized) before non-splines
-  order_REs <- c(which(spline_REs & regularized_RE), which(!spline_REs & regularized_RE))
+  # Splines before non-splines
+  order_REs <- c(which(spline_REs), which(!spline_REs))
   
   ESigma <- lapply(moments_sigma_alpha[order_REs], FUN=function(i){i$sigma.inv})
   Phi <- diag_weight[order_REs] 
@@ -37,17 +37,17 @@ update_rho <- function(XR, y, omega, prior_precision,
     tXy <- tXy - t(XR) %*% omega %*% offset
   }
   prior_precision <- prior_precision
-  rho_idx <- d_j[spline_REs & regularized_RE]
+  rho_idx <- d_j[spline_REs]
   rho_idx <- rho_idx * seq_len(length(rho_idx))
   rho_idx <- c(rho_idx, 
     rep(seq_len(sum(!spline_REs)), times = d_j[!spline_REs]^2) + 
-      sum(spline_REs & regularized_RE))
+      sum(spline_REs))
 
   if (method == 'numerical'){
 
-    null_rho <- c(rep(1, sum(spline_REs & regularized_RE)), stationary_rho)
+    null_rho <- c(rep(1, sum(spline_REs)), stationary_rho)
     null_rho <- c(as.vector(vi_beta_mean), null_rho)
-    dim_rho <- c(rep(1, sum(spline_REs & regularized_RE)), d_j[!spline_REs])
+    dim_rho <- c(rep(1, sum(spline_REs)), d_j[!spline_REs])
     
     ctrl_opt <- list(fnscale = -1)
     if (!is.null(px_it)){
@@ -78,18 +78,18 @@ update_rho <- function(XR, y, omega, prior_precision,
     
   }else if (method == 'dynamic'){
     
-    vec_OSL_prior <- mapply(moments_sigma_alpha[!spline_REs & regularized_RE], 
-                            diag_weight[!spline_REs & regularized_RE], 
-                            prior_weight[!spline_REs & regularized_RE], 
+    vec_OSL_prior <- mapply(moments_sigma_alpha[!spline_REs], 
+                            diag_weight[!spline_REs], 
+                            prior_weight[!spline_REs], 
                             SIMPLIFY = FALSE, FUN=function(moment_j, phi_j, nu_j){
                               as.vector(moment_j$sigma.inv %*% phi_j - nu_j * Diagonal(n = nrow(phi_j)))
                             })
     vec_OSL_prior <- do.call('c', vec_OSL_prior)
     
-    if (sum(spline_REs) & any(regularized_RE)){
-      OSL_spline_prior <- unlist(mapply(moments_sigma_alpha[spline_REs & regularized_RE], 
-                                        diag_weight[spline_REs & regularized_RE], 
-                                        prior_weight[spline_REs & regularized_RE], 
+    if (sum(spline_REs)){
+      OSL_spline_prior <- unlist(mapply(moments_sigma_alpha[spline_REs], 
+                                        diag_weight[spline_REs], 
+                                        prior_weight[spline_REs], 
                                         SIMPLIFY = FALSE, FUN=function(moment_j, phi_j, nu_j){
                                           as.vector(moment_j$sigma.inv %*% phi_j - nu_j * Diagonal(n = nrow(phi_j)))
                                         }))
@@ -102,11 +102,11 @@ update_rho <- function(XR, y, omega, prior_precision,
     A_prior <- vi_a_APRIOR_jp[order_REs]
     nu_prior <- vi_a_nu_jp[order_REs]
     
-    sum_d <- sum(d_j[regularized_RE])
+    sum_d <- sum(d_j)
     
-    null_rho <- c(rep(1, sum(spline_REs & regularized_RE)), stationary_rho)
+    null_rho <- c(rep(1, sum(spline_REs)), stationary_rho)
     null_rho <- c(as.vector(vi_beta_mean), null_rho)
-    dim_rho <- c(rep(1, sum(spline_REs & regularized_RE)), d_j[!spline_REs])
+    dim_rho <- c(rep(1, sum(spline_REs)), d_j[!spline_REs])
     
     if (is.null(init_rho)){
       init_rho <- null_rho
@@ -196,11 +196,11 @@ update_rho <- function(XR, y, omega, prior_precision,
     A_prior <- vi_a_APRIOR_jp[order_REs]
     nu_prior <- vi_a_nu_jp[order_REs]
     
-    sum_d <- sum(d_j[regularized_RE])
+    sum_d <- sum(d_j)
     
-    null_rho <- c(rep(1, sum(spline_REs & regularized_RE)), stationary_rho)
+    null_rho <- c(rep(1, sum(spline_REs)), stationary_rho)
     null_rho <- c(as.vector(vi_beta_mean), null_rho)
-    dim_rho <- c(rep(1, sum(spline_REs & regularized_RE)), d_j[!spline_REs])
+    dim_rho <- c(rep(1, sum(spline_REs)), d_j[!spline_REs])
     
     if (is.null(init_rho)){
       init_rho <- null_rho
@@ -243,9 +243,9 @@ update_rho <- function(XR, y, omega, prior_precision,
     
   }else if (method == 'OSL'){
     
-    null_rho <- c(rep(1, sum(spline_REs & regularized_RE)), stationary_rho)
+    null_rho <- c(rep(1, sum(spline_REs)), stationary_rho)
     null_rho <- c(as.vector(vi_beta_mean), null_rho)
-    dim_rho <- c(rep(1, sum(spline_REs & regularized_RE)), d_j[!spline_REs])
+    dim_rho <- c(rep(1, sum(spline_REs)), d_j[!spline_REs])
     
     vec_OSL_prior <- mapply(moments_sigma_alpha[!spline_REs], 
                             diag_weight[!spline_REs], 
@@ -255,10 +255,10 @@ update_rho <- function(XR, y, omega, prior_precision,
                             })
     vec_OSL_prior <- do.call('c', vec_OSL_prior)
     
-    if (sum(spline_REs) & any(regularized_RE)){
-      OSL_spline_prior <- unlist(mapply(moments_sigma_alpha[spline_REs & regularized_RE], 
-                                        diag_weight[spline_REs & regularized_RE], 
-                                        prior_weight[spline_REs & regularized_RE], 
+    if (sum(spline_REs)){
+      OSL_spline_prior <- unlist(mapply(moments_sigma_alpha[spline_REs], 
+                                        diag_weight[spline_REs], 
+                                        prior_weight[spline_REs], 
                                         SIMPLIFY = FALSE, FUN=function(moment_j, phi_j, nu_j){
                                           as.vector(moment_j$sigma.inv %*% phi_j - nu_j * Diagonal(n = nrow(phi_j)))
                                         }))
@@ -273,7 +273,7 @@ update_rho <- function(XR, y, omega, prior_precision,
 
     if (do_huangwand){
       
-      sum_d <- sum(d_j[regularized_RE])
+      sum_d <- sum(d_j)
       
       hw_a <- vi_a_a_jp[order_REs]
       A_prior <- vi_a_APRIOR_jp[order_REs]

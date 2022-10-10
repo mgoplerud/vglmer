@@ -22,6 +22,10 @@ calculate_expected_outer_alpha <- function(L, alpha_mu, re_position_list) {
     .Call('_vglmer_calculate_expected_outer_alpha', PACKAGE = 'vglmer', L, alpha_mu, re_position_list)
 }
 
+invert_rowwise <- function(X, dim_X) {
+    .Call('_vglmer_invert_rowwise', PACKAGE = 'vglmer', X, dim_X)
+}
+
 unique_rows <- function(m) {
     .Call('_vglmer_unique_rows', PACKAGE = 'vglmer', m)
 }

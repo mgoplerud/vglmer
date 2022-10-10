@@ -1,20 +1,9 @@
 
-#' Create a sparse design matrix for the fixed effects
-vglmer_build_fe <- function(x, by, contrast_type, levels = NULL){
-  if (is.null(levels)){
-    ux <- unique(x)
-  }else{
-    ux <- levels
-  }
-  if (is.null(by)){
-    x <- sparseMatrix(i = 1:length(x), j = match(x, ux), x = 1, dims = c(length(x), length(ux)))
-  }else{
-    x <- sparseMatrix(i = 1:length(x), j = match(x, ux), x = by, dims = c(length(x), length(ux)))
-  }
-  colnames(x) <- ux
-  out <- list(x = x, attr = list(unique_values = ux, constrast = contrast_type(ncol(x), sparse = TRUE)))
-  class(out) <- c('fe_sparse')
-  return(list(out))
+
+fast_contr_sum <- function(N){
+  N_1 <- N - 1; grid_N1 <- seq_len(N_1) 
+  return(sparseMatrix(i = c(grid_N1,rep(N, N_1)), 
+      j = c(grid_N1, grid_N1), x = c(rep(1,N_1), rep(-1,N_1))))
 }
 
 obj_poisson <- function(par, y, Textend, P, joint.XZ, diag_position, exp_diag = TRUE){
@@ -311,3 +300,87 @@ poisson_fixedpoint <- function(par, y, Textend, P, joint.XZ, diag_position,
   return(par)
 }
 
+
+
+update_poisson <- function(current_param, current_lowertri, 
+      y, Textend, X, diag_position, existing_P, diag_vi_pg_mean,
+      vi_pg_mean, old_vi_pg_mean, old_Textend,
+      starting_obj, it, force_ascent){
+
+  starting_obj <- obj_poisson(par = c(current_param, current_lowertri), y = y,
+                              P = existing_P, Textend = Textend, joint.XZ = X, 
+                              diag_position = diag_position)
+  
+  attempt_NVMP <- poisson_NVMP(y = y, joint.XZ = X, Textend = Textend, 
+     vi_pg_mean = vi_pg_mean, diag_position = diag_position,
+     diag_vi_pg_mean = diag_vi_pg_mean, old_param = current_param)
+  
+  attempt_NVMP_obj <- obj_poisson(par = attempt_NVMP$par, y = y,
+    P = attempt_NVMP$P, Textend = Textend, joint.XZ = X, 
+    diag_position = diag_position)
+  
+  if ( (attempt_NVMP_obj > starting_obj) & (!force_ascent | it == 1)){
+    vi_var_L_nonpermute <- attempt_NVMP$L 
+    vi_var_P <- attempt_NVMP$P 
+    vi_update_mean <- attempt_NVMP$mean
+    type <- 'NVMP'
+  }else{
+    
+    if (!force_ascent & (it != 1) & (abs(attempt_NVMP_obj) < 1e12)){
+      # Try dampening to address convergence issue
+      damp_par <- tryCatch(damp_poisson_NVMP(attempt_NVMP = attempt_NVMP, y = y, old_param = old_param, 
+         old_weights = old_vi_pg_mean, Textend = Textend, 
+         joint.XZ = X, diag_position = diag_position, 
+         starting_obj = starting_obj,
+         direct_optimize = TRUE), error = function(e){NULL})
+    }else{
+      damp_par <- NULL
+    }
+    
+    # If damping fails or makes it worse, or force ascent, use direct
+    # optimization...
+    
+    if (is.null(damp_par) | force_ascent){
+      opt_obj <- tryCatch(optim(par = c(current_param, current_lowertri), 
+        fn = obj_poisson, gr = grad_poisson,
+        control = list(fnscale = -1, maxit = 30),
+        method = 'CG', y = y,
+        P = existing_P, Textend = old_Textend, joint.XZ = X, 
+        diag_position = diag_position), error = function(e){NULL})
+      
+      opt_failed <- FALSE
+      if (!is.null(opt_obj)){
+        if (opt_obj$value < starting_obj){
+          opt_failed <- TRUE
+        }
+      }else{
+        opt_failed <- TRUE
+      }
+      if (opt_failed){
+        warning(paste0('Direct optimization (and NVMP and damping) failed;',
+                       ' not updating q(beta,alpha) parameters at', it, 
+                       '; try rescaling parameters or using calibrate_init=TRUE'))
+        ascent_par <- c(current_param, current_lowertri)
+        type <- "FAILED"
+      }else{
+        ascent_par <- opt_obj$par
+        type <- "OPTIMIZE"
+      }
+      vi_var_P <- existing_P
+    }else{
+      type <- 'DAMP'
+      vi_var_P <- damp_par$P
+      ascent_par <- damp_par$par
+    }
+    
+    vi_update_mean <- ascent_par[1:ncol(X)]
+    vi_var_L_nonpermute <- sparseMatrix(i = 1, j = 1, x = 0, dims = rep(ncol(X), 2))
+    ascent_lt <- ascent_par[-1:-ncol(X)]
+    ascent_lt[diag_position] <- exp(ascent_lt[diag_position])
+    vi_var_L_nonpermute[lower.tri(vi_var_L_nonpermute, diag = TRUE)] <- ascent_lt
+    
+  }
+  return(
+    list(L = vi_var_L_nonpermute, P = vi_var_P, mean = vi_update_mean, type = type)
+  )
+}

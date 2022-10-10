@@ -46,27 +46,19 @@ v_s <- function(..., type = 'tpf', knots = NULL, by = NA,
   # Using mgcv's syntax for "s" to make it work with "interpret.gam"
   vars <- as.list(substitute(list(...)))[-1]
   d <- length(vars)
+
   if (d > 1){stop('Unlike mgcv, only provide a single variable')}
   by.var <- deparse(substitute(by), backtick = TRUE, width.cutoff = 500)
   if (by.var == "."){
     stop("by=. not allowed")
   }
   term <- deparse(vars[[1]], backtick = TRUE, width.cutoff = 500)
-  if (term[1] == "."){
-    stop("s(.) not supported.")
-  }
-  
   term[1] <- attr(terms(reformulate(term[1])), "term.labels")
-
-  label <- paste0("v_s(", term[1], ")")
+  if (any(term == '.')){stop('v_s(.) not supported')}
   
-  if (type == 'fe'){
-    ret <- list(term = term, by = by.var, type = type, by_re = FALSE)
-  }else{
-    ret <- list(term = term, outer_okay = outer_okay,
-                by = by.var, type = type, knots = knots,
-                by_re = by_re)
-  }
+  ret <- list(term = term, outer_okay = outer_okay,
+              by = by.var, type = type, knots = knots,
+              by_re = by_re)
   class(ret) <- 'vglmer_special'
   
   return(ret)
@@ -208,9 +200,14 @@ vglmer_interpret.gam0 <- function(gf, textra = NULL, extra.special = NULL){
   tp <- attr(tf, "specials")$te
   tip <- attr(tf, "specials")$ti
   t2p <- attr(tf, "specials")$t2
-  zp <- if (is.null(extra.special)) 
-    NULL
-  else attr(tf, "specials")[[extra.special]]
+  
+  if (is.null(extra.special)) {
+    zp <- NULL
+  }else{
+    zp <- unlist(attr(tf, "specials")[extra.special])
+    names(zp) <- NULL
+  }
+  
   off <- attr(tf, "offset")
   vtab <- attr(tf, "factors")
   if (length(sp) > 0) 
@@ -325,6 +322,7 @@ vglmer_interpret.gam0 <- function(gf, textra = NULL, extra.special = NULL){
       }
       else av <- c(av, smooth.spec[[i]]$term)
     }
+  
   fake.formula <- as.formula(fake.formula, p.env)
   if (length(av)) {
     pred.formula <- as.formula(paste("~", paste(av, 
