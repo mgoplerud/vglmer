@@ -236,6 +236,15 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
   }
 
   force_ascent <- control$force_ascent
+  force_ascent_init <- FALSE
+  if (is.infinite(force_ascent)){
+    force_ascent_init <- TRUE
+    force_ascent <- TRUE
+  }else if (force_ascent > 0){
+    force_ascent_init <- force_ascent
+    force_ascent <- TRUE    
+  }
+  
   do_timing <- control$do_timing
   factorization_method <- control$factorization_method
   print_prog <- control$print_prog
@@ -816,8 +825,13 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
   # Note that we keep a sparse matrix or lowertri such that
   # t(vi_beta_decomp) %*% vi_beta_decomp = VARIANCE
 
+  
   vi_beta_L_nonpermute <- vi_beta_decomp <- Diagonal(x = rep(0, ncol(X)))
   vi_alpha_L_nonpermute <- vi_alpha_decomp <- Diagonal(x = rep(0, ncol(Z)))
+  
+  vi_beta_decomp <- as(vi_beta_decomp, 'dgCMatrix')
+  vi_alpha_decomp <- as(vi_alpha_decomp, 'dgCMatrix')
+  
   vi_beta_LP <- Diagonal(n = ncol(X))
   vi_alpha_LP <- Diagonal(n = ncol(Z))
   
@@ -926,9 +940,14 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
       }
     } else if (family %in% 'poisson'){
       if (control$init == 'EM_FE'){
-        EM_init <- coef(glm(y ~ 0 + X, family = poisson))
-        names(EM_init) <- NULL
-        EM_init <- list('beta' = EM_init, 'alpha' = rep(0, ncol(Z)))
+        if (ncol(X) == 0){
+          EM_init <- list('beta' = vector(length = 0, mode = 'numeric'), 
+                          'alpha' = rep(0, ncol(Z)))
+        }else{
+          EM_init <- coef(glm(y ~ 0 + X, family = poisson))
+          names(EM_init) <- NULL
+          EM_init <- list('beta' = EM_init, 'alpha' = rep(0, ncol(Z)))
+        }
         
       }else{
         stop('Set up full EM init')
@@ -1030,8 +1049,12 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     stop("Provide init = EM or random")
   }
   
-  zero_mat <- sparseMatrix(i = 1, j = 1, x = 0, dims = c(ncol(X), ncol(X)))
-  zero_mat <- drop0(zero_mat)
+  if (ncol(X) > 0){
+    zero_mat <- sparseMatrix(i = 1, j = 1, x = 0, dims = c(ncol(X), ncol(X)))
+    zero_mat <- drop0(zero_mat)
+  }else{
+    zero_mat <- drop0(matrix(nrow = 0, ncol = 0))
+  }
 
   if (factorization_method %in% c("weak", "collapsed")) {
     vi_joint_decomp <- bdiag(vi_beta_decomp, vi_alpha_decomp)
@@ -1195,6 +1218,42 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
   if (do_timing) {
     toc(quiet = verbose_time, log = TRUE)
     tic.clear()
+  }
+  if (family %in% 'poisson'){
+    
+    if (factorization_method %in% 'weak'){
+      # Collect the current parameters
+      mask_lowertri <- which(lower.tri(vi_joint_L_nonpermute, diag = TRUE))
+      diag_position <- c(1, 1 + cumsum(ncol(vi_joint_L_nonpermute):2))
+    }else if (factorization_method %in% 'strong'){
+      
+      mask_lowertri <- mapply(d_j, g_j, spline_REs, SIMPLIFY = FALSE, FUN=function(di, gi, si){
+        if (si == FALSE & di == 1){
+          return(Diagonal(x = rep(TRUE, gi)))
+        }else if (si == FALSE & di > 1){
+          adj <- seq(0, di * (gi - 1), by=di)
+          combn_all <- rbind(t(combn(1:di, 2)), cbind(1:di, 1:di))
+          combn_all <- apply(combn_all, MARGIN = 1, 
+                             FUN=function(i){
+                               return(Matrix(cbind(i[1] + adj, i[2] + adj)))
+                             })
+          combn_all <- do.call('rbind', combn_all)
+          combn_all <- sparseMatrix(i = combn_all[,2], j = combn_all[,1])
+          return(combn_all)
+        }else{
+          return(drop0(Matrix(TRUE, nrow = gi, ncol = gi)))
+        }
+      })
+      mask_lowertri <- c(drop0(lower.tri(matrix(1, p.X, p.X), diag = T)), mask_lowertri)
+      mask_lowertri <- lapply(mask_lowertri, FUN=function(mi){
+        diag_mask <- which(band(mi, 0, 0))
+        mask_lowertri <- which(mi)
+        diag_position <- match(diag_mask, mask_lowertri)
+        return(list(mask = mask_lowertri, diag = diag_position))
+      })
+      names(mask_lowertri) <- c('..fe..', names(names_of_RE))
+      if ('..fe..' %in% names(names_of_RE)){stop('Cannot have random effect with variable name ..fe..')}
+    }else{stop('Set up Poisson for other factorizations')}
   }
   ## Begin VI algorithm:
   if (!quiet) {
@@ -1384,90 +1443,138 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     }else{
       offset_fe <- 0
     }
-    if (factorization_method == "weak") {
-      ## Update <beta, alpha> jointly
-      if (family %in% 'poisson'){
+    if (family == 'poisson'){
+      
+      if (it == force_ascent_init){
+        force_ascent <- FALSE
+      }
+      
+      if (any_FE){
+        adj_fe <- adjust_fe_mean + 1/2 * adjust_fe_var
+      }else{
+        adj_fe <- 0
+      }
+      
+      if (factorization_method == 'weak'){
         
         if (any_RE){
           Textend <- bdiag(zero_mat, Tinv)
         }else{
           Textend <- zero_mat
         }
-        # Collect the current parameters
-        diag_position <- c(1, 1 + cumsum(ncol(vi_joint_L_nonpermute):2))
         
         current_param <- c(as.vector(vi_beta_mean), as.vector(vi_alpha_mean))
-        current_lowertri <- ks::vech(as.matrix(vi_joint_L_nonpermute))
+        current_lowertri <- vi_joint_L_nonpermute[mask_lowertri]
         current_lowertri[diag_position] <- log(current_lowertri[diag_position])
-        
-        est_poisson <- update_poisson(current_param = current_param, 
-          current_lowertri = current_lowertri, y = y, Textend = Textend, 
-          X = joint.XZ, diag_position = diag_position, existing_P = vi_joint_LP, 
+      
+        est_poisson <- update_poisson(current_param = current_param,
+          current_lowertri = current_lowertri, y = y, Textend = Textend,
+          joint.XZ = joint.XZ, diag_position = diag_position, existing_P = vi_joint_LP,
           vi_pg_mean = vi_pg_mean, diag_vi_pg_mean = diag_vi_pg_mean,
-          old_vi_pg_mean = old_vi_pg_mean, old_Textend = old_Textend, 
+          old_vi_pg_mean = old_vi_pg_mean, old_Textend = old_Textend,
+          old_param = old_param, mask_lowertri = mask_lowertri, offset_weight = 0,
           starting_obj = starting_obj, it = it, force_ascent = force_ascent)
-        
-        if (it == 5){browser()}
+
         vi_joint_L_nonpermute <- est_poisson$L
         vi_joint_LP <- est_poisson$P
         update_mean <- est_poisson$mean
         if (est_poisson$type != "NVMP"){
-          browser()
+          print(est_poisson$type)
         }
-        # Update Poisson parameters
+        # # Update Poisson parameters
         vi_joint_decomp <- vi_joint_L_nonpermute %*% t(vi_joint_LP)
         joint_quad <- rowSums( (joint.XZ %*% t(vi_joint_decomp))^2 )
         vi_pg_mean <- as.vector(exp(X %*% vi_beta_mean + Z %*% vi_alpha_mean + 1/2 * joint_quad))
         diag_vi_pg_mean <- sparseMatrix(i = seq_N, j = seq_N, x = vi_pg_mean)
-        
+
         log_det_joint_var <- 2 * sum(log(diag(vi_joint_L_nonpermute)))
-        
-        vi_beta_mean <- Matrix(update_mean[1:p.X], dimnames = list(colnames(X), NULL))
-        vi_alpha_mean <- Matrix(update_mean[-1:-p.X], dimnames = list(fmt_names_Z, NULL))
-        
-        vi_alpha_decomp <- vi_joint_decomp[, -1:-p.X, drop = F]
-        vi_beta_decomp <- vi_joint_decomp[, 1:p.X, drop = F]
+
+        if (p.X > 0){
+          vi_beta_mean <- Matrix(update_mean[1:p.X], dimnames = list(colnames(X), NULL))
+          vi_alpha_mean <- Matrix(update_mean[-1:-p.X], dimnames = list(fmt_names_Z, NULL))
+          vi_alpha_decomp <- vi_joint_decomp[, -1:-p.X, drop = F]
+          vi_beta_decomp <- vi_joint_decomp[, 1:p.X, drop = F]
+        }else{
+          vi_alpha_mean <- Matrix(update_mean, dimnames = list(fmt_names_Z, NULL))
+          vi_alpha_decomp <- vi_joint_decomp[, -1:-p.X, drop = F]
+        }
+
         
         old_param <- c(as.vector(vi_beta_mean), as.vector(vi_alpha_mean))
-        old_lowertri <- ks::vech(as.matrix(vi_joint_L_nonpermute))
-        old_lowertri[diag_position] <- log(old_lowertri[diag_position])
         old_vi_pg_mean <- vi_pg_mean
-        old_vi_L_P <- vi_joint_LP
         old_Textend <- Textend
         
-        if (it >= 15){plot(store_ELBO$ELBO, type = 'l')[-1:-10]}
-      }else{
+      }else if (factorization_method == "strong") {
+
         
+        est_poisson <- cyclical_update_poisson(X = drop0(X), 
+          Z = Z, y = y, cyclical_pos = cyclical_pos,
+          vi_pg_mean = vi_pg_mean, diag_vi_pg_mean = diag_vi_pg_mean,
+          number_of_RE = number_of_RE, name_RE = names(names_of_RE),
+          vi_alpha_mean = vi_alpha_mean, vi_beta_mean = vi_beta_mean,
+          vi_beta_L_nonpermute = vi_beta_L_nonpermute, 
+          vi_alpha_L_nonpermute = vi_alpha_L_nonpermute,
+          vi_alpha_decomp = vi_alpha_decomp,
+          vi_beta_decomp = vi_beta_decomp,
+          zeromat = zero_mat, it = it, Tinv = Tinv,
+          mask_lowertri = mask_lowertri, seq_N = seq_N,
+          vi_beta_LP = vi_beta_LP, 
+          vi_alpha_LP = vi_alpha_LP, force_ascent = force_ascent,
+          old_Tinv = old_Tinv, old_param = old_param, 
+          old_vi_pg_mean = old_vi_pg_mean, adj_fe = adj_fe)
+        
+        for (v in names(est_poisson)){
+          assign(v, est_poisson[[v]])
+        }
+
+        sqrt_pg_weights <- sqrt(diag_vi_pg_mean)
+
+        rm(est_poisson)
+        
+        old_param <- c(as.vector(vi_beta_mean), as.vector(vi_alpha_mean))
+        old_vi_pg_mean <- vi_pg_mean
         if (any_RE){
-          reg_term <- bdiag(zero_mat, Tinv)
-        }else{
-          reg_term <- zero_mat
+          old_Tinv <- Tinv
         }
         
-        adj_y <- s + vi_pg_mean * vi_r_mu - vi_pg_mean * offset_fe
-        
-        chol.update.joint <- LinRegChol(
-          X = joint.XZ, omega = diag_vi_pg_mean,
-          prior_precision = reg_term,
-          y = adj_y, adj_y = zero_vector
-        )
-        
-        Pmatrix <- sparseMatrix(i = 1:ncol(joint.XZ), j = 1 + chol.update.joint$Pindex, x = 1)
-        vi_joint_L_nonpermute <- drop0(solve(chol.update.joint$origL))
-        vi_joint_LP <- Pmatrix
-        vi_joint_decomp <- vi_joint_L_nonpermute %*% t(vi_joint_LP)
-        log_det_joint_var <- -2 * sum(log(diag(chol.update.joint$origL)))
-        
-        vi_beta_mean <- Matrix(chol.update.joint$mean[1:p.X], dimnames = list(colnames(X), NULL))
-        vi_alpha_mean <- Matrix(chol.update.joint$mean[-1:-p.X], dimnames = list(fmt_names_Z, NULL))
-        
-        vi_alpha_decomp <- vi_joint_decomp[, -1:-p.X, drop = F]
-        vi_beta_decomp <- vi_joint_decomp[, 1:p.X, drop = F]
-        
+      }else{stop('Poisson not set up yet...')}
+      
+      
+      if (it >= 6){
+        plot(store_ELBO$ELBO[-1:-4], type = 'l')
       }
+      
+      
+    }else if (factorization_method == "weak") {
+      ## Update <beta, alpha> jointly
 
+      if (any_RE){
+        reg_term <- bdiag(zero_mat, Tinv)
+      }else{
+        reg_term <- zero_mat
+      }
+        
+      adj_y <- s + vi_pg_mean * vi_r_mu - vi_pg_mean * offset_fe
+      
+      chol.update.joint <- LinRegChol(
+        X = joint.XZ, omega = diag_vi_pg_mean,
+        prior_precision = reg_term,
+        y = adj_y, adj_y = zero_vector
+      )
+        
+      Pmatrix <- sparseMatrix(i = 1:ncol(joint.XZ), j = 1 + chol.update.joint$Pindex, x = 1)
+      vi_joint_L_nonpermute <- drop0(solve(chol.update.joint$origL))
+      vi_joint_LP <- Pmatrix
+      vi_joint_decomp <- vi_joint_L_nonpermute %*% t(vi_joint_LP)
+      log_det_joint_var <- -2 * sum(log(diag(chol.update.joint$origL)))
+      
+      vi_beta_mean <- Matrix(chol.update.joint$mean[1:p.X], dimnames = list(colnames(X), NULL))
+      vi_alpha_mean <- Matrix(chol.update.joint$mean[-1:-p.X], dimnames = list(fmt_names_Z, NULL))
+      
+      vi_alpha_decomp <- vi_joint_decomp[, -1:-p.X, drop = F]
+      vi_beta_decomp <- vi_joint_decomp[, 1:p.X, drop = F]
+        
       if (do_SQUAREM){
-        if (family == 'poisson'){stop('squarem poisson not set up')}
         vi_joint_L_nonpermute <- vi_joint_decomp
         vi_joint_LP <- Diagonal(n = ncol(vi_joint_decomp))
       }
@@ -1532,29 +1639,15 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
         stop('Only linpred_method="joint" set up for "partial".')
       } else if (linpred_method == "joint") {
         
-        browser()
-        
         if (it == 1){
           joint.XZ <- cbind(X, Z)
         }
         
-        if (family %in% 'poisson'){
-          old_param <- c(as.vector(vi_beta_mean), as.vector(vi_alpha_mean))
-          old_param_alpha <- as.vector(vi_alpha_mean)
-          Textend <- bdiag(zero_mat, Tinv)
-          chol.update.joint <- solve(Matrix::Cholesky(  
-            crossprod(sqrt_pg_weights %*% joint.XZ) + 
-              Textend ),
-            t(joint.XZ) %*% (y - vi_pg_mean) - Textend %*% old_param)
-          chol.update.joint <- chol.update.joint + old_param
-          if (it == 2){browser()}
-        }else{
-          chol.update.joint <- solve(Matrix::Cholesky(  
-            crossprod(sqrt_pg_weights %*% joint.XZ) + 
-              bdiag(zero_mat, bdiag(Tinv)) ),
-            t(joint.XZ) %*% (s + vi_pg_mean * vi_r_mu) )
-        }
-        
+        chol.update.joint <- solve(Matrix::Cholesky(  
+          crossprod(sqrt_pg_weights %*% joint.XZ) + 
+            bdiag(zero_mat, bdiag(Tinv)) ),
+          t(joint.XZ) %*% (s + vi_pg_mean * vi_r_mu) )
+
         vi_beta_mean <- Matrix(chol.update.joint[1:p.X,], dimnames = list(colnames(X), NULL))
         vi_alpha_mean <- Matrix(chol.update.joint[-1:-p.X,], dimnames = list(fmt_names_Z, NULL))
         
@@ -1565,19 +1658,12 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
         
         log_det_beta_var <- 2 * sum(log(diag(vi_beta_decomp)))
 
-        if (family %in% 'poisson'){
-          chol.update.alpha <- LinRegChol(
-            X = Z, omega = diag_vi_pg_mean, prior_precision = Tinv,
-            y = y - vi_pg_mean,
-            adj_y = -as.vector(Tinv %*% old_param_alpha)
-          )
-        }else{
-          chol.update.alpha <- LinRegChol(
-            X = Z, omega = diag_vi_pg_mean, prior_precision = Tinv,
-            y = s + vi_pg_mean * vi_r_mu - vi_pg_mean * offset_fe,
-            adj_y = zero_vector
-          )
-        }
+        chol.update.alpha <- LinRegChol(
+          X = Z, omega = diag_vi_pg_mean, prior_precision = Tinv,
+          y = s + vi_pg_mean * vi_r_mu - vi_pg_mean * offset_fe,
+          adj_y = zero_vector
+        )
+        
         Pmatrix <- sparseMatrix(i = 1:p.Z, j = 1 + chol.update.alpha$Pindex, x = 1)
 
         vi_alpha_L_nonpermute <- drop0(solve(chol.update.alpha$origL))
@@ -1600,11 +1686,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
       running_log_det_alpha_var <- rep(NA, number_of_RE)
       
       if (any_RE){
-        if (!(family %in% 'poisson')){
-          vi_alpha_decomp <- sparseMatrix(i = 1, j = 1, x = 0, dims = rep(p.Z, 2))
-        }else{
-          vi_alpha_decomp <- as(vi_alpha_decomp, 'dgCMatrix')
-        }
+        vi_alpha_decomp <- sparseMatrix(i = 1, j = 1, x = 0, dims = rep(p.Z, 2))
       }
       
       if (linpred_method == "joint") {
@@ -1616,32 +1698,16 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
           tic("ux_mean")
         }
         
-        if (family %in% 'poisson'){
-          if (any_FE){stop('set up for fe')}
-          old_param <- c(as.vector(vi_beta_mean), as.vector(vi_alpha_mean))
-          old_lowertri <- drop0(ks::vech(as.matrix(bdiag(vi_beta_L_nonpermute, vi_alpha_L_nonpermute))))
-          old_P <- bdiag(vi_beta_LP, vi_alpha_LP)
-          Textend <- bdiag(zero_mat, bdiag(Tinv))
-          chol.update.joint <- solve(Matrix::Cholesky(  
-            crossprod(sqrt_pg_weights %*% joint.XZ) + 
-              Textend ),
-            t(joint.XZ) %*% (y - vi_pg_mean) - Textend %*% old_param)
-          chol.update.joint <- chol.update.joint + old_param
-          
+        if (any_RE){
+          reg_term <- bdiag(zero_mat, bdiag(Tinv))
         }else{
-          
-          if (any_RE){
-            reg_term <- bdiag(zero_mat, bdiag(Tinv))
-          }else{
-            reg_term <- zero_mat
-          }
-          chol.update.joint <- solve(Matrix::Cholesky(  
-            crossprod(sqrt_pg_weights %*% joint.XZ) + 
-              reg_term ),
-            t(joint.XZ) %*% (s + vi_pg_mean * vi_r_mu - vi_pg_mean * offset_fe) )
-          
+          reg_term <- zero_mat
         }
-        
+        chol.update.joint <- solve(Matrix::Cholesky(  
+          crossprod(sqrt_pg_weights %*% joint.XZ) + 
+            reg_term ),
+          t(joint.XZ) %*% (s + vi_pg_mean * vi_r_mu - vi_pg_mean * offset_fe) )
+
         vi_beta_mean <- Matrix(chol.update.joint[1:p.X,], dimnames = list(colnames(X), NULL))
         vi_alpha_mean <- Matrix(chol.update.joint[-1:-p.X,], dimnames = list(fmt_names_Z, NULL))
 
@@ -1681,106 +1747,27 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
         if (it > 1){
           plot(store_ELBO$ELBO, type = 'l')
         }
-        if (family == 'poisson'){
-          if (any_FE){stop('set up fe')}
-          
-          nvmp_par <- drop0(c(as.vector(vi_beta_mean),
-              as.vector(vi_alpha_mean),
-              (ks::vech(as.matrix(bdiag(vi_beta_L_nonpermute, vi_alpha_L_nonpermute))))
-          ))
-          
-          orig_obj <- obj_poisson(
-            par = rbind(Matrix(old_param), old_lowertri),
-            y = y, Textend = Textend,
-            P = old_P, joint.XZ = joint.XZ
-          )
-          nvmp_obj <- obj_poisson(par = nvmp_par,
-            y = y, Textend = Textend,
-            P = bdiag(vi_beta_LP, vi_alpha_LP), joint.XZ = joint.XZ)
-          
-          if (nvmp_obj < orig_obj){
-            
-            ascent_par <- gradient_ascent_poisson(
-              par = rbind(Matrix(old_param), old_lowertri),
-              y = y, Textend = Textend, 
-              vi_joint_LP = old_P, joint.XZ = joint.XZ)
-            
-            vi_joint_LP <- Pmatrix <- old_P
-            if (!isDiagonal(old_P)){stop('...; not diag')}
-            if (!isDiagonal(vi_joint_LP)){stop('...; not diag')}
-            int_L <- sparseMatrix(i = 1, j = 1, x = 0, dims = rep(ncol(joint.XZ), 2))
-            int_L[lower.tri(int_L, diag = TRUE)] <- ascent_par[-1:-ncol(joint.XZ)]
-            perm_int_L <- int_L %*% t(vi_joint_LP)
-            
-            vi_beta_decomp <- perm_int_L[1:p.X,1:p.X,drop=F]            
-            vi_alpha_decomp <- perm_int_L[-1:-p.X,-1:-p.X, drop=F]
-            for (index_j in cyclical_pos){
-              vi_alpha_decomp[,-index_j][index_j,] <- 0
-            }
-            vi_alpha_decomp <- drop0(vi_alpha_decomp)
-            
-            vi_alpha_mean <- Matrix(ascent_par[-1:-p.X][1:p.Z])
-            vi_beta_mean <- Matrix(ascent_par[1:p.X])
-            
-            # recons <- rbind(vi_beta_mean, vi_alpha_mean, drop0(ks::vech(as.matrix(bdiag(vi_beta_decomp, vi_alpha_decomp)))))
-            # recons_obj <- obj_poisson(par = recons, y = y, Textend = Textend, P = vi_joint_LP, joint.XZ = joint.XZ)
-            # ascent_obj <- obj_poisson(par = ascent_par, y = y, Textend = Textend, P = vi_joint_LP, joint.XZ = joint.XZ)
-            
-            log_det_joint_var <- sum(log(diag(int_L)^2))
-            
-          }
-          
-          beta_quad <- rowSums((X %*% t(vi_beta_decomp))^2)
-          alpha_quad <- rowSums((Z %*% t(vi_alpha_decomp))^2)
-          vi_pg_mean <- as.vector(exp(X %*% vi_beta_mean + Z %*% vi_alpha_mean + 1/2 * (beta_quad + alpha_quad)))
-          diag_vi_pg_mean <- sparseMatrix(i = seq_N, j = seq_N, x = vi_pg_mean)
-        }
-        
+
         if (do_timing){
           toc(quiet = verbose_time, log = T)
         }
       } else if (linpred_method == "cyclical") {
-        
-        if (family %in% 'poisson'){
-          log_weight <- log(vi_pg_mean)
-        }
         
         for (j in 1:number_of_RE) {
           index_j <- cyclical_pos[[j]]
           Z_j <- Z[, index_j, drop = F]
           Z_negj <- Z[, -index_j, drop = F]
         
-          if (family %in% 'poisson'){
-            old_param <- vi_alpha_mean[index_j]
-            chol.j <- LinRegChol(
-              X = Z_j, omega = diag_vi_pg_mean, prior_precision = Tinv[[j]],
-              y = as.vector(y - vi_pg_mean),
-              adj_y = -as.vector(Tinv[[j]] %*% old_param)
-            )
-            chol.j$mean <- chol.j$mean + old_param
-            
-          }else{
-            chol.j <- LinRegChol(
-              X = Z_j, omega = diag_vi_pg_mean, prior_precision = Tinv[[j]],
-              y = as.vector(s + vi_pg_mean * vi_r_mu - diag_vi_pg_mean %*% (offset_fe + X %*% vi_beta_mean + Z_negj %*% vi_alpha_mean[-index_j])),
-              adj_y = zero_vector
-            )
-          }
+          chol.j <- LinRegChol(
+            X = Z_j, omega = diag_vi_pg_mean, prior_precision = Tinv[[j]],
+            y = as.vector(s + vi_pg_mean * vi_r_mu - diag_vi_pg_mean %*% (offset_fe + X %*% vi_beta_mean + Z_negj %*% vi_alpha_mean[-index_j])),
+            adj_y = zero_vector
+          )
           
           Pmatrix <- sparseMatrix(i = 1:ncol(Z_j), j = 1 + chol.j$Pindex, x = 1)
           running_log_det_alpha_var[j] <- -2 * sum(log(diag(chol.j$origL)))
           
           vi_alpha_j_decomp <- drop0(solve(chol.j$origL) %*% t(Pmatrix))
-          
-          if (family %in% 'poisson'){
-            if (any_FE){browser()}
-            diff_mean <- chol.j$mean - old_param
-            log_weight <- log_weight + as.vector(Z_j %*% diff_mean) +
-               1/2 * rowSums((Z_j %*% t(vi_alpha_j_decomp))^2) +
-              -1/2 * rowSums((Z_j %*% t(vi_alpha_decomp[index_j, index_j]))^2)
-            vi_pg_mean <- exp(log_weight)
-            diag_vi_pg_mean <- sparseMatrix(i = seq_N, j = seq_N, x = vi_pg_mean)
-          }
           
           vi_alpha_mean[index_j] <- chol.j$mean
           vi_alpha_decomp[index_j, index_j] <- vi_alpha_j_decomp
@@ -1792,20 +1779,12 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
         # vi_alpha_decomp <- bdiag(vi_alpha_decomp)
         log_det_alpha_var <- sum(running_log_det_alpha_var)
 
-        if (family %in% 'poisson'){
-          chol.update.beta <- LinRegChol(
-            X = as(X, "sparseMatrix"), omega = diag_vi_pg_mean, prior_precision = zero_mat,
-            y = as.vector(y - vi_pg_mean),
-            adj_y = zero_vector # zero because flat prior!
-          )
-          chol.update.beta$mean <- chol.update.beta$mean + vi_beta_mean
-        }else{
-          chol.update.beta <- LinRegChol(
-            X = as(X, "sparseMatrix"), omega = diag_vi_pg_mean, prior_precision = zero_mat,
-            y = as.vector(s + vi_pg_mean * vi_r_mu - vi_pg_mean * offset_fe - diag_vi_pg_mean %*% Z %*% vi_alpha_mean),
-            adj_y = zero_vector
-          )
-        }
+        chol.update.beta <- LinRegChol(
+          X = as(X, "sparseMatrix"), omega = diag_vi_pg_mean, prior_precision = zero_mat,
+          y = as.vector(s + vi_pg_mean * vi_r_mu - vi_pg_mean * offset_fe - diag_vi_pg_mean %*% Z %*% vi_alpha_mean),
+          adj_y = zero_vector
+        )
+        
         Pmatrix <- sparseMatrix(i = 1:p.X, j = 1 + chol.update.beta$Pindex, x = 1)
 
         vi_beta_L_nonpermute <- drop0(solve(chol.update.beta$origL))
@@ -1819,11 +1798,11 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
         vi_alpha_mean <- Matrix(vi_alpha_mean, dimnames = list(fmt_names_Z, NULL))
         
         if (family %in% 'poisson'){
-          if (any_FE){stop('...')}
           beta_quad <- rowSums((X %*% t(vi_beta_decomp))^2)
           alpha_quad <- rowSums((Z %*% t(vi_alpha_decomp))^2)
-          vi_pg_mean <- as.vector(exp(X %*% vi_beta_mean + Z %*% vi_alpha_mean + 
-              1/2 * beta_quad + 1/2 * alpha_quad))
+          vi_pg_mean <- as.vector(exp(X %*% vi_beta_mean + Z %*% vi_alpha_mean +
+              adjust_fe_mean +
+              1/2 * beta_quad + 1/2 * alpha_quad + 1/2 * adjust_fe_var))
           diag_vi_pg_mean <- sparseMatrix(i = seq_N, j = seq_N, x = vi_pg_mean)
           sqrt_pg_weights <- sparseMatrix(i = seq_N, j = seq_N, x = sqrt(vi_pg_mean))
         }
@@ -1838,26 +1817,50 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     # Updated fixed effects variational parameters
     if (any_FE){
       
-      if (family == 'linear'){
-        adj_y <- s - Z %*% vi_alpha_mean - X %*% vi_beta_mean
-      }else if (family != 'poisson'){
-        adj_y <- s + vi_pg_mean * vi_r_mu - vi_pg_mean * (Z %*% vi_alpha_mean + X %*% vi_beta_mean)
+      if (family == 'poisson'){
+
+        est_FE <- update_poisson_FE(y = y,
+            FE_data = Z.FE.data, weight = as.vector(vi_pg_mean),
+            FE_lookup = Z.FE.lookup, FE_rowtens = Z.FE.rowTensor, 
+            vi_FE_mean = vi_FE_mean, vi_FE_var = vi_FE_var, 
+            old_FE_mean = old_vi_FE_mean, 
+            vi_FE_lndet = vi_FE_lndet, it = it, force_ascent = force_ascent,
+            dim_fe = Z.FE.size, levels_fe = Z.FE.levels)
+        
+        vi_FE_mean <- est_FE$mean
+        vi_FE_var <- est_FE$var
+        vi_FE_lndet <- est_FE$lndet
+        vi_pg_mean <- est_FE$weight
+        vi_FE_raw_var <- est_FE$raw
+        diag_vi_pg_mean <- sparseMatrix(i = seq_N, j = seq_N, x = vi_pg_mean)
+        
+        old_vi_FE_mean <- vi_FE_mean
+        
       }else{
-        stop('.......')
+        
+        if (family == 'linear'){
+          adj_y <- s - Z %*% vi_alpha_mean - X %*% vi_beta_mean
+        }else if (family != 'poisson'){
+          adj_y <- s + vi_pg_mean * vi_r_mu - vi_pg_mean * (Z %*% vi_alpha_mean + X %*% vi_beta_mean)
+        }else{
+          stop('Unknown family')
+        }
+        
+        est_FE <- update_FE(
+          FE_data = Z.FE.data, FE_lookup = Z.FE.lookup,
+          FE_rowtens = Z.FE.rowTensor,
+          y = as.vector(adj_y), weights = vi_pg_mean,
+          dim_fe = Z.FE.size, levels_fe = Z.FE.levels,
+          family = family,
+          vi_mean = vi_FE_mean, vi_var = vi_FE_var,
+          vi_lndet = vi_FE_lndet
+        )
+        
+        vi_FE_raw_var <- est_FE$raw
+        vi_FE_mean <- est_FE$mean
+        vi_FE_var <- est_FE$var
+        vi_FE_lndet <- est_FE$lndet
       }
-      
-      est_FE <- update_FE(
-        FE_data = Z.FE.data, FE_lookup = Z.FE.lookup,
-        FE_rowtens = Z.FE.rowTensor,
-        y = as.vector(adj_y), weights = vi_pg_mean,
-        dim_fe = Z.FE.size, levels_fe = Z.FE.levels,
-        family = family,
-        vi_mean = vi_FE_mean, vi_var = vi_FE_var,
-        vi_lndet = vi_FE_lndet
-      )
-      vi_FE_mean <- est_FE$mean
-      vi_FE_var <- est_FE$var
-      vi_FE_lndet <- est_FE$lndet
     }
     
     if (family == 'linear'){
@@ -1889,6 +1892,9 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     if (debug_ELBO & it != 1) {
       
       if (any_RE){
+        if (!inherits(vi_alpha_decomp, 'dgCMatrix')){
+          vi_alpha_decomp <- as(vi_alpha_decomp, 'dgCMatrix')
+        }
         variance_by_alpha_jg <- calculate_expected_outer_alpha(L = vi_alpha_decomp, alpha_mu = as.vector(vi_alpha_mean), re_position_list = outer_alpha_RE_positions)
         vi_sigma_outer_alpha <- variance_by_alpha_jg$outer_alpha
       }
@@ -1933,6 +1939,10 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     ##
     if (any_RE){
 
+      if (!inherits(vi_alpha_decomp, 'dgCMatrix')){
+        vi_alpha_decomp <- as(vi_alpha_decomp, 'dgCMatrix')
+      }
+      
       if (!do_huangwand){#Update standard Inverse-Wishart
         
         variance_by_alpha_jg <- calculate_expected_outer_alpha(L = vi_alpha_decomp, alpha_mu = as.vector(vi_alpha_mean), re_position_list = outer_alpha_RE_positions)
@@ -1943,6 +1953,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
         })
         
       }else{
+        
         #Update Inverse-Wishart
         variance_by_alpha_jg <- calculate_expected_outer_alpha(L = vi_alpha_decomp, alpha_mu = as.vector(vi_alpha_mean), re_position_list = outer_alpha_RE_positions)
         vi_sigma_outer_alpha <- variance_by_alpha_jg$outer_alpha
@@ -2143,7 +2154,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
       }
 
       if (any(!spline_REs)){
-        raw_R <- R_ridge <- vecR_ridge_new(L = vi_alpha_decomp[,nonspline_positions], pg_mean = diag(diag_vi_pg_mean),
+        raw_R <- R_ridge <- vecR_ridge_new(L = vi_alpha_decomp[,nonspline_positions], pg_mean = vi_pg_mean,
          mapping_J = mapping_J, d = d_j[!spline_REs],
          store_id = store_id, store_re_id = store_re_id,
          store_design = store_design, 
@@ -2664,6 +2675,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
       }
       if (any_FE){
         squarem_args$vi_FE_mean <- lapply(vi_FE_mean, as.vector)
+        squarem_args$vi_FE_raw_var <- vi_FE_raw_var
       }
 
       squarem_list[[squarem_counter]] <- squarem_args
@@ -2774,9 +2786,15 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
           squarem_par <- squarem_par[!grepl(squarem_par, pattern='vi_a_b_jp|vi_sigma_alpha|vi_alpha_L_nonpermute|vi_alpha_mean')]
         }
         if (any_FE){
-          squarem_type <- c(squarem_type, 'real')
-          squarem_structure <- c(squarem_structure, 'list')
-          squarem_par <- c(squarem_par, 'vi_FE_mean')
+          squarem_type <- c(squarem_type, 'real', 'positive')
+          squarem_structure <- c(squarem_structure, 'list', 'list')
+          if (any(Z.FE.size > 1)){browser()}
+          squarem_list[[1]]$vi_FE_raw_var <- lapply(squarem_list[[1]]$vi_FE_raw_var, as.vector)
+          squarem_list[[2]]$vi_FE_raw_var <- lapply(squarem_list[[2]]$vi_FE_raw_var, as.vector)
+          squarem_list[[3]]$vi_FE_raw_var <- lapply(squarem_list[[3]]$vi_FE_raw_var, as.vector)
+          
+          squarem_par <- c(squarem_par, 'vi_FE_mean', 'vi_FE_raw_var')
+          
         }
 
         check_tri <- sapply(squarem_par[squarem_type == 'cholesky'], FUN=function(nm_i){
@@ -2809,7 +2827,6 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
         
         prep_SQUAREM <- mapply(squarem_par, squarem_structure, squarem_type,
           SIMPLIFY = FALSE, FUN=function(s_par, s_str, s_type){
-            
             if (s_type == 'lu'){
               
               r <- list(
@@ -2852,11 +2869,13 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
         })
         
         ind_alpha <- FALSE
-
+        ATTEMPTS <- 10
+        
         if (ind_alpha){
           alpha <- -sqrt((sapply(prep_SQUAREM, FUN=function(i){i$norm_sq_r}))) /
             sqrt((sapply(prep_SQUAREM, FUN=function(i){i$norm_sq_v})))
           if (any(alpha > -1)){
+            ATTEMPTS <- 2
             alpha[which(alpha > -1)] <- -1.01
           }
           if (any(alpha < -10)){
@@ -2872,6 +2891,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
             sqrt(sum(sapply(prep_SQUAREM, FUN=function(i){i$norm_sq_v})))
           
           if (alpha > -1){
+            ATTEMPTS <- 2
             alpha <- -1.01
           }
           if (alpha < -10){
@@ -2886,7 +2906,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
         orig_squarempar <- squarem_par
         orig_alpha <- alpha
       
-        for (attempt_SQUAREM in 1:10){
+        for (attempt_SQUAREM in 1:ATTEMPTS){
           
           squarem_par <- orig_squarempar
           if (attempt_SQUAREM > 1){
@@ -3020,11 +3040,11 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
             prop_ELBOargs[[v]] <- prop_squarem[[v]]
           }
           
-          prop_ELBOargs$vi_alpha_L_nonpermute <- NULL
-          prop_ELBOargs$vi_beta_L_nonpermute <- NULL
-          prop_ELBOargs$vi_joint_L_nonpermute <- NULL
-
           if ('vi_alpha_mean' %in% names(prop_squarem)){
+            
+            if (!inherits(prop_squarem$vi_alpha_decomp, 'dgCMatrix')){
+              prop_squarem$vi_alpha_decomp <- as(prop_squarem$vi_alpha_decomp, 'dgCMatrix')
+            }
             prop_variance_by_alpha_jg <- calculate_expected_outer_alpha(
               L = (prop_squarem$vi_alpha_decomp), 
               alpha_mu = as.vector(prop_squarem$vi_alpha_mean), 
@@ -3058,63 +3078,61 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
             squarem_par <- c(squarem_par, 'vi_pg_mean')
           }else if (family %in% 'poisson'){
 
-            if (any_FE){stop('set up Poisson SQUAREM FE')}
-            if (factorization_method %in% c("weak", "collapsed")) {
-              joint_quad <- cpp_zVz(Z = joint.XZ, V = as(prop_ELBOargs$vi_joint_decomp, "dgCMatrix")) 
-            } else {
-              beta_quad <- rowSums((X %*% t(prop_ELBOargs$vi_beta_decomp))^2)
-              alpha_quad <- rowSums((Z %*% t(prop_ELBOargs$vi_alpha_decomp))^2)
-              joint_quad <- beta_quad + alpha_quad
-            }
-            
-            if (family %in% 'poisson'){
-              prop_vi_pg_mean <- as.vector(exp(X %*% prop_ELBOargs$vi_beta_mean + 
-                Z %*% prop_ELBOargs$vi_alpha_mean +
-                1/2 * joint_quad))
-            }
-            
-            prop_ELBOargs[['vi_pg_mean']] <- prop_vi_pg_mean
+            prop_ELBOargs[['vi_pg_mean']] <- NA
             squarem_par <- c(squarem_par, 'vi_pg_c', 'vi_pg_mean')
             
           }
           
           
           if (any_FE){
-            
             prop_ELBOargs$vi_FE_mean <- mapply(prop_ELBOargs$vi_FE_mean, Z.FE.size, SIMPLIFY = FALSE, FUN=function(i,j){matrix(i, ncol = j)})
-            if (family == 'linear'){
-              prop_adj_y <- s - Z %*% prop_ELBOargs$vi_alpha_mean - X %*% prop_ELBOargs$vi_beta_mean
-            }else if (family != 'poisson'){
-              prop_adj_y <- s + prop_ELBOargs$vi_pg_mean * prop_ELBOargs$vi_r_mu - prop_ELBOargs$vi_pg_mean * (Z %*% prop_ELBOargs$vi_alpha_mean + X %*% prop_ELBOargs$vi_beta_mean)
-            }else{stop('...')}
-            
-            prop_est_FE <- update_FE(
-              FE_data = Z.FE.data, FE_lookup = Z.FE.lookup,
-              FE_rowtens = Z.FE.rowTensor,
-              y = as.vector(prop_adj_y), weights = prop_ELBOargs$vi_pg_mean,
-              dim_fe = Z.FE.size, levels_fe = Z.FE.levels,
-              family = family,
-              vi_mean = prop_ELBOargs$vi_FE_mean , vi_var = prop_ELBOargs$vi_FE_var,
-              vi_lndet = rep(NA, length(Z.FE.name))
-            )
-            
-            prop_adjust_var <- 1/sqrt(prop_ELBOargs$vi_sigmasq_a/prop_ELBOargs$vi_sigmasq_b)
-            prop_ln_sigmasq <- log(prop_ELBOargs$vi_sigmasq_b) - log(prop_ELBOargs$vi_sigmasq_a)
-            
-            prop_ELBOargs$vi_FE_mean <- prop_est_FE$mean
-            prop_ELBOargs$vi_FE_var <- lapply(prop_est_FE$var, FUN=function(i){i * prop_adjust_var^2})
-            prop_ELBOargs$vi_FE_lndet <- prop_est_FE$lndet + (Z.FE.levels - 1) * Z.FE.size * prop_ln_sigmasq
-           
+            reformat_var <- mapply(prop_ELBOargs$vi_FE_raw_var, Z.FE.size, SIMPLIFY = FALSE, FUN=function(i,j){
+              lndet <- sum(log(i)) - log(sum(i))
+              i <- i - i^2/sum(i)
+              return(list(var = matrix(i, ncol = j^2), lndet = lndet))
+            })
+            prop_ELBOargs$vi_FE_var <- lapply(reformat_var, FUN=function(i){i$var})
+            prop_ELBOargs$vi_FE_lndet <- sapply(reformat_var, FUN=function(i){i$lndet})
+            squarem_par <- setdiff(squarem_par, 'vi_FE_raw_var')
             squarem_par <- c(squarem_par, 'vi_FE_mean', 'vi_FE_var', 'vi_FE_lndet')
-            
           }
-          
-          
+
           elbo_init <- do.call("calculate_ELBO", ELBOargs)
-          elbo_squarem <- do.call("calculate_ELBO", prop_ELBOargs)
+          elbo_squarem <- do.call("calculate_ELBO", prop_ELBOargs[!(names(prop_ELBOargs) %in% c('vi_alpha_L_nonpermute', 'vi_beta_L_nonpermute', 'vi_joint_L_nonpermute', 'vi_FE_raw_var'))])
+          
           if (!quiet_rho){print(c(elbo_squarem$ELBO, elbo_init$ELBO))}
           if (elbo_squarem$ELBO >= elbo_init$ELBO){break}
-            
+          # if (family %in% 'poisson' & any_FE){
+          # 
+          #   temp_joint_quad <- rowSums( (X %*% t(prop_ELBOargs$vi_beta_decomp))^2 ) +
+          #     rowSums( (Z %*% t(prop_ELBOargs$vi_alpha_decomp))^2 )
+          #   temp_adjust_FE <- calculate_FE(X = Z.FE.data,
+          #     Z = Z.FE.lookup, FS_XX = Z.FE.rowTensor, mean = prop_ELBOargs$vi_FE_mean,
+          #     var = prop_ELBOargs$vi_FE_var)
+          #   temp_vi_pg_mean <- as.vector(
+          #       X %*% prop_ELBOargs$vi_beta_mean +
+          #       Z %*% prop_ELBOargs$vi_alpha_mean + 1/2 * temp_joint_quad +
+          #       temp_adjust_FE[,1] + 1/2 * temp_adjust_FE[,2])
+          #   temp_vi_pg_mean <- exp(temp_vi_pg_mean)
+          #   temp_FE <- update_poisson_FE(y = y,
+          #     FE_data = Z.FE.data, weight = temp_vi_pg_mean,
+          #     FE_lookup = Z.FE.lookup, FE_rowtens = Z.FE.rowTensor,
+          #     vi_FE_mean = prop_ELBOargs$vi_FE_mean,
+          #     vi_FE_var = prop_ELBOargs$vi_FE_var,
+          #     old_FE_mean = ELBOargs$vi_FE_mean,
+          #     vi_FE_lndet = prop_ELBOargs$vi_FE_lndet,
+          #     it = NA, force_ascent = FALSE, allow_decrease = TRUE,
+          #     dim_fe = Z.FE.size, levels_fe = Z.FE.levels)
+          # 
+          #   prop_ELBOargs$vi_FE_mean <- temp_FE$mean
+          #   prop_ELBOargs$vi_FE_var <- temp_FE$var
+          #   prop_ELBOargs$vi_FE_lndet <- temp_FE$lndet
+          #   prop_ELBOargs$vi_FE_raw_var <- temp_FE$raw
+          # 
+          #   elbo_squarem <- do.call("calculate_ELBO", prop_ELBOargs[!(names(prop_ELBOargs) %in% c('vi_alpha_L_nonpermute', 'vi_beta_L_nonpermute', 'vi_joint_L_nonpermute', 'vi_FE_raw_var'))])
+          #   if (elbo_squarem$ELBO >= elbo_init$ELBO){break}
+          # 
+          # }
         }
         
         if (elbo_squarem$ELBO >= elbo_init$ELBO){
@@ -3204,10 +3222,13 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     # }
 
     ## Change diagnostics
-    
     change_elbo <- final.ELBO$ELBO - lagged_ELBO
 
-    change_beta_mean <- max(abs(vi_beta_mean - lagged_beta_mean))
+    if (p.X > 0){
+      change_beta_mean <- max(abs(vi_beta_mean - lagged_beta_mean))
+    }else{
+      change_beta_mean <- 0
+    }
     
     if (any_RE){
       change_alpha_mean <- max(abs(vi_alpha_mean - lagged_alpha_mean))
@@ -3236,7 +3257,11 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
       }else{
         change_alpha_var <- 0
       }
-      change_beta_var <- max(abs(vi_beta_decomp - lagged_beta_decomp))
+      if (p.X > 0){
+        change_beta_var <- max(abs(vi_beta_decomp - lagged_beta_decomp))
+      }else{
+        change_beta_var <- 0
+      }
     }
 
     change_vi_r_mu <- vi_r_mu - lagged_vi_r_mu
@@ -3251,8 +3276,10 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
         store_hw[it,] <- unlist(vi_a_b_jp)
         colnames(store_hw) <- names(unlist(vi_a_b_jp))
       }
-      store_sigma[it,] <- unlist(lapply(vi_sigma_alpha, as.vector))
-      colnames(store_sigma) <- names(unlist(lapply(vi_sigma_alpha, as.vector)))
+      if (any_RE){
+        store_sigma[it,] <- unlist(lapply(vi_sigma_alpha, as.vector))
+        colnames(store_sigma) <- names(unlist(lapply(vi_sigma_alpha, as.vector)))
+      }
       
     }
     
@@ -3267,8 +3294,10 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     change_all <- data.frame(change_alpha_mean, change_beta_mean, 
         t(change_sigma_mean), change_alpha_var, change_beta_var, change_joint_var, 
         change_vi_r_mu, change_fe_mean, change_fe_var)
-    cat('\n')
-    print(round(change_all, 5))
+    
+    # cat('\n')
+    # print(round(change_all, 5))
+    
     if ((max(change_all) < tolerance_parameters) | (change_elbo > 0 & change_elbo < tolerance_elbo)) {
       if (!quiet) {
         message(paste0("Converged after ", it, " iterations with ELBO change of ", round(change_elbo, 1 + abs(floor(log(tolerance_elbo) / log(10))))))
@@ -3326,7 +3355,15 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
   }
   
   if (any_FE){
+
+    for (v in 1:length(vi_FE_mean)){
+      colnames(vi_FE_mean[[v]]) <- colnames(Z.FE.data[[v]]) 
+      rownames(vi_FE_mean[[v]]) <- Z.FE.attr[[v]]$unique_values
+      rownames(vi_FE_var[[v]]) <- Z.FE.attr[[v]]$unique_values
+    }
+    names(vi_FE_mean) <- names(vi_FE_var) <- Z.FE.name
     output$FE <- list(mean = vi_FE_mean, var = vi_FE_var)
+    
   }
   output$family <- family
   output$control <- control
@@ -3372,6 +3409,9 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
   }
   if (control$return_data) {
     output$data <- list(X = X, Z = Z, y = y)
+    if (any_FE){
+      output$data$FE <- list(data = Z.FE.data, lookup = Z.FE.lookup)
+    }
     if (family == 'binomial'){
       output$data$trials <- trials
     }
@@ -3437,6 +3477,25 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
   output$timing <- tic_summary
   class(output) <- "vglmer"
   
+  save_lp_NOFE <- X %*% vi_beta_mean + Z %*% vi_alpha_mean
+  if (any_FE){
+    save_lp <- save_lp_NOFE + calculate_FE(X = Z.FE.data, Z = Z.FE.lookup, FS_XX = Z.FE.rowTensor, 
+      mean = vi_FE_mean, var = vi_FE_var)[,1]
+    
+    Z.FE.data$person <- NULL
+    Z.FE.lookup$person <- NULL
+    Z.FE.rowTensor$person <- NULL
+    vi_FE_mean$person <- NULL
+    vi_FE_var$person <- NULL
+    if (length(vi_FE_var) > 0){
+      save_lp_NOFE <- save_lp_NOFE + calculate_FE(X = Z.FE.data, Z = Z.FE.lookup, FS_XX = Z.FE.rowTensor, 
+          mean = vi_FE_mean, var = vi_FE_var)[,1]
+    }
+  }else{
+    save_lp <- NULL
+  }
+  output$save_lp_NOFE <- save_lp_NOFE
+  output$save_lp <- save_lp
   return(output)
 }
 

@@ -35,6 +35,18 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// invert_rowwise
+Rcpp::List invert_rowwise(const Eigen::MatrixXd X, const int dim_X);
+RcppExport SEXP _vglmer_invert_rowwise(SEXP XSEXP, SEXP dim_XSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const Eigen::MatrixXd >::type X(XSEXP);
+    Rcpp::traits::input_parameter< const int >::type dim_X(dim_XSEXP);
+    rcpp_result_gen = Rcpp::wrap(invert_rowwise(X, dim_X));
+    return rcpp_result_gen;
+END_RCPP
+}
 // unique_rows
 IntegerMatrix unique_rows(const IntegerMatrix m);
 RcppExport SEXP _vglmer_unique_rows(SEXP mSEXP) {
@@ -153,6 +165,7 @@ END_RCPP
 static const R_CallMethodDef CallEntries[] = {
     {"_vglmer_LinRegChol", (DL_FUNC) &_vglmer_LinRegChol, 6},
     {"_vglmer_calculate_expected_outer_alpha", (DL_FUNC) &_vglmer_calculate_expected_outer_alpha, 3},
+    {"_vglmer_invert_rowwise", (DL_FUNC) &_vglmer_invert_rowwise, 2},
     {"_vglmer_unique_rows", (DL_FUNC) &_vglmer_unique_rows, 1},
     {"_vglmer_prepare_Z_for_px", (DL_FUNC) &_vglmer_prepare_Z_for_px, 1},
     {"_vglmer_chol_sparse", (DL_FUNC) &_vglmer_chol_sparse, 3},

@@ -11,7 +11,7 @@ opt_edf <- function(par, target, M, g_l){abs(get_edf_diag(alpha = par, M = M, g 
 
 calibrate_init <- function(Z, weight_init, cyclical_pos, d_j, g_j, vi_sigma_alpha_nu, vi_sigmasq_a, vi_sigmasq_b){
   
-  vi_sigma_alpha <- mapply(cyclical_pos, d_j, g_j, vi_sigma_alpha_nu, FUN=function(c_l, d_l, g_l, alpha_nu){
+  vi_sigma_alpha <- mapply(cyclical_pos, names(d_j), d_j, g_j, vi_sigma_alpha_nu, FUN=function(c_l, n_l, d_l, g_l, alpha_nu){
     
     ZtZ <- crossprod(Diagonal(x = sqrt(weight_init)) %*% Z[,c_l])
     if (d_l == 1 & isDiagonal(ZtZ)){
@@ -21,7 +21,13 @@ calibrate_init <- function(Z, weight_init, cyclical_pos, d_j, g_j, vi_sigma_alph
                       method = 'L-BFGS-B')
     }else{
       # If spline (i.e. non-diagonal), then set to relatively small to start
-      if (d_l == 1){target_fraction <- 0.1}else{target_fraction <- 0.90}
+      if (d_l == 1){
+        if (grepl(n_l, pattern='[0-9]-int$')){
+          target_fraction <- 1/ncol(ZtZ)
+        }else{
+          target_fraction <- 1/ncol(ZtZ)
+        }
+      }else{target_fraction <- 0.90}
       out_cl <- optim(par = rep(0, d_l), fn = opt_edf, method = 'L-BFGS-B',
                       control = list(maxit = 10),
                       M = ZtZ, g_l = g_l, target = target_fraction * ncol(ZtZ))

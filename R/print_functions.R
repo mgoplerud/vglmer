@@ -130,6 +130,7 @@ print.vglmer <- function(x, ...) {
   missing_obs <- x$internal_parameters$missing_obs
   it_used <- x$internal_parameters$it_used
   it_max <- x$internal_parameters$it_max
+  x$internal_parameters$parameter.change$it <- NULL
   final_param_change <- round(max(x$internal_parameters$parameter.change), 6)
   final_ELBO_change <- round(tail(diff(x$ELBO_trajectory$ELBO), 1), 8)
   converged <- it_max != it_used

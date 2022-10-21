@@ -102,7 +102,7 @@ fast_generic_FE <- function(FS_XX, X, Z, y, weights, dim_fe, levels_fe){
   lndet_FE <- sum(det_block)  + as.numeric(determinant(weight_matrix)$modulus)
   # -(sum(log(diag_ZtZ)) + log(sum(1/diag_ZtZ))) [ignore]((+ log(ncol(Z)) ))
   
-  return(list(mean = mean_FE, var = var_FE, lndet = lndet_FE))  
+  return(list(mean = mean_FE, var = var_FE, lndet = lndet_FE, raw = lhs_meat))  
 }
 
 # Function for updating FE with sum-to-zero constraint, only 1-D
@@ -111,12 +111,13 @@ fast_1D_FE <- function(X, Z, weights, y){
   diag_ZtZ <- as.vector(t(Z) %*% Diagonal(x = weights) %*% X^2)
   inv_diag_ZtZ <- 1/diag_ZtZ
   
-  OLS <- Diagonal(x = inv_diag_ZtZ) %*% t(Z) %*% y
+  OLS <- Diagonal(x = inv_diag_ZtZ) %*% (t(Z) %*% Diagonal(x = y) %*% X)
   var_FE <- inv_diag_ZtZ - inv_diag_ZtZ^2/sum(inv_diag_ZtZ)
   mean_FE <- OLS - inv_diag_ZtZ * sum(OLS)/sum(inv_diag_ZtZ)
   lndet_FE <- -(sum(log(diag_ZtZ)) + log(sum(1/diag_ZtZ)))
   
-  return(list(var = matrix(var_FE), mean = Matrix(mean_FE), lndet = lndet_FE))
+  return(list(var = matrix(var_FE), mean = Matrix(mean_FE), 
+              lndet = lndet_FE, raw = inv_diag_ZtZ))
 }
 
 update_FE <- function(vi_mean, vi_var, vi_lndet, FE_data, FE_lookup, y, weights, 
@@ -126,6 +127,8 @@ update_FE <- function(vi_mean, vi_var, vi_lndet, FE_data, FE_lookup, y, weights,
   running_FE <- calculate_FE(X = FE_data, Z = FE_lookup, FS_XX = FE_rowtens, mean = vi_mean, var = vi_var)
   
   n_FE <- length(FE_data)
+  vi_var_raw <- as.list(rep(NA, n_FE))
+  
   for (v in 1:n_FE){
     
     FE_rt_v <- FE_rowtens[[v]]
@@ -147,7 +150,7 @@ update_FE <- function(vi_mean, vi_var, vi_lndet, FE_data, FE_lookup, y, weights,
     vi_mean[[v]] <- update_FE_v$mean
     vi_var[[v]] <- update_FE_v$var  
     vi_lndet[v] <- update_FE_v$lndet
-    
+    vi_var_raw[[v]] <- update_FE_v$raw
     # running_FE <- calculate_FE(X = FE_data, Z = FE_lookup, FS_XX = FE_rowtens, mean = vi_mean, var = vi_var)
     new_mean_v <- rowSums(FE_data_v * (FE_lookup_v %*% vi_mean[[v]]))
     new_var_v <- rowSums(FE_rt_v * (FE_lookup_v %*% vi_var[[v]]))
@@ -156,6 +159,6 @@ update_FE <- function(vi_mean, vi_var, vi_lndet, FE_data, FE_lookup, y, weights,
     running_FE[,2] <- running_FE[,2] + (new_var_v - init_var_v)
   }
   
-  return(list(mean = vi_mean, var = vi_var, lndet = vi_lndet))
+  return(list(mean = vi_mean, var = vi_var, lndet = vi_lndet, raw = vi_var_raw))
   
 }

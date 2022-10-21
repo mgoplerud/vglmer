@@ -347,11 +347,16 @@ calculate_ELBO <- function(family, ELBO_type, factorization_method,
 
     ## GET THE ENTROPY
     # Entropy for p(beta,alpha)
+    entropy_1 <- 0
     if (factorization_method == "weak") {
-      entropy_1 <- ncol(vi_joint_decomp) / 2 * log(2 * pi * exp(1)) +
-        1 / 2 * log_det_joint_var
+      if (ncol(vi_joint_decomp) > 0){
+        entropy_1 <- ncol(vi_joint_decomp) / 2 * log(2 * pi * exp(1)) +
+          1 / 2 * log_det_joint_var
+      }
     } else {
-      entropy_1 <- nrow(vi_beta_mean) / 2 * log(2 * pi * exp(1)) + 1 / 2 * log_det_beta_var
+      if (ncol(X) > 0){
+        entropy_1 <- entropy_1 + nrow(vi_beta_mean) / 2 * log(2 * pi * exp(1)) + 1 / 2 * log_det_beta_var
+      }
       if (any_RE){
         entropy_1 <- entropy_1 + ncol(vi_alpha_decomp) / 2 * log(2 * pi * exp(1)) + 1 / 2 * log_det_alpha_var
       }
