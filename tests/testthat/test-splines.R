@@ -358,13 +358,13 @@ test_that("Compare against mgcv", {
     pred_estgam <- predict(est_gam, newdata = data.frame(x = seq(min(dat$x), max(dat$x), length.out=100), f = 'b'))
     pred_estvglmer <- predict(est_vglmer, newdata = data.frame(x = seq(min(dat$x), max(dat$x), length.out=100), f = 'b'))
     
-    expect_gte(cor(pred_estvglmer, pred_estgam), 0.95)
+    expect_gte(cor(plogis(pred_estvglmer), plogis(pred_estgam)), 0.95)
     
-    est_gam <- mgcv::gam(y ~ s(x), data = dat, family = binomial())  
-    est_vglmer <- vglmer(y ~ v_s(x, type = 'o'), data = dat, family = 'binomial')
+    est_gam <- mgcv::gam(y ~ s(x), data = dat, family = gaussian())  
+    est_vglmer <- vglmer(y ~ v_s(x, type = 'o'), data = dat, family = 'linear')
     
     knots_custom <- seq(-3, 3, length.out=35)
-    est_vglmer_2 <- vglmer(y ~ v_s(x, knots = knots_custom, type = 'tpf'), data = dat, family = 'binomial')
+    est_vglmer_2 <- vglmer(y ~ v_s(x, knots = knots_custom, type = 'tpf'), data = dat, family = 'linear')
     
     grid_x <- seq(min(dat$x), max(dat$x), length.out=100)
     pred_estgam <- predict(est_gam, newdata = data.frame(x = grid_x, f = 'b'))

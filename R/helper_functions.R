@@ -6,6 +6,9 @@ safe_convert <- function(x){
     out <- cbind(lout, lout, out)
     colnames(out) <- c('i', 'j', 'x')
   }else{
+    if (inherits(x, 'matrix')){
+      x <- drop0(x)  
+    }
     out <- with(attributes(as(as(x, "generalMatrix"), "TsparseMatrix")), cbind(i, j, x))
   }
   return(out)
