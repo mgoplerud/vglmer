@@ -117,6 +117,7 @@ ranef.vglmer <- function(object, ...) {
 }
 
 #' @rdname vglmer-class
+#' @method coef vglmer
 #' @export
 coef.vglmer <- function(object, ...) {
   if (length(list(...)) > 0) {

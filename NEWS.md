@@ -1,6 +1,6 @@
 # vglmer 1.0.3
 
-* Adjust code to work with Matrix 1.5-2
+* Adjust `vglmer` to not throw deprecation messages with Matrix 1.5.
 
 # vglmer 1.0.2
 

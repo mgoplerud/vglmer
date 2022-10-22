@@ -1154,7 +1154,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
         # joint_quad <- rowSums( (joint.XZ %*% t(vi_joint_decomp))^2 )
         # vi_joint_decomp <<- vi_joint_decomp
         # joint.XZ <<- joint.XZ
-        joint_quad <- cpp_zVz(Z = joint.XZ, V = as(vi_joint_decomp, "dgCMatrix")) 
+        joint_quad <- cpp_zVz(Z = joint.XZ, V = as(vi_joint_decomp, "generalMatrix")) 
         if (family == 'negbin'){
           joint_quad <- joint_quad + vi_r_sigma
         }
@@ -1231,10 +1231,10 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     )
 
     if (!cyclical_T & factorization_method != "collapsed") {
-      Tinv <- as(Tinv, "dgCMatrix")
+      Tinv <- as(Tinv, "generalMatrix")
     } else {
       Tinv <- lapply(Tinv, FUN = function(i) {
-        as(i, "dgCMatrix")
+        as(i, "generalMatrix")
       })
     }
     
@@ -1285,19 +1285,22 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
       
       for (j in 1:number_of_RE) {
         index_j <- cyclical_pos[[j]]
-        M_j <- as(M[, index_j, drop = F], 'dgCMatrix')
+        M_j <- as(M[, index_j, drop = F], 'generalMatrix')
         prec_j <- crossprod(sqrt_pg_weights %*% M_j) + Tinv[[j]]
         
         chol_var_j <- solve(t(chol(prec_j)))
         running_log_det_alpha_var[j] <- 2 * sum(log(diag(chol_var_j)))
         
-        vi_alpha_decomp[index_j, index_j] <- as(chol_var_j, "dgTMatrix")
+        vi_alpha_decomp[index_j, index_j] <- drop0(chol_var_j)
+        # as(
+        #   as(chol_var_j, "generalMatrix"), "TsparseMatrix"
+        # )
       }
       vi_alpha_L_nonpermute <- vi_alpha_decomp
       vi_alpha_LP <- Diagonal(n = nrow(vi_alpha_L_nonpermute))
       vi_alpha_decomp <- vi_alpha_L_nonpermute  %*% t(vi_alpha_LP)
       vi_alpha_decomp <- drop0(vi_alpha_decomp)
-      vi_alpha_decomp <- as(vi_alpha_decomp, 'dgCMatrix')
+      vi_alpha_decomp <- as(vi_alpha_decomp, 'generalMatrix')
       
       log_det_alpha_var <- sum(running_log_det_alpha_var)
       
@@ -1355,7 +1358,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
         vi_alpha_LP <- Pmatrix
         vi_alpha_decomp <- vi_alpha_L_nonpermute  %*% t(vi_alpha_LP)
         vi_alpha_decomp <- drop0(vi_alpha_decomp)
-        vi_alpha_decomp <- as(vi_alpha_decomp, 'dgCMatrix')
+        vi_alpha_decomp <- as(vi_alpha_decomp, 'generalMatrix')
         vi_alpha_mean <- chol.update.alpha$mean
         log_det_alpha_var <- -2 * sum(log(diag(chol.update.alpha$origL)))
 
@@ -1459,7 +1462,11 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
           chol_var_j <- solve(t(chol(prec_j)))
           running_log_det_alpha_var[j] <- 2 * sum(log(diag(chol_var_j)))
 
-          vi_alpha_decomp[index_j, index_j] <- as(chol_var_j, "dgTMatrix")
+          vi_alpha_decomp[index_j, index_j] <- drop0(chol_var_j)
+          # as(
+          #   as(chol_var_j, "generalMatrix"), "TsparseMatrix"
+          # )
+          
         }
         
         vi_alpha_L_nonpermute <- vi_alpha_decomp
@@ -1493,7 +1500,10 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
           bind_rhs_j[[j]] <- mod_j %*% t(Z_j) %*% s
 
           running_log_det_alpha_var[j] <- 2 * sum(log(diag(chol_var_j)))
-          vi_alpha_decomp[index_j, index_j] <- as(chol_var_j, "dgTMatrix")
+          vi_alpha_decomp[index_j, index_j] <- drop0(chol_var_j)
+          # as(
+          #   as(chol_var_j, "generalMatrix"), "TsparseMatrix"
+          # )
         }
 
         log_det_alpha_var <- sum(running_log_det_alpha_var)
@@ -1686,7 +1696,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     } else if (family == 'linear') {
       
       if (factorization_method == 'weak'){
-        joint_quad <- cpp_zVz(Z = joint.XZ, V = as(vi_joint_decomp, "dgCMatrix"))
+        joint_quad <- cpp_zVz(Z = joint.XZ, V = as(vi_joint_decomp, "generalMatrix"))
         vi_lp <- (s - as.vector(X %*% vi_beta_mean + Z %*% vi_alpha_mean))^2 + joint_quad
       } else{
         beta_quad <- rowSums((X %*% t(vi_beta_decomp))^2)
@@ -1836,9 +1846,9 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
         
         R_spline_ridge <- sapply(cyclical_pos[spline_REs], FUN=function(s){vi_alpha_decomp[,s, drop = F]})
         R_spline_ridge <- Diagonal(x =mapply(R_spline_ridge, cyclical_pos[spline_REs], FUN=function(V, pos){
-          sum(vi_pg_mean * cpp_zVz(Z = drop0(Z[,pos,drop=F]), V = as(V, 'dgCMatrix')))
+          sum(vi_pg_mean * cpp_zVz(Z = drop0(Z[,pos,drop=F]), V = as(V, 'generalMatrix')))
         }))
-        # Manually convert "ddiMatrix" to "dgCMatrix" so doesn't fail on
+        # Manually convert "ddiMatrix" to "generalMatrix" so doesn't fail on
         # old versions of "Matrix" package.
         if (inherits(R_spline_ridge, 'ddiMatrix')){
           R_spline_ridge <- diag(R_spline_ridge)
@@ -1847,7 +1857,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
             j = seq_len(length(R_spline_ridge)),
             x = R_spline_ridge)
         }else{
-          R_spline_ridge <- as(R_spline_ridge, 'dgCMatrix')
+          R_spline_ridge <- as(R_spline_ridge, 'generalMatrix')
         }
       }else{
         R_spline_ridge <- drop0(matrix(0, nrow = 0, ncol = 0))
@@ -2593,7 +2603,8 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
               prop_joint_var <- rowSums((X %*% t(prop_squarem$vi_beta_decomp))^2) + 
                 rowSums((Z %*% t(prop_squarem$vi_alpha_decomp))^2)
             }else{
-              prop_joint_var <-  cpp_zVz(Z = joint.XZ, V = as(prop_squarem$vi_joint_decomp, "dgCMatrix")) 
+              prop_joint_var <-  cpp_zVz(Z = joint.XZ, 
+                V = as(prop_squarem$vi_joint_decomp, "generalMatrix")) 
             }
             
             if (vi_r_method %in% c('Laplace', 'delta')){
@@ -2655,7 +2666,8 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
             if (family != 'binomial'){stop('check squarem for non-binomial case')}
             
             if (factorization_method %in% c("weak", "collapsed")) {
-              joint_quad <- cpp_zVz(Z = joint.XZ, V = as(prop_ELBOargs$vi_joint_decomp, "dgCMatrix")) 
+              joint_quad <- cpp_zVz(Z = joint.XZ, 
+                  V = as(prop_ELBOargs$vi_joint_decomp, "generalMatrix")) 
               if (family == 'negbin'){
                 joint_quad <- joint_quad + prop_ELBOargs$vi_r_sigma
               }

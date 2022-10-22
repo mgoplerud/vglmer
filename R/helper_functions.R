@@ -5,9 +5,8 @@ safe_convert <- function(x){
     lout <- seq_len(length(out)) - 1
     out <- cbind(lout, lout, out)
     colnames(out) <- c('i', 'j', 'x')
-    # out <- with(attributes(as(as(as.matrix(x), "sparseMatrix"), "dgTMatrix")), cbind(i, j, x))
   }else{
-    out <- with(attributes(as(as(x, "sparseMatrix"), "dgTMatrix")), cbind(i, j, x))
+    out <- with(attributes(as(as(x, "generalMatrix"), "TsparseMatrix")), cbind(i, j, x))
   }
   return(out)
 }

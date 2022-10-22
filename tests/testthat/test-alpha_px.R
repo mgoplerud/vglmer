@@ -51,7 +51,7 @@ test_that("Calculate E[alpha alpha^T] comparing cpp and base R", {
   })
 
   vi_alpha_var <- drop0(rWishart(n = 1, df = nrow(mk_Z$Zt) + 10, Sigma = diag(nrow(mk_Z$Zt)))[, , 1])
-  vi_alpha_chol <- as(drop0((chol(vi_alpha_var))), "dgCMatrix")
+  vi_alpha_chol <- as(drop0((chol(vi_alpha_var))), "generalMatrix")
   expect_equal(as.matrix(t(vi_alpha_chol) %*% vi_alpha_chol), as.matrix(vi_alpha_var))
 
   vi_alpha_mean <- Matrix(rnorm(nrow(vi_alpha_var)))
