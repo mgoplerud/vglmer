@@ -1,3 +1,7 @@
+# vglmer 1.0.3
+
+* Adjust code to work with Matrix 1.5-2
+
 # vglmer 1.0.2
 
 * IMPORTANT: Fixes bug where prediction with only one spline  (and no random effects) was wrong; the non-linear part of the spline was ignored.
