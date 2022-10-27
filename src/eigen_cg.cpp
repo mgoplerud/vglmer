@@ -34,13 +34,40 @@ List cg_custom(
   Eigen::SparseMatrix<double> scaled_Z = sparse_diag(sqrt_omega_k) * Z;
   Eigen::SparseMatrix<double> scaled_X = sparse_diag(sqrt_omega_k) * X;
   
-  Eigen::VectorXd precond_diag(p_Z);
-    
-  // Remember that P is ncol(X) by ncol(Z)
-  for (int i = 0; i < p_Z; i++){
-    precond_diag(i) = 1.0/((scaled_Z.col(i) + scaled_X * P.col(i)).squaredNorm() + ridge.coeff(i,i));
+  Eigen::VectorXd diag_ridge = ridge.diagonal();
+  
+  Eigen::VectorXd Z_sqnorm = Eigen::VectorXd::Zero(Z.cols());
+  for (int k=0; k < scaled_Z.outerSize(); ++k){
+    for (Eigen::SparseMatrix<double>::InnerIterator it(scaled_Z, k); it; ++it){
+      int temp_col = it.col();
+      double temp_dbl = std::pow(it.value(), 2);
+      Z_sqnorm(temp_col) += temp_dbl;
+    }
   }
 
+  Eigen::MatrixXd meat_X = (scaled_X.adjoint() * scaled_X) * P;
+  Eigen::VectorXd P_sqnorm = meat_X.cwiseProduct(P).colwise().sum();
+  
+  Eigen::SparseMatrix<double> meat_cross = scaled_X.adjoint() * scaled_Z;
+  Eigen::VectorXd cross_norm = Eigen::VectorXd::Zero(p_Z);
+  for (int k=0; k < meat_cross.outerSize(); ++k){
+    for (Eigen::SparseMatrix<double>::InnerIterator it(meat_cross, k); it; ++it){
+      int temp_col = it.col();
+      int temp_row = it.row();
+      double temp_val = it.value();
+      cross_norm(temp_col) +=  temp_val * P(temp_row, temp_col);
+    }
+  }
+  Eigen::VectorXd precond_diag = (Z_sqnorm + P_sqnorm + 2 * cross_norm + diag_ridge).cwiseInverse();
+
+  // Eigen::VectorXd precond_diag_old(p_Z);
+  // for (int i = 0; i < p_Z; i++){
+  //   Eigen::VectorXd P_i = P.col(i);
+  //   Eigen::VectorXd int_vector = scaled_Z.col(i) + scaled_X * P_i;
+  //   double int_term = (int_vector).squaredNorm() + diag_ridge(i);
+  //   precond_diag_old(i) = 1.0/(int_term);
+  // }
+  
   Eigen::VectorXd alpha = old_alpha;
   Eigen::VectorXd PA = P * alpha;
   // residual = s - (Z * a - X * P * a)
@@ -56,7 +83,6 @@ List cg_custom(
   Eigen::VectorXd p = normal_residual.cwiseProduct(precond_diag);
   double absNew = normal_residual.dot(p);
     
-
   double threshold = tol * tol * rhsNorm2;
   double tol_error = 0;
     
@@ -113,7 +139,8 @@ List cg_custom(
     Rcpp::Named("alpha") = alpha,
     Rcpp::Named("iter") = it,
     Rcpp::Named("error") = tol_error,
-    Rcpp::Named("converged") = convg
+    Rcpp::Named("converged") = convg,
+    Rcpp::Named("precond") = precond_diag
   );
  
 }

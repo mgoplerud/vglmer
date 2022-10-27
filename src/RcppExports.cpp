@@ -159,9 +159,9 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
-// cpp_update_c_var
-Rcpp::List cpp_update_c_var(const Eigen::SparseMatrix<double> diag_vi_pg_mean, const Eigen::SparseMatrix<double> design_C, const Eigen::SparseMatrix<double> Tinv_C, const Eigen::VectorXd s, const Rcpp::List vi_M_list);
-RcppExport SEXP _vglmer_cpp_update_c_var(SEXP diag_vi_pg_meanSEXP, SEXP design_CSEXP, SEXP Tinv_CSEXP, SEXP sSEXP, SEXP vi_M_listSEXP) {
+// test_f
+Rcpp::List test_f(const Eigen::SparseMatrix<double> diag_vi_pg_mean, const Eigen::SparseMatrix<double> design_C, const Eigen::SparseMatrix<double> Tinv_C, const Eigen::VectorXd s, const Rcpp::List vi_M_list);
+RcppExport SEXP _vglmer_test_f(SEXP diag_vi_pg_meanSEXP, SEXP design_CSEXP, SEXP Tinv_CSEXP, SEXP sSEXP, SEXP vi_M_listSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -170,7 +170,7 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< const Eigen::SparseMatrix<double> >::type Tinv_C(Tinv_CSEXP);
     Rcpp::traits::input_parameter< const Eigen::VectorXd >::type s(sSEXP);
     Rcpp::traits::input_parameter< const Rcpp::List >::type vi_M_list(vi_M_listSEXP);
-    rcpp_result_gen = Rcpp::wrap(cpp_update_c_var(diag_vi_pg_mean, design_C, Tinv_C, s, vi_M_list));
+    rcpp_result_gen = Rcpp::wrap(test_f(diag_vi_pg_mean, design_C, Tinv_C, s, vi_M_list));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -307,7 +307,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_vglmer_cpp_quad_legacy", (DL_FUNC) &_vglmer_cpp_quad_legacy, 5},
     {"_vglmer_cpp_var_lp", (DL_FUNC) &_vglmer_cpp_var_lp, 7},
     {"_vglmer_cpp_update_m_var", (DL_FUNC) &_vglmer_cpp_update_m_var, 7},
-    {"_vglmer_cpp_update_c_var", (DL_FUNC) &_vglmer_cpp_update_c_var, 5},
+    {"_vglmer_test_f", (DL_FUNC) &_vglmer_test_f, 5},
     {"_vglmer_calculate_alpha_decomp_full_factor", (DL_FUNC) &_vglmer_calculate_alpha_decomp_full_factor, 8},
     {"_vglmer_chol_sparse", (DL_FUNC) &_vglmer_chol_sparse, 3},
     {"_vglmer_cpp_zVz", (DL_FUNC) &_vglmer_cpp_zVz, 2},
