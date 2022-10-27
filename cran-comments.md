@@ -1,6 +1,6 @@
 ## Resubmission
 
-This is a patch on vglmer 1.0.1 to address issues bug fix noted in `NEWS.md`.
+This is a patch on vglmer 1.0.2 to address updates to the `Matrix` package (1.5-2).
 
 ## R CMD check results
 
