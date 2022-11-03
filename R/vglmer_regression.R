@@ -996,28 +996,49 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     
     joint_V_init <- bdiag(crossprod(vi_beta_decomp), crossprod(vi_alpha_decomp))
     vi_C_var <- joint_V_init[unlist(C_j), unlist(C_j), drop = F]
-    vi_M_var <- lapply(M_j, FUN=function(i){as(joint_V_init[i,i,drop=F], 'dgCMatrix')})
+    
     vi_M_list <- lapply(M_j, FUN=function(i){joint_XZ[,i, drop = F]})
-    rm(joint_V_init, joint_XZ)
     
     vi_P <- lapply(vi_M_list, FUN=function(i){
       vi_C_var %*% 
         t(design_C) %*% Diagonal(x = init_mean) %*% i
     })
     
-    vi_C_uncond <- vi_C_var + 
-      Reduce('+', mapply(vi_P, vi_M_var, SIMPLIFY = FALSE, 
-        FUN=function(pi_m, Mi){pi_m %*% Mi %*% t(pi_m)}))
-    vi_C_uncond <- as(vi_C_uncond, 'dgCMatrix')
+    if (linpred_method == 'cyclical'){
+      vi_M_B <- lapply(vi_P, 
+       FUN=function(i){
+         if (ncol(i) > 0){
+           drop0(sparseMatrix(i = 1, j = 1, x = 0, dims = dim(i)))
+         }else{
+           drop0(matrix(nrow = nrow(i), ncol = 0))
+         }
+       }
+      )
+      
+      vi_C_uncond <- vi_C_var
+      vi_C_uncond <- as(vi_C_uncond, 'dgCMatrix')
+      vi_M_var_flat <- mapply(
+        sapply(vi_M_list, ncol), c(1, d_j), SIMPLIFY = FALSE,
+          FUN=function(i, j){matrix(0, nrow = i, ncol = j)})
+      lagged_flat_M_var <- vi_M_var_flat
+    }else{
+      vi_M_var <- lapply(M_j, FUN=function(i){as(joint_V_init[i,i,drop=F], 'dgCMatrix')})
+      vi_C_uncond <- vi_C_var
+      vi_C_uncond <- as(vi_C_uncond, 'dgCMatrix')
+      
+      vi_var_M_list <- lapply(vi_M_var, FUN=function(i){
+        if (ncol(i) == 0){return(NULL)}
+        o <- diag(i)
+        o <- sparseMatrix(i = seq_len(length(o)), j = seq_len(length(o)), x = o)
+        return(o)
+      })
+      lagged_M_var <- vi_M_var
+      
+    }
     
-    vi_var_M_list <- lapply(vi_M_var, FUN=function(i){
-      if (ncol(i) == 0){return(NULL)}
-      o <- diag(i)
-      o <- sparseMatrix(i = seq_len(length(o)), j = seq_len(length(o)), x = o)
-      return(o)
-    })
+    rm(joint_V_init, joint_XZ)
+    
 
-    lagged_M_var <- vi_M_var
     lagged_C_var <- vi_C_var
     
     lagged_C_mean <- rep(-Inf, length(unlist(C_j)))
@@ -1074,7 +1095,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     if (do_timing) {
       tic("Update PG")
     }
-    
+
     if (family != 'linear'){
       if (factorization_method == "weak") {
         # joint_quad <- rowSums( (joint.XZ %*% t(vi_joint_decomp))^2 )
@@ -1095,14 +1116,28 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
         #   jq2 <- rowSums( (data_Mj %*% t(vi_P[[j]] %*% var_Mj)) * design_C)
         #   joint_quad <- joint_quad + jq1 - 2 * jq2
         # }
-        
-        joint_quad <- cpp_var_lp(design_C = design_C,
-          vi_C_uncond = vi_C_uncond,
-          vi_M_var = vi_M_var,
-          vi_M_list = vi_M_list,
-          vi_P = vi_P, skip_vector = sapply(vi_M_var, FUN=function(i){ncol(i) == 0}),
-          sparse_input = class(vi_M_var[[1]])[1] == 'dgCMatrix'
-        )
+        if (linpred_method == 'cyclical'){
+          # Variance of Collapsed 
+          joint_quad <- rowSums( (design_C %*% vi_C_uncond) * design_C)
+          # Variance of Marginal
+          joint_quad <- joint_quad + rowSums(mapply(vi_M_list, vi_M_var_flat, FUN=function(data_j, var_j){
+            rowSums( (data_j %*% Diagonal(x = var_j)) * data_j)
+          }))
+          # Covariance
+          joint_quad <- joint_quad + -2 * rowSums(
+            mapply(vi_M_list, vi_M_B, FUN=function(data_j, B_j){
+              rowSums((data_j %*% t(B_j)) * design_C)})
+          )
+          
+        }else{
+          joint_quad <- cpp_var_lp(design_C = design_C,
+                                   vi_C_uncond = vi_C_uncond,
+                                   vi_M_var = vi_M_var,
+                                   vi_M_list = vi_M_list,
+                                   vi_P = vi_P, skip_vector = sapply(vi_M_var, FUN=function(i){ncol(i) == 0}),
+                                   sparse_input = class(vi_M_var[[1]])[1] == 'dgCMatrix'
+          )
+        }
         
         if (family == 'negbin'){
           joint_quad <- joint_quad + vi_r_sigma
@@ -1159,7 +1194,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
         vi_joint_decomp = vi_joint_decomp, choose_term = choose_term,
         vi_P = vi_P, vi_C_uncond = vi_C_uncond, vi_M_var = vi_M_var, vi_M_list = vi_M_list,
         vi_M_mean = vi_M_mean, vi_C_mean = vi_C_mean, 
-        design_M = design_M,
+        design_M = design_M, linpred_method = linpred_method, vi_M_B = vi_M_B, vi_M_var_flat = vi_M_var_flat,
         design_C = design_C, log_det_M_var = log_det_M_var, log_det_C_var = log_det_C_var,
         vi_sigmasq_a = vi_sigmasq_a, vi_sigmasq_b = vi_sigmasq_b, 
         vi_sigmasq_prior_a = vi_sigmasq_prior_a, vi_sigmasq_prior_b = vi_sigmasq_prior_b,
@@ -1240,97 +1275,84 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
       }
     } else if (factorization_method == "collapsed") {
       
-      running_log_det_M_var <- rep(0, length(M_j))
-      
-      if (do_timing){
-        tic('beta C')
-      }
-      if (any_collapsed_C){
+      if (linpred_method == 'cyclical'){
         
         Tinv_C <- Tinv[unlist(C_j), unlist(C_j), drop = F]
         
-        # chol.update.C <- Cholesky(t(design_C) %*% diag_vi_pg_mean %*% design_C + Tinv_C)
-        # C_hat <- as.vector(solve(chol.update.C, t(design_C) %*% s))
-        # vi_P <- lapply(vi_M_list, FUN=function(i){
-        #   solve(chol.update.C, t(design_C) %*% diag_vi_pg_mean %*% i)
-        # })
-        # vi_C_var <- with(expand(chol.update.C), crossprod(solve(L) %*% P))
-        # # vi_C_var_alt <- solve(t(design_C) %*% diag_vi_pg_mean %*% design_C + Tinv_C)
-        # log_det_C_var <- -2 * as.numeric(determinant(chol.update.C)$modulus)
-        
-        update_C <- test_f(diag_vi_pg_mean = diag_vi_pg_mean,
-                         design_C = design_C, Tinv_C = Tinv_C, s = s,
-                         vi_M_list = vi_M_list)
-        
-        list2env(update_C, envir = environment())
-        rm(update_C)
-        
-      }else{
-        Tinv_C <- vi_C_var <- sparseMatrix(i = numeric(0), j = numeric(0), x = numeric(0), dims = c(0,0))
+        chol.update.C <- Cholesky(t(design_C) %*% diag_vi_pg_mean %*% design_C + Tinv_C)
+        C_hat <- as.vector(solve(chol.update.C, t(design_C) %*% s))
+        vi_C_var <- with(expand(chol.update.C), crossprod(solve(L) %*% P))
         vi_P <- lapply(vi_M_list, FUN=function(i){
-          sparseMatrix(i = numeric(0), j = numeric(0), x = numeric(0), dims = c(0, ncol(i)))
+          solve(chol.update.C, t(design_C) %*% diag_vi_pg_mean %*% i)
         })
-        C_hat <- numeric(0)
-        log_det_C_var <- 0
-      }
-      
-      if (do_timing){
-        toc(quiet = verbose_time, log = TRUE)
-      }
-      if (linpred_method == 'cyclical'){
+        log_det_C_var <- -2 * as.numeric(determinant(chol.update.C)$modulus)
         
         pg_lp_C_hat <- diag_vi_pg_mean %*% design_C %*% C_hat
-
+        
+        running_lp <- rep(0, nrow(X))
+        
         if (any_collapsed_M){
           running_Cadjust <- rowSums(do.call('cbind',
-                                             mapply(vi_P, vi_M_mean, SIMPLIFY = FALSE,
-                                                    FUN=function(i,j){if (ncol(i) > 0){i %*% j}})))
+           mapply(vi_P, vi_M_mean, SIMPLIFY = FALSE,
+                  FUN=function(i,j){if (ncol(i) > 0){i %*% j}})
+          ))
         }else{
           running_Cadjust <- rep(0, ncol(design_C))
         }
-
-        running_lp <- rep(0, nrow(X))
+        
+        
         if (any_collapsed_M){
           running_lp <- running_lp + as.vector(design_M %*% do.call('c', vi_M_mean))
         }
         if (any_collapsed_C){
           running_lp <- running_lp - as.vector(design_C %*% running_Cadjust)
         }
+        
 
         running_log_det_M_var <- rep(0, length(M_j))
-        vi_M_var <- lapply(seq_len(length(M_j)), FUN=function(i){
-          drop0(matrix(0, nrow=0,ncol=0))
-        })
-      
+
+        vi_C_uncond <- vi_C_var
         for (j in seq_len(length(M_j))) {
           index_Mj <- M_j[[j]]
           if (length(index_Mj) == 0){
             next
           }
+          index_Mj <- M_j[[j]]
           data_M_j <- vi_M_list[[j]]
-        
-          Ainv <- solve(t(data_M_j) %*% diag_vi_pg_mean %*% data_M_j + bdiag(Tinv)[index_Mj, index_Mj])
+          
+          ZtZinv_j <- solve(t(data_M_j) %*% diag_vi_pg_mean %*% data_M_j + bdiag(Tinv)[index_Mj, index_Mj])
+          P_j <- vi_P[[j]]
           
           if (any_collapsed_C){
             bread_j <- t(data_M_j) %*% diag_vi_pg_mean %*% design_C
-            meat_woodbury <- t(design_C) %*% diag_vi_pg_mean %*% design_C -
-              t(bread_j) %*% Ainv %*% bread_j + Tinv_C
-            var_M_j <- Ainv + Ainv %*% bread_j %*% solve(meat_woodbury) %*% t(bread_j) %*% Ainv
-            running_log_det_M_var[j] <- -as.numeric(determinant(meat_woodbury)$modulus +
-                                                      determinant(vi_C_var)$modulus - determinant(Ainv)$modulus)
+            chol_Cmeat <- Cholesky(
+              t(design_C) %*% diag_vi_pg_mean %*% design_C +
+                - t(bread_j) %*% ZtZinv_j %*% bread_j + 
+              Tinv_C
+            )
+            PZ_j <- P_j %*% ZtZinv_j
+            scaled_ZX_j <- ZtZinv_j %*% (t(data_M_j) %*% diag_vi_pg_mean %*% design_C)
+            
+            B_term_1 <- P_j %*% scaled_ZX_j
+            B_term_2 <- solve(chol_Cmeat, t(scaled_ZX_j))
+            B <- B_term_1 %*% B_term_2
+            
+            running_log_det_M_var[j] <- -2 * as.numeric(determinant(chol_Cmeat)$modulus) - log_det_C_var + sum(log(diag(ZtZinv_j)))
+            var_flat_j <- diag(ZtZinv_j) + rowSums( scaled_ZX_j * t(B_term_2) )
+            var_flat_j <- matrix(var_flat_j)
           }else{
-            var_M_j <- Ainv 
-            running_log_det_M_var[j] <- as.numeric(determinant(Ainv)$modulus)
+            var_flat_j <- matrix(diag(ZtZinv_j))
+            running_log_det_M_var[j] <- sum(log(diag(ZtZinv_j)))
           }
           
-          data_projM_j <- data_M_j - design_C %*% vi_P[[j]]
-          var_M_j <- solve(t(data_projM_j) %*% diag_vi_pg_mean %*% data_projM_j +
-              bdiag(Tinv)[index_Mj, index_Mj] + t(vi_P[[j]]) %*% Tinv_C %*% vi_P[[j]])
-
-          running_log_det_M_var[j] <- as.numeric(determinant(var_M_j)$modulus)
+          # data_projM_j <- data_M_j - design_C %*% vi_P[[j]]
+          # var_M_j <- solve(t(data_projM_j) %*% diag_vi_pg_mean %*% data_projM_j +
+          #     bdiag(Tinv)[index_Mj, index_Mj] + t(vi_P[[j]]) %*% Tinv_C %*% vi_P[[j]])
+          # running_log_det_M_var[j] <- as.numeric(determinant(var_M_j)$modulus)
           
-          adj_s <- s - pg_lp_C_hat -  diag_vi_pg_mean %*% (running_lp - (data_M_j %*% vi_M_mean[[j]] - design_C %*% vi_P[[j]] %*% vi_M_mean[[j]]))
-          adj_C <- C_hat - (running_Cadjust - vi_P[[j]] %*% vi_M_mean[[j]])
+          old_mean_j <- vi_M_mean[[j]]
+          adj_s <- s - pg_lp_C_hat -  diag_vi_pg_mean %*% (running_lp - (data_M_j %*% old_mean_j - design_C %*% (P_j %*% old_mean_j)))
+          adj_C <- C_hat - (running_Cadjust - P_j %*% old_mean_j)
 
           # other_termRHS1 <- Reduce('+', mapply(vi_M_list[-j], vi_M_mean[-j], SIMPLIFY = FALSE, FUN=function(i,j){if (ncol(i) > 0){i %*% j}else{0}}))
           # other_termRHS1 <- other_termRHS1 - design_C %*% Reduce('+', mapply(vi_P[-j], vi_M_mean[-j], SIMPLIFY = FALSE, FUN=function(i,j){if (ncol(i) > 0){i %*% j}else{0}}))
@@ -1341,24 +1363,48 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
           # adj_s <- adj_salt
           # adj_C <- adj_Calt
           
-          RHS_1 <- t(data_M_j) %*% adj_s - t(design_C %*% vi_P[[j]]) %*% adj_s
-          RHS_2 <- t(vi_P[[j]]) %*% Tinv_C %*% adj_C
+          RHS_1 <- t(data_M_j) %*% adj_s - t(P_j) %*% (t(design_C) %*% adj_s)
+          RHS_2 <- t(P_j) %*% Tinv_C %*% adj_C
+          RHS <- RHS_1 + RHS_2
           
-          update_Mj <- var_M_j %*% (RHS_1 + RHS_2)
           
-          running_lp <- running_lp + data_M_j %*% (update_Mj - vi_M_mean[[j]]) +
-            - design_C %*% vi_P[[j]] %*% (update_Mj - vi_M_mean[[j]])
-          running_Cadjust <- running_Cadjust + vi_P[[j]] %*% (update_Mj - vi_M_mean[[j]])
+          update_Mj <- ZtZinv_j %*% RHS + scaled_ZX_j %*% (B_term_2 %*% RHS)
           
-          vi_M_var[[j]] <- as(var_M_j, 'dgCMatrix')
+          diff_M_j <- update_Mj - vi_M_mean[[j]]
+          running_lp <- running_lp + data_M_j %*% (diff_M_j) - design_C %*% (P_j %*% diff_M_j)
+          running_Cadjust <- running_Cadjust + P_j %*% diff_M_j
+          
+          vi_M_B[[j]] <- B
           vi_M_mean[[j]] <- as.vector(update_Mj)
-          
+          vi_M_var_flat[[j]] <- var_flat_j
+          vi_C_uncond <- vi_C_uncond + B %*% t(P_j)
         }
         
         if (any_collapsed_M){
           vi_M_mean <- do.call('c', vi_M_mean)
         }
 
+        if (any_collapsed_M){
+          vi_M_mean <- split(as.vector(vi_M_mean), id_Mj)
+          vi_M_mean <- vi_M_mean[c_id_Mj]
+          names(vi_M_mean) <- NULL
+        }
+        
+        # Turn vi_M_mean into "list"
+        # Get E[alpha_C] = E[E[alpha_C | alpha_M]]
+        if (any_collapsed_C){
+          vi_C_mean <- C_hat
+          if (any_collapsed_M){
+            vi_C_mean <- vi_C_mean - Reduce('+', mapply(vi_P, vi_M_mean, FUN=function(i,j){if (!is.null(j)){i %*% j}else{0}}))
+          }
+        }
+        
+        vi_C_uncond <- as(vi_C_uncond, 'dgCMatrix')
+        log_det_M_var <- sum(running_log_det_M_var)
+        
+        log_det_joint_var <- NA
+        
+        
         # Tinv_M <- bdiag(Tinv)
         # Tinv_M <- lapply(M_j, FUN=function(i){Tinv_M[i,i, drop = F]})
         # update_vi_M <- cpp_update_m_var(diag_vi_pg_mean = diag_vi_pg_mean,
@@ -1372,6 +1418,44 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
         
       }else if (linpred_method == 'joint'){
         
+        running_log_det_M_var <- rep(0, length(M_j))
+        
+        if (do_timing){
+          tic('beta C')
+        }
+        if (any_collapsed_C){
+          
+          Tinv_C <- Tinv[unlist(C_j), unlist(C_j), drop = F]
+          
+          # chol.update.C <- Cholesky(t(design_C) %*% diag_vi_pg_mean %*% design_C + Tinv_C)
+          # C_hat <- as.vector(solve(chol.update.C, t(design_C) %*% s))
+          # vi_P <- lapply(vi_M_list, FUN=function(i){
+          #   solve(chol.update.C, t(design_C) %*% diag_vi_pg_mean %*% i)
+          # })
+          # vi_C_var <- with(expand(chol.update.C), crossprod(solve(L) %*% P))
+          # # vi_C_var_alt <- solve(t(design_C) %*% diag_vi_pg_mean %*% design_C + Tinv_C)
+          # log_det_C_var <- -2 * as.numeric(determinant(chol.update.C)$modulus)
+          
+          update_C <- test_f(diag_vi_pg_mean = diag_vi_pg_mean,
+                             design_C = design_C, Tinv_C = Tinv_C, s = s,
+                             vi_M_list = vi_M_list)
+          
+          list2env(update_C, envir = environment())
+          rm(update_C)
+          
+        }else{
+          Tinv_C <- vi_C_var <- sparseMatrix(i = numeric(0), j = numeric(0), x = numeric(0), dims = c(0,0))
+          vi_P <- lapply(vi_M_list, FUN=function(i){
+            sparseMatrix(i = numeric(0), j = numeric(0), x = numeric(0), dims = c(0, ncol(i)))
+          })
+          C_hat <- numeric(0)
+          log_det_C_var <- 0
+        }
+        
+        if (do_timing){
+          toc(quiet = verbose_time, log = TRUE)
+        }
+        
         all_P <- do.call('cbind', vi_P)
         Tinv_M <- Tinv[unlist(M_j), unlist(M_j), drop = F]
         
@@ -1380,7 +1464,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
           tic('beta mean')
         }
         
-        if (FALSE){
+        if (TRUE){
           if (any_collapsed_M){
             
             cg_alpha <- cg_custom(Z = design_M[exclude_collapsed,], 
@@ -1471,33 +1555,34 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
 
         }
         
+        # Turn vi_M_mean into "list"
+        if (any_collapsed_M){
+          vi_M_mean <- split(as.vector(vi_M_mean), id_Mj)
+          vi_M_mean <- vi_M_mean[c_id_Mj]
+          names(vi_M_mean) <- NULL
+        }
+        # Get E[alpha_C] = E[E[alpha_C | alpha_M]]
+        if (any_collapsed_C){
+          vi_C_mean <- C_hat
+          if (any_collapsed_M){
+            vi_C_mean <- vi_C_mean - Reduce('+', mapply(vi_P, vi_M_mean, FUN=function(i,j){if (!is.null(j)){i %*% j}else{0}}))
+          }
+        }
+        
+        vi_C_uncond <- vi_C_var + 
+          Reduce('+', mapply(vi_P, vi_M_var, SIMPLIFY = FALSE, 
+                             FUN=function(pi_m, Mi){pi_m %*% Mi %*% t(pi_m)}))
+        vi_C_uncond <- as(vi_C_uncond, 'dgCMatrix')
+        log_det_M_var <- sum(running_log_det_M_var)
+        
+        log_det_joint_var <- NA
+        
         if (do_timing){
           toc(quiet = verbose_time, log = TRUE)
         }
         
       }else{stop('linpred_method must be "joint" or "cyclical" if collapsed.')}
 
-      # Turn vi_M_mean into "list"
-      if (any_collapsed_M){
-        vi_M_mean <- split(as.vector(vi_M_mean), id_Mj)
-        vi_M_mean <- vi_M_mean[c_id_Mj]
-        names(vi_M_mean) <- NULL
-      }
-      # Get E[alpha_C] = E[E[alpha_C | alpha_M]]
-      if (any_collapsed_C){
-        vi_C_mean <- C_hat
-        if (any_collapsed_M){
-          vi_C_mean <- vi_C_mean - Reduce('+', mapply(vi_P, vi_M_mean, FUN=function(i,j){if (!is.null(j)){i %*% j}else{0}}))
-        }
-      }
-      
-      vi_C_uncond <- vi_C_var + 
-        Reduce('+', mapply(vi_P, vi_M_var, SIMPLIFY = FALSE, 
-                           FUN=function(pi_m, Mi){pi_m %*% Mi %*% t(pi_m)}))
-      vi_C_uncond <- as(vi_C_uncond, 'dgCMatrix')
-      log_det_M_var <- sum(running_log_det_M_var)
-      
-      log_det_joint_var <- NA
       
     } else if (factorization_method == "partial") {
       if (linpred_method == "cyclical") {
@@ -1757,7 +1842,13 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
       e_ln_sigmasq <- log(vi_sigmasq_b) - digamma(vi_sigmasq_a)
       
       if (factorization_method == "collapsed"){
-        vi_M_var <- lapply(vi_M_var, FUN=function(i){adjust_var^2 * i})
+        
+        if (linpred_method == 'joint'){
+          vi_M_var <- lapply(vi_M_var, FUN=function(i){adjust_var^2 * i})
+        }else{
+          vi_M_var_flat <- lapply(vi_M_var_flat, FUN=function(i){adjust_var^2 * i})
+        }
+        
         vi_C_var <- vi_C_var * adjust_var^2
         vi_C_uncond <- vi_C_uncond * adjust_var^2
         
@@ -1827,7 +1918,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
         vi_joint_decomp = vi_joint_decomp, choose_term = choose_term,
         vi_P = vi_P, vi_C_uncond = vi_C_uncond, vi_M_var = vi_M_var, vi_M_list = vi_M_list,
         vi_M_mean = vi_M_mean, vi_C_mean = vi_C_mean, 
-        design_M = design_M,
+        design_M = design_M, linpred_method = linpred_method, vi_M_B = vi_M_B, vi_M_var_flat = vi_M_var_flat,
         design_C = design_C, log_det_M_var = log_det_M_var, log_det_C_var = log_det_C_var,
         vi_sigmasq_a = vi_sigmasq_a, vi_sigmasq_b = vi_sigmasq_b, 
         vi_sigmasq_prior_a = vi_sigmasq_prior_a, vi_sigmasq_prior_b = vi_sigmasq_prior_b,
@@ -1857,8 +1948,14 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
       stopifnot(all(d_j == 1))
 
       if (any_collapsed_M){
-        ssq_M <- sapply(vi_M_var, FUN=function(i){sum(diag(i))}) + 
-          sapply(vi_M_mean, FUN=function(i){sum(i^2)})
+        if (linpred_method == 'joint'){
+          ssq_M <- sapply(vi_M_var, FUN=function(i){sum(diag(i))}) + 
+            sapply(vi_M_mean, FUN=function(i){sum(i^2)})
+        }else{
+          if (any(d_j > 1)){stop('..')}
+          ssq_M <- sapply(vi_M_var_flat, FUN=function(i){sum(i)}) + 
+            sapply(vi_M_mean, FUN=function(i){sum(i^2)})
+        }
       }else{
         ssq_M <- rep(0, length(M_j))
       }
@@ -2021,6 +2118,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
         vi_P = vi_P, vi_C_uncond = vi_C_uncond, vi_M_var = vi_M_var, vi_M_list = vi_M_list,
         vi_M_mean = vi_M_mean, vi_C_mean = vi_C_mean, 
         design_M = design_M, design_C = design_C, 
+        linpred_method = linpred_method, vi_M_B = vi_M_B, vi_M_var_flat = vi_M_var_flat,
         log_det_M_var = log_det_M_var, log_det_C_var = log_det_C_var,
         log_det_joint_var = log_det_joint_var, 
         vi_r_mu = vi_r_mu, vi_r_mean = vi_r_mean, vi_r_sigma = vi_r_sigma, 
@@ -2096,7 +2194,14 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
             sum(mean_RE)
         }
         
-        ssq_M <- sapply(vi_M_var, FUN=function(i){sum(diag(i))}) + sapply(vi_M_mean, FUN=function(i){sum(i^2)})
+        if (linpred_method == 'joint'){
+          ssq_M <- sapply(vi_M_var, FUN=function(i){sum(diag(i))}) + 
+            sapply(vi_M_mean, FUN=function(i){sum(i^2)})
+        }else{
+          if (any(d_j > 1)){stop('..')}
+          ssq_M <- sapply(vi_M_var_flat, FUN=function(i){sum(i)}) + 
+            sapply(vi_M_mean, FUN=function(i){sum(i^2)})
+        }
         ssq_C <- sapply(split((vi_C_mean^2 + diag(vi_C_uncond)), position_block_j)[c_id_Mj], sum)
         
         if (block_collapse){
@@ -2148,7 +2253,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
         vi_joint_decomp = vi_joint_decomp, choose_term = choose_term,
         vi_P = vi_P, vi_C_uncond = vi_C_uncond, vi_M_var = vi_M_var, vi_M_list = vi_M_list,
         vi_M_mean = vi_M_mean, vi_C_mean = vi_C_mean, 
-        design_M = design_M,
+        design_M = design_M, linpred_method = linpred_method, vi_M_B = vi_M_B, vi_M_var_flat = vi_M_var_flat,
         design_C = design_C, log_det_M_var = log_det_M_var, log_det_C_var = log_det_C_var,
         vi_sigmasq_a = vi_sigmasq_a, vi_sigmasq_b = vi_sigmasq_b, 
         vi_sigmasq_prior_a = vi_sigmasq_prior_a, vi_sigmasq_prior_b = vi_sigmasq_prior_b,
@@ -2400,7 +2505,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
         
         vi_P = vi_P, vi_C_uncond = vi_C_uncond, vi_M_var = vi_M_var, vi_M_list = vi_M_list,
         vi_M_mean = vi_M_mean, vi_C_mean = vi_C_mean, 
-        design_M = design_M,
+        design_M = design_M, linpred_method = linpred_method, vi_M_B = vi_M_B, vi_M_var_flat = vi_M_var_flat,
         design_C = design_C, log_det_M_var = log_det_M_var, log_det_C_var = log_det_C_var,
         
         do_huangwand = do_huangwand, vi_a_a_jp = vi_a_a_jp, 
@@ -2469,7 +2574,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
         vi_joint_decomp = vi_joint_decomp, choose_term = choose_term,
         vi_P = vi_P, vi_C_uncond = vi_C_uncond, vi_M_var = vi_M_var, vi_M_list = vi_M_list,
         vi_M_mean = vi_M_mean, vi_C_mean = vi_C_mean, 
-        design_M = design_M,
+        design_M = design_M, linpred_method = linpred_method, vi_M_B = vi_M_B, vi_M_var_flat = vi_M_var_flat,
         design_C = design_C, log_det_M_var = log_det_M_var, log_det_C_var = log_det_C_var,
         vi_sigmasq_a = vi_sigmasq_a, vi_sigmasq_b = vi_sigmasq_b,
         vi_sigmasq_prior_a = vi_sigmasq_prior_a, vi_sigmasq_prior_b = vi_sigmasq_prior_b,
@@ -3050,7 +3155,11 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     } else if (factorization_method == "collapsed") {
       
       if (any_collapsed_M){
-        change_alpha_var <- max(mapply(vi_M_var, lagged_M_var, FUN=function(i,j){if(ncol(i) > 0){max(abs(i-j))}else{0}}))
+        if (linpred_method == 'joint'){
+          change_alpha_var <- max(mapply(vi_M_var, lagged_M_var, FUN=function(i,j){if(ncol(i) > 0){max(abs(i-j))}else{0}}))
+        }else{
+          change_alpha_var <- max(mapply(vi_M_var_flat, lagged_flat_M_var, FUN=function(i,j){if(nrow(i) > 0){max(abs(i-j))}else{0}}))
+        }
       }else{
         change_alpha_var <- 0
       }
@@ -3121,7 +3230,11 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
       lagged_C_mean <- vi_C_mean
       lagged_M_mean <- do.call('c', vi_M_mean)
       lagged_C_var <- vi_C_var
-      lagged_M_var <- vi_M_var
+      if (linpred_method == 'joint'){
+        lagged_M_var <- vi_M_var
+      }else{
+        lagged_flat_M_var <- vi_M_var_flat
+      }
       
       lagged_sigma_alpha <- vi_sigma_alpha
       lagged_vi_r_mu <- vi_r_mu
@@ -3201,21 +3314,30 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     output$collapsed$cond_variance <- vi_C_var
     output$collapsed$C.hat <- C_hat
     output$collapsed$index <- C_j
-    vi_P <- lapply(vi_M_list, FUN=function(i){
-      vi_C_var %*% 
-        t(design_C) %*% Diagonal(x = vi_pg_mean) %*% i
-    })
-    vi_P <- do.call('cbind', vi_P)
-    
-    vi_C_uncond <- vi_C_var + vi_P %*% bdiag(vi_M_var) %*% t(vi_P)
     
     # Adjust for linear model
     adjust_var <- 1/sqrt(vi_sigmasq_a/vi_sigmasq_b)
     e_ln_sigmasq <- log(vi_sigmasq_b) - digamma(vi_sigmasq_a)
     
+    if (linpred_method == 'joint'){
+      vi_P <- lapply(vi_M_list, FUN=function(i){
+        vi_C_var %*% 
+          t(design_C) %*% Diagonal(x = vi_pg_mean) %*% i
+      })
+      vi_P <- do.call('cbind', vi_P)
+      
+      vi_C_uncond <- vi_C_var + vi_P %*% bdiag(vi_M_var) %*% t(vi_P)
+      vi_M_var <- lapply(vi_M_var, FUN=function(i){adjust_var^2 * i})
+      
+    }else{
+      vi_C_uncond <- vi_C_var + 
+        Reduce('+', mapply(vi_M_B, vi_P, FUN=function(b,p){b %*% t(p)}))
+      
+      vi_M_var_flat <- lapply(vi_M_var_flat, FUN=function(i){adjust_var^2 * i})
+    }
+    
     vi_C_var <- vi_C_var * adjust_var^2
     vi_C_uncond <- vi_C_uncond * adjust_var^2
-    vi_M_var <- lapply(vi_M_var, FUN=function(i){adjust_var^2 * i})
     
     if (any_collapsed_C){
       output$collapsed$variance <- vi_C_uncond
@@ -3225,8 +3347,11 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
       output$collapsed <- list(variance = NULL, mean = NULL, decomp = NULL)
     }
     
-    output$marginal <- list(variance = vi_M_var, mean = vi_M_mean, index = M_j)
-    
+    if (linpred_method == 'joint'){
+      output$marginal <- list(variance = vi_M_var, mean = vi_M_mean, index = M_j)
+    }else{
+      output$marginal <- list(variance = vi_M_var_flat, mean = vi_M_mean, index = M_j)
+    }
     
     if (block_collapse){
 
@@ -3250,7 +3375,12 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
           c(ci, mi)[order(c(index_c, index_m))]
     })
 
-    var_M <- lapply(vi_M_var, diag)
+    if (linpred_method == 'joint'){
+      var_M <- lapply(vi_M_var, diag)
+    }else{
+      stopifnot(all(d_j == 1))
+      var_M <- lapply(vi_M_var_flat, as.vector)
+    }
     if (block_collapse){
       var_C <- split(diag(vi_C_var), position_block_j)
     }else{
@@ -3298,11 +3428,12 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     
     output$alpha$var <- variance_by_alpha_jg$variance_jg
     output$alpha$decomp_var <- vi_alpha_decomp
-    
   }
+  
   if (family == "negbin") {
     output$r <- list(mu = vi_r_mu, sigma = vi_r_sigma, method = vi_r_method)
   }
+  
   if (do_huangwand){
     output$hw <- list(a = vi_a_a_jp, b = vi_a_b_jp)
   }
@@ -3415,6 +3546,10 @@ vglmer_control <- function(iterations = 1000,
 
   if (vi_r_method == "fixed" & is.na(vi_r_val)) {
     stop('vi_r_val must not be NA if vi_r_method = "fixed"')
+  }
+  
+  if (factorization_method == 'collapsed' & linpred_method != 'cyclical'){
+    warning('Should set linpred_method="cyclical" for collapsed')
   }
 
   output <- namedList(

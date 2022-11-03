@@ -213,8 +213,8 @@ calculate_ELBO <- function(family, ELBO_type, factorization_method,
                            vi_P = NULL, log_det_M_var = NULL, log_det_C_var = NULL,
                            vi_C_uncond = NULL, vi_C_mean = NULL,
                            vi_M_var = NULL, vi_M_mean = NULL,
-                           vi_M_list = NULL, 
-                           design_M = NULL, 
+                           vi_M_list = NULL, linpred_method = NULL,
+                           design_M = NULL,  vi_M_B = NULL, vi_M_var_flat = NULL,
                            design_C = NULL,
                            # r Parameters
                            vi_r_mu = NULL, vi_r_mean = NULL,
@@ -258,11 +258,27 @@ calculate_ELBO <- function(family, ELBO_type, factorization_method,
     }
   } else if (factorization_method == "collapsed") {
     
-    var_XBZA <- cpp_var_lp(design_C = design_C, vi_C_uncond = vi_C_uncond,
-       vi_M_var = vi_M_var,
-       vi_M_list = vi_M_list, vi_P = vi_P,
-       skip_vector = sapply(vi_M_var, FUN=function(i){ncol(i) == 0}), 
-       sparse_input = class(vi_M_var[[1]])[1] == 'dgCMatrix')
+    if (linpred_method == 'joint'){
+      var_XBZA <- cpp_var_lp(design_C = design_C, vi_C_uncond = vi_C_uncond,
+                             vi_M_var = vi_M_var,
+                             vi_M_list = vi_M_list, vi_P = vi_P,
+                             skip_vector = sapply(vi_M_var, FUN=function(i){ncol(i) == 0}), 
+                             sparse_input = class(vi_M_var[[1]])[1] == 'dgCMatrix')
+    }else{
+      
+      # Variance of Collapsed 
+      var_XBZA <- rowSums( (design_C %*% vi_C_uncond) * design_C)
+      # Variance of Marginal
+      var_XBZA <- var_XBZA + rowSums(mapply(vi_M_list, vi_M_var_flat, FUN=function(data_j, var_j){
+        rowSums( (data_j %*% Diagonal(x = var_j)) * data_j)
+      }))
+      # Covariance
+      var_XBZA <- var_XBZA + -2 * rowSums(
+        mapply(vi_M_list, vi_M_B, FUN=function(data_j, B_j){
+          rowSums((data_j %*% t(B_j)) * design_C)})
+      )
+      
+    }
 
   } else {
     
