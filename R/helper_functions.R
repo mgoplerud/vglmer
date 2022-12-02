@@ -1,4 +1,13 @@
 
+# Commutation Matrix
+sparse_K <- function(p){
+  sparseMatrix(
+    i = 1:p^2,
+    j = as.vector(outer(1:p, 1:p, FUN=function(x,y){y + p * (x-1)})),
+    x = 1, dims = rep(p^2, 2)
+  )
+}
+
 safe_convert <- function(x){
   if (isDiagonal(x)){
     out <- diag(x)

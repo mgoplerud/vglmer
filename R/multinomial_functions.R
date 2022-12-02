@@ -740,3 +740,222 @@ grad_FE_poisson <- function(par, y, X, FS_XX, Z, P, offset_weight){
   
   return(c(as.vector(grad_beta), as.vector(grad_V)))
 }
+
+eval_rho_poisson <- function(rho, tXy, tBy, X, W, B, pos_ij,
+                             nu_prior,hw_a, A_prior, offset,
+                             rho_idx, dim_rho, p.X, nu, Phi, ESigma, do_huangwand){
+  
+  if (p.X > 0){
+    nonfe_rho <- rho[-seq_len(p.X)]
+    fe_rho <- rho[seq_len(p.X)]
+  }else{
+    nonfe_rho <- rho
+    fe_rho <- numeric(length = 0)
+  }
+  split_rho <- split(nonfe_rho, rho_idx)
+  kron_rho <- do.call('c', lapply(split_rho, FUN=function(i){kronecker(i,i)}))
+  
+  var_zTz <- as.vector(W %*% kron_rho)
+  mean_Zt <- as.vector(B %*% nonfe_rho)
+  mean_XB <- X %*% fe_rho
+  
+  weight <- as.vector(exp(offset + mean_XB + mean_Zt + 1/2 * var_zTz))
+  Rmatrix <- mapply(split(nonfe_rho, rho_idx), dim_rho, SIMPLIFY = FALSE, FUN=function(i,d){matrix(i, nrow = d, ncol = d)})
+  if (do_huangwand){
+    prior <- sum(mapply(Rmatrix, nu, hw_a, A_prior, ESigma, nu_prior,
+                        FUN=function(R_j, nu_j, hw_a_j, A_j, ESigma.inv.j, nu_prior_j){
+                          inv_R_j <- solve(R_j)
+                          diag_meat <- diag(t(inv_R_j) %*% ESigma.inv.j %*% inv_R_j)
+                          rho_hw_j <- nu_prior_j * diag_meat + 1/A_j^2
+                          out <- -(nu_j + 1)/2 * sum(log(rho_hw_j)) +
+                            - nu_j * determinant(R_j)$modulus +
+                            sum(hw_a_j)
+                          return(out)
+                        }))
+  }else{
+    prior <- sum(mapply(Rmatrix, nu, Phi, ESigma, FUN=function(R_j, nu_j, Phi_j, ESigma.inv.j){
+      inv_R_j <- solve(R_j)
+      out <- - nu_j * determinant(R_j)$modulus - 1/2 * sum(Matrix::diag(inv_R_j %*% Phi_j %*% t(inv_R_j) %*% ESigma.inv.j))
+      return(out)
+    }))
+  }
+  obj <- t(fe_rho) %*% tXy + t(nonfe_rho) %*% tBy - sum(weight)
+  return(as.numeric( obj + prior ) )
+}
+
+
+grad_rho_poisson <- function(rho, tXy, tBy,  nu_prior, A_prior, hw_a,
+                             X, B, W, pos_ij, nu, Phi, ESigma, offset,
+                             rho_idx, dim_rho, p.X, do_huangwand){
+  
+  if (p.X > 0){
+    nonfe_rho <- rho[-seq_len(p.X)]
+    fe_rho <- rho[seq_len(p.X)]
+  }else{
+    nonfe_rho <- rho
+    fe_rho <- numeric(length = 0)
+  }
+  split_rho <- split(nonfe_rho, rho_idx)
+  kron_rho <- do.call('c', lapply(split_rho, FUN=function(i){kronecker(i,i)}))
+  
+  var_zTz <- as.vector(W %*% kron_rho)
+  mean_Zt <- as.vector(B %*% nonfe_rho)
+  mean_XB <- X %*% fe_rho
+  weight <- as.vector(exp(offset + mean_XB + mean_Zt + 1/2 * var_zTz))
+  
+  Ridge_rho <- sparseMatrix(i = pos_ij[,1], j = pos_ij[,2],
+                            x = as.vector(t(W) %*% weight))
+  grad_beta <- tXy - t(X) %*% weight
+  grad_rho <-  tBy - t(B) %*% weight - Ridge_rho %*% nonfe_rho
+  
+  Rmatrix <- mapply(split(nonfe_rho, rho_idx), dim_rho, SIMPLIFY = FALSE, FUN=function(i,d){matrix(i, nrow = d, ncol = d)})
+  if (do_huangwand){
+    prior <- mapply(Rmatrix, nu, hw_a, A_prior, ESigma, nu_prior, SIMPLIFY = FALSE,
+                    FUN=function(R_j, nu_j, hw_a_j, A_j, ESigma.inv.j, nu_prior_j){
+                      inv_R_j <- solve(R_j)
+                      d_j <- ncol(R_j)
+                      diag_meat <- diag(t(inv_R_j) %*% ESigma.inv.j %*% inv_R_j)
+                      rho_hw_j <- diag_meat * nu_prior_j + 1/A_j^2
+                      
+                      term_profiled <- -(nu_j + 1)/2 * nu_prior_j * 1/rho_hw_j
+                      zeromat <- matrix(0, nrow = d_j, ncol = d_j)
+                      invRE <- t(inv_R_j) %*% ESigma.inv.j
+                      term_profiled <- mapply(seq_len(d_j), term_profiled, SIMPLIFY = FALSE, FUN=function(p, w){
+                        zeromat[,p] <- 2 * invRE[p,]
+                        as.vector(- t(inv_R_j) %*% zeromat %*% t(inv_R_j)) * w
+                      })
+                      term_profiled <- Reduce('+', term_profiled)
+                      out <- as.vector(- nu_j * t(inv_R_j) + term_profiled)
+                      return(out)
+                    })
+  }else{
+    prior <- mapply(Rmatrix, nu, Phi, ESigma, SIMPLIFY = FALSE, FUN=function(R_j, nu_j, Phi_j, ESigma.inv.j){
+      inv_R_j <- solve(R_j)
+      inv_Phi_j <- solve(Phi_j)
+      # meat <- inv_R_j %*% Phi_j %*% t(inv_R_j)
+      meat <- solve(t(R_j) %*% inv_Phi_j %*% R_j)
+      out <- as.vector(- nu_j * t(inv_R_j) + inv_Phi_j %*% R_j %*% meat %*% ESigma.inv.j %*% meat)
+      return(out)
+    })
+  }
+  prior <- c(rep(0, p.X), unlist(prior))
+  out <- c(as.vector(grad_beta), as.vector(grad_rho)) + prior
+  return(out)
+}
+
+
+update_rho_poisson <- function(X, B, W, y, W_pos_ij,
+                              moments_sigma_alpha,
+                              prior_sigma_alpha_nu, prior_sigma_alpha_phi,
+                              vi_a_a_jp, vi_a_b_jp, vi_a_nu_jp,
+                              vi_a_APRIOR_jp, 
+                              spline_REs, vi_beta_mean,
+                              p.X, d_j, stationary_rho,
+                              do_huangwand, offset,
+                              px_it = NULL, init_rho = NULL){
+  
+  rho_idx <- d_j[spline_REs]
+  rho_idx <- rho_idx * seq_len(length(rho_idx))
+  rho_idx <- c(rho_idx, 
+               rep(seq_len(sum(!spline_REs)), times = d_j[!spline_REs]^2) + 
+                 sum(spline_REs))
+  dim_rho <- c(rep(1, sum(spline_REs)), d_j[!spline_REs])
+  
+  tXy <- t(X) %*% y
+  tBy <- t(B) %*% y
+  
+  if (do_huangwand){
+    prior_weight <- vi_a_nu_jp + d_j - 1
+    diag_weight <- mapply(vi_a_a_jp, vi_a_b_jp, vi_a_nu_jp, SIMPLIFY = FALSE, 
+                          FUN = function(tilde.a, tilde.b, nu) {
+                            Diagonal(x = tilde.a/tilde.b) * 2 * nu
+                          })
+  }else{
+    diag_weight <- prior_sigma_alpha_phi
+    prior_weight <- prior_sigma_alpha_nu
+  }
+  
+  null_rho <- stationary_rho
+  # Splines before non-splines
+  order_REs <- c(which(spline_REs), which(!spline_REs))
+  
+  ESigma <- lapply(moments_sigma_alpha[order_REs], FUN=function(i){i$sigma.inv})
+  Phi <- diag_weight[order_REs] 
+  nu <- prior_weight[order_REs]
+  
+  if (do_huangwand){
+    hw_a <- vi_a_a_jp[order_REs]
+    A_prior <- vi_a_APRIOR_jp[order_REs]
+    nu_prior <- vi_a_nu_jp[order_REs]
+  }else{
+    hw_a <- A_prior <- nu_prior <- NULL
+  }
+  
+  if (is.null(init_rho)){
+    init_rho <- null_rho
+  }
+  ctrl_opt <- list(fnscale = -1)
+  if (!is.null(px_it)){
+    ctrl_opt$maxit <- px_it
+  }
+  opt_failed <- FALSE
+  
+  null_eval <- eval_rho_poisson(null_rho, tXy = tXy, tBy = tBy, 
+                                X = X, B = B, pos_ij = W_pos_ij, offset = offset,
+                                W = W, rho_idx = rho_idx, dim_rho = dim_rho,
+                                p.X = ncol(X), nu = nu, ESigma = ESigma, Phi = Phi, 
+                                nu_prior = nu_prior, hw_a = hw_a, A_prior = A_prior,
+                                do_huangwand = do_huangwand)
+  
+  opt_rho <- tryCatch(optim(par = null_rho, fn = eval_rho_poisson, 
+                            gr = grad_rho_poisson,
+                            method = 'L-BFGS-B', control = ctrl_opt,
+                            tXy = tXy, tBy = tBy, offset = offset,
+                            X = X, B = B, pos_ij = W_pos_ij, 
+                            W = W, rho_idx = rho_idx, dim_rho = dim_rho,
+                            nu_prior = nu_prior, hw_a = hw_a, A_prior = A_prior,
+                            p.X = ncol(X), nu = nu, ESigma = ESigma, Phi = Phi, 
+                            do_huangwand = do_huangwand
+  ), error = function(e){NULL})
+  if (is.null(opt_rho)){
+    warning('Optimization algorithm for parameter expansion returned error; no improvement done')
+    opt_rho <- list(value = null_eval, par = null_rho)
+    opt_failed <- TRUE
+  }
+  
+  raw_opt_rho <- opt_rho
+  
+  improvement <- opt_rho$value - null_eval
+  
+  if (improvement < 0){
+    warning('Optimization of parameter expansion failed')
+    opt_rho <- null_rho
+  }
+  if (opt_failed){
+    improvement <- NA
+  }
+  
+  opt_rho <- opt_rho$par
+  
+  if (p.X > 0){nonfe_rho <- opt_rho[-seq_len(p.X)]}else{nonfe_rho <- opt_rho}
+  Rmatrix <- mapply(split(nonfe_rho, rho_idx), dim_rho, SIMPLIFY = FALSE, FUN=function(i,d){matrix(i, nrow = d, ncol = d)})
+  if (do_huangwand){
+    opt_rho_hw <- mapply(Rmatrix, nu, hw_a, A_prior, ESigma, nu_prior, SIMPLIFY = FALSE, 
+                       FUN=function(R_j, nu_j, hw_a_j, A_j, ESigma.inv.j, nu_prior_j){
+                         inv_R_j <- solve(R_j)
+                         diag_meat <- diag(t(inv_R_j) %*% ESigma.inv.j %*% inv_R_j)
+                         rho_hw_j <- nu_prior_j * diag_meat + 1/A_j^2
+                         return(rho_hw_j)
+                       })
+    names(opt_rho_hw) <- names(d_j)[order_REs]
+  }else{
+    opt_rho_hw <- NULL
+  }
+  names(opt_rho) <- NULL
+  opt_rho <- list(hw = opt_rho_hw,
+                  rho = opt_rho, improvement = improvement,
+                  opt_par = raw_opt_rho)
+  return(opt_rho)
+}  
+
+

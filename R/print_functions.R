@@ -78,15 +78,15 @@ ranef.vglmer <- function(object, ...) {
 
   vi_id <- gsub(rownames(object$alpha$mean), pattern = "^.* @ .* @ ", replacement = "")
   vi_id <- split(vi_id, re_pos)
+  
   vi_alpha_mean <- split(vi_alpha_mean, re_pos)
-  vi_alpha_var <- split(vi_alpha_var, re_pos)
 
   vi_parsed <- mapply(d_j, g_j, vi_alpha_mean, vi_alpha_var, vi_id, object$internal_parameters$names_of_RE,
     SIMPLIFY = F,
     FUN = function(d, g, mean_j, var_j, id_j, name_j) {
       mat_id <- matrix(id_j, byrow = TRUE, nrow = g, ncol = d)
       mat_mean <- matrix(mean_j, byrow = TRUE, nrow = g, ncol = d)
-      mat_var <- matrix(var_j, byrow = TRUE, nrow = g, ncol = d)
+      mat_var <- var_j
       colnames(mat_mean) <- colnames(mat_var) <- name_j
       id <- mat_id[, 1]
       mat_mean <- data.frame(id, mat_mean, check.names = FALSE, stringsAsFactors = F)
@@ -253,8 +253,15 @@ fmt_IW_mean <- function(Phi, nu, digits = 2) {
 #' @rdname vglmer-class
 #' @export
 format_vglmer <- function(object) {
-  beta.output <- data.frame(name = rownames(object$beta$mean), mean = as.vector(object$beta$mean), var = diag(object$beta$var), stringsAsFactors = F)
-  alpha.output <- data.frame(name = rownames(object$alpha$mean), mean = as.vector(object$alpha$mean), var = as.vector(object$alpha$dia.var), stringsAsFactors = F)
+  
+  beta.output <- data.frame(name = rownames(object$beta$mean), 
+    mean = as.vector(object$beta$mean), var = diag(object$beta$var), 
+    stringsAsFactors = F)
+  alpha.output <- data.frame(name = rownames(object$alpha$mean),
+    mean = as.vector(object$alpha$mean), 
+    var = as.vector(unlist(lapply(object$alpha$dia.var, 
+      FUN=function(i){as.vector(t(i))}))),
+    stringsAsFactors = F)
   output <- rbind(beta.output, alpha.output)
   return(output)
 }

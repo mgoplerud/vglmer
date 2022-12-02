@@ -58,3 +58,7 @@ vecR_ridge_new <- function(L, pg_mean, mapping_J, d, store_id, store_re_id, stor
     .Call('_vglmer_vecR_ridge_new', PACKAGE = 'vglmer', L, pg_mean, mapping_J, d, store_id, store_re_id, store_design, diag_only)
 }
 
+vecR_ridge_fs <- function(pg_mean, mapping_J, d, store_vec_data) {
+    .Call('_vglmer_vecR_ridge_fs', PACKAGE = 'vglmer', pg_mean, mapping_J, d, store_vec_data)
+}
+
