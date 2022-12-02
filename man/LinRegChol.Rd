@@ -4,7 +4,7 @@
 \alias{LinRegChol}
 \title{Linear Regression by Cholesky}
 \usage{
-LinRegChol(X, omega, prior_precision, y, save_chol = TRUE)
+LinRegChol(X, omega, prior_precision, y, adj_y, save_chol = TRUE)
 }
 \arguments{
 \item{X}{Design Matrix}
@@ -16,6 +16,8 @@ LinRegChol(X, omega, prior_precision, y, save_chol = TRUE)
 \item{y}{Outcome}
 
 \item{save_chol}{Save cholesky factor}
+
+\item{adjustment}{vector}
 }
 \description{
 Do linear regression of form (X^T O X + P)^{-1} X^T y where O is omega, P is

@@ -170,6 +170,19 @@ test_that("CRAN basic spline tests", {
   expect_vector(predict(m6, newdata = dat[1:5,]))
   expect_vector(predict(m7, newdata = dat[1:5,]))
   
+  fmt_m5 <- format_vglmer(m5)
+  ranef_m5 <- ranef(m5)
+  manual_m5 <- colSums(m5$alpha$decomp_var^2) 
+  
+  # Check variance is correctly extracted and transformed for splines
+  expect_equivalent(
+    unlist(lapply(m5$alpha$dia.var, FUN=function(i){as.vector(t(i))})), 
+    manual_m5)
+  expect_equivalent(m5$alpha$dia.var[[3]], 
+    attributes(ranef_m5$`spline-x-1-base`)$variance[,2])
+  expect_equivalent(m5$alpha$dia.var[[4]], 
+    attributes(ranef_m5$`spline-x-1-int`)$variance[,2])
+  
 })
 
 test_that("Test order of splines", {

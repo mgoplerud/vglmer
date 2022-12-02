@@ -30,6 +30,8 @@ vglmer_control(
   px_method = "dynamic",
   px_numerical_it = 10,
   hw_INNER = 10,
+  force_ascent = FALSE,
+  calibrate_init = TRUE,
   init = "EM_FE"
 )
 }

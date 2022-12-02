@@ -161,6 +161,20 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// vecR_ridge_fs
+Eigen::MatrixXd vecR_ridge_fs(const Eigen::VectorXd pg_mean, const Rcpp::NumericVector mapping_J, const Rcpp::NumericVector d, const Rcpp::List store_vec_data);
+RcppExport SEXP _vglmer_vecR_ridge_fs(SEXP pg_meanSEXP, SEXP mapping_JSEXP, SEXP dSEXP, SEXP store_vec_dataSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const Eigen::VectorXd >::type pg_mean(pg_meanSEXP);
+    Rcpp::traits::input_parameter< const Rcpp::NumericVector >::type mapping_J(mapping_JSEXP);
+    Rcpp::traits::input_parameter< const Rcpp::NumericVector >::type d(dSEXP);
+    Rcpp::traits::input_parameter< const Rcpp::List >::type store_vec_data(store_vec_dataSEXP);
+    rcpp_result_gen = Rcpp::wrap(vecR_ridge_fs(pg_mean, mapping_J, d, store_vec_data));
+    return rcpp_result_gen;
+END_RCPP
+}
 
 static const R_CallMethodDef CallEntries[] = {
     {"_vglmer_LinRegChol", (DL_FUNC) &_vglmer_LinRegChol, 6},
@@ -174,6 +188,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_vglmer_vecR_design", (DL_FUNC) &_vglmer_vecR_design, 6},
     {"_vglmer_vecR_fast_ridge", (DL_FUNC) &_vglmer_vecR_fast_ridge, 5},
     {"_vglmer_vecR_ridge_new", (DL_FUNC) &_vglmer_vecR_ridge_new, 8},
+    {"_vglmer_vecR_ridge_fs", (DL_FUNC) &_vglmer_vecR_ridge_fs, 4},
     {NULL, NULL, 0}
 };
 

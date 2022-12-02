@@ -55,13 +55,11 @@ test_that("Check that B_j has correct shape", {
                        family = 'linear',
                        control = vglmer_control(iterations = NITER))
   expect_gt(min(diff(ELBO(est_vglmer, 'traj'))), -sqrt(.Machine$double.eps))
-  est_vglmer$MAVB_xx
-  
+
   est_vglmer <- vglmer(y ~ v_s(x) + (1 + x | g) + (1 + x2 | g2), data = NULL,
                        family = 'linear',
                        control = vglmer_control(iterations = NITER))
   expect_gt(min(diff(ELBO(est_vglmer, 'traj'))), -sqrt(.Machine$double.eps))
-  est_vglmer$MAVB_xx
 
 })
 

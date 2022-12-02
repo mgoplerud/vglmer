@@ -38,10 +38,23 @@ test_that("Test generic methods (fixed, ranef, coef, vcov)", {
 
   generic_ranef <- ranef(example_vglmer)
 
-  generic_ranef$g
-
   expect_equivalent(example_vglmer$alpha$mean[-(1:(2 * G))], generic_ranef$g2$`(Intercept)`)
   expect_equivalent(example_vglmer$alpha$mean[(1:(2 * G))], as.vector(t(generic_ranef$g[, -1])))
+  expect_equivalent(example_vglmer$alpha$dia.var[[1]], example_vglmer$alpha$var[[1]][,c(1,4)])
+  expect_equivalent(as.vector(t(as.matrix(attributes(generic_ranef$g)$variance[,-1]))), 
+    diag(crossprod(example_vglmer$alpha$decomp_var[,1:(2*G)])),
+    tol = 1e-6)
+  expect_equivalent(as.vector(t(as.matrix(attributes(generic_ranef$g2)$variance[,-1]))), 
+    diag(crossprod(example_vglmer$alpha$decomp_var[,-(1:(2*G))])),
+    tol = 1e-6)
+  
+  test_fmt <- format_vglmer(example_vglmer)
+  
+  expect_equivalent(test_fmt[-1:-2,][1:(2 * G),]$mean, example_vglmer$alpha$mean[(1:(2 * G))])
+  expect_equivalent(test_fmt[-1:-2,][-(1:(2 * G)),]$mean, example_vglmer$alpha$mean[-(1:(2 * G))])
+  expect_equivalent(test_fmt[-1:-2,][1:(2 * G),]$var, as.vector(t(as.matrix(attributes(generic_ranef$g)$variance[,-1]))))
+  expect_equivalent(test_fmt[-1:-2,][-(1:(2 * G)),]$var, as.vector(t(as.matrix(attributes(generic_ranef$g2)$variance[,-1]))))
+  
 })
 
 test_that("Test that print and summary run", {

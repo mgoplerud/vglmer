@@ -215,3 +215,33 @@ Eigen::MatrixXd vecR_ridge_new(
   }
   return(ridge_R);
 }
+
+// [[Rcpp::export]]
+Eigen::MatrixXd vecR_ridge_fs(
+    const Eigen::VectorXd pg_mean,
+    const Rcpp::NumericVector mapping_J, // Where to assign the elements to the larger matrix.
+    const Rcpp::NumericVector d,
+    const Rcpp::List store_vec_data
+){
+  
+  Rcpp::NumericVector dsq = d * d;
+  int size_vecR = Rcpp::sum(dsq);
+  int J = d.size();
+
+  Eigen::DiagonalMatrix<double, Eigen::Dynamic> diag_pg = pg_mean.asDiagonal();
+  Eigen::MatrixXd ridge_R = Eigen::MatrixXd::Zero(size_vecR, size_vecR);
+  for (int j = 0; j < J; j++){
+    Eigen::MatrixXd data_j = store_vec_data[j];
+    int d_j = d[j];
+    int d2_j = std::pow(d_j, 2);
+    int d4_j = std::pow(d_j, 4);
+    Eigen::VectorXd colsum_j = (diag_pg * data_j).colwise().sum();
+    if (d_j == 1){
+      ridge_R.block(mapping_J[j], mapping_J[j], dsq[j], dsq[j]) = colsum_j;
+    }else{
+      Eigen::MatrixXd out_j = Eigen::Map<Eigen::MatrixXd>(colsum_j.data(), d2_j, d2_j);
+      ridge_R.block(mapping_J[j], mapping_J[j], dsq[j], dsq[j]) = out_j;
+    }
+  }
+  return(ridge_R);
+}
