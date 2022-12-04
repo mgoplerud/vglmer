@@ -369,10 +369,12 @@ calculate_ELBO <- function(family, ELBO_type, factorization_method,
       if (any_RE){
         entropy_1 <- entropy_1 + ncol(vi_alpha_decomp) / 2 * log(2 * pi * exp(1)) + 1 / 2 * log_det_alpha_var
       }
-      if (any_FE){
-        entropy_1 <- entropy_1 + 1/2 * sum(vi_FE_lndet) + dim_all_FE / 2 * log(2 * pi * exp(1))
-      }
     }
+    
+    if (any_FE){
+      entropy_1 <- entropy_1 + 1/2 * sum(vi_FE_lndet) + dim_all_FE / 2 * log(2 * pi * exp(1))
+    }
+    
     #ENTROPY FOR LINK SPECIFIC PARAMETERS
     if (family == 'poisson'){
       entropy_2 <- 0

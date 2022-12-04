@@ -239,9 +239,9 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
   force_ascent_init <- FALSE
   if (is.infinite(force_ascent)){
     force_ascent_init <- TRUE
-    force_ascent <- TRUE
+    force_ascent_regular <- TRUE
   }else if (force_ascent > 0){
-    force_ascent_init <- force_ascent
+    force_ascent_regular <- force_ascent_init <- force_ascent
     force_ascent <- TRUE    
   }
   
@@ -1222,11 +1222,15 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     tic.clear()
   }
   if (family %in% 'poisson'){
-    
+
     if (factorization_method %in% 'weak'){
       # Collect the current parameters
       mask_lowertri <- which(lower.tri(vi_joint_L_nonpermute, diag = TRUE))
-      diag_position <- c(1, 1 + cumsum(ncol(vi_joint_L_nonpermute):2))
+      if (ncol(vi_joint_L_nonpermute) > 1){
+        diag_position <- c(1, 1 + cumsum(ncol(vi_joint_L_nonpermute):2))
+      }else{
+        diag_position <- 1
+      }
     }else if (factorization_method %in% 'strong'){
       
       mask_lowertri <- mapply(d_j, g_j, spline_REs, SIMPLIFY = FALSE, FUN=function(di, gi, si){
@@ -1469,12 +1473,18 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
         current_lowertri <- vi_joint_L_nonpermute[mask_lowertri]
         current_lowertri[diag_position] <- log(current_lowertri[diag_position])
       
+        starting_obj <- obj_poisson(par = c(current_param, current_lowertri),
+          y = y, Textend = Textend, P = vi_joint_LP, 
+          offset_weight = adj_fe,
+          joint.XZ = cbind(X,Z), diag_position = diag_position, mask_lowertri = mask_lowertri)
+        
         est_poisson <- update_poisson(current_param = current_param,
           current_lowertri = current_lowertri, y = y, Textend = Textend,
           joint.XZ = joint.XZ, diag_position = diag_position, existing_P = vi_joint_LP,
           vi_pg_mean = vi_pg_mean, diag_vi_pg_mean = diag_vi_pg_mean,
           old_vi_pg_mean = old_vi_pg_mean, old_Textend = old_Textend,
-          old_param = old_param, mask_lowertri = mask_lowertri, offset_weight = 0,
+          old_param = old_param, mask_lowertri = mask_lowertri, 
+          offset_weight = adj_fe,
           starting_obj = starting_obj, it = it, force_ascent = force_ascent)
 
         vi_joint_L_nonpermute <- est_poisson$L
@@ -1486,9 +1496,6 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
         # # Update Poisson parameters
         vi_joint_decomp <- vi_joint_L_nonpermute %*% t(vi_joint_LP)
         joint_quad <- rowSums( (joint.XZ %*% t(vi_joint_decomp))^2 )
-        vi_pg_mean <- as.vector(exp(X %*% vi_beta_mean + Z %*% vi_alpha_mean + 1/2 * joint_quad))
-        diag_vi_pg_mean <- sparseMatrix(i = seq_N, j = seq_N, x = vi_pg_mean)
-
         log_det_joint_var <- 2 * sum(log(diag(vi_joint_L_nonpermute)))
 
         if (p.X > 0){
@@ -1501,6 +1508,12 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
           vi_alpha_decomp <- vi_joint_decomp[, -1:-p.X, drop = F]
         }
 
+        vi_pg_mean <- as.vector(
+          exp(X %*% vi_beta_mean + Z %*% vi_alpha_mean + 
+            1/2 * joint_quad + adj_fe)
+        )
+        diag_vi_pg_mean <- sparseMatrix(i = seq_N, j = seq_N, x = vi_pg_mean)
+        
         
         old_param <- c(as.vector(vi_beta_mean), as.vector(vi_alpha_mean))
         old_vi_pg_mean <- vi_pg_mean
@@ -1508,7 +1521,6 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
         
       }else if (factorization_method == "strong") {
 
-        
         est_poisson <- cyclical_update_poisson(X = drop0(X), 
           Z = Z, y = y, cyclical_pos = cyclical_pos,
           vi_pg_mean = vi_pg_mean, diag_vi_pg_mean = diag_vi_pg_mean,
@@ -1543,7 +1555,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
       
       
       if (it >= 6){
-        plot(store_ELBO$ELBO[-1:-4], type = 'l')
+        plot(store_ELBO$ELBO[-1], type = 'l')
       }
       
       
@@ -1826,7 +1838,8 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
             FE_lookup = Z.FE.lookup, FE_rowtens = Z.FE.rowTensor, 
             vi_FE_mean = vi_FE_mean, vi_FE_var = vi_FE_var, 
             old_FE_mean = old_vi_FE_mean, 
-            vi_FE_lndet = vi_FE_lndet, it = it, force_ascent = force_ascent,
+            vi_FE_lndet = vi_FE_lndet, it = it, 
+            force_ascent = force_ascent,
             dim_fe = Z.FE.size, levels_fe = Z.FE.levels)
         
         vi_FE_mean <- est_FE$mean
@@ -1834,9 +1847,23 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
         vi_FE_lndet <- est_FE$lndet
         vi_pg_mean <- est_FE$weight
         vi_FE_raw_var <- est_FE$raw
-        diag_vi_pg_mean <- sparseMatrix(i = seq_N, j = seq_N, x = vi_pg_mean)
         
         old_vi_FE_mean <- vi_FE_mean
+        
+        adjust_fe <- calculate_FE(X = Z.FE.data, 
+          Z = Z.FE.lookup, FS_XX = Z.FE.rowTensor, 
+          mean = vi_FE_mean,
+          var = vi_FE_var)
+        adjust_fe_mean <- adjust_fe[,1]
+        adjust_fe_var <- adjust_fe[,2]
+        adj_fe <- adjust_fe_mean + 1/2 * adjust_fe_var
+        
+        # vi_pg_mean <- as.vector(
+        #   exp(X %*% vi_beta_mean + Z %*% vi_alpha_mean + 
+        #         1/2 * joint_quad + adj_fe)
+        # )
+        
+        diag_vi_pg_mean <- sparseMatrix(i = seq_N, j = seq_N, x = vi_pg_mean)
         
       }else{
         
@@ -2225,7 +2252,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
           offset <- offset[,1] + 1/2 * offset[,2] + 
             1/2 * rowSums( (X %*% t(vi_beta_decomp))^2 )
         }else{
-          offset <- 0
+          offset <- 1/2 * rowSums( (X %*% t(vi_beta_decomp))^2 )
         }
         
         update_expansion_XR <- update_rho_poisson(
@@ -2938,6 +2965,11 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
                       r = r, v = v, norm_sq_r = norm_sq_r, norm_sq_v = norm_sq_v))
         })
         
+        # if (any_FE & family == 'poisson'){
+        #   ind_alpha <- TRUE
+        # }else{
+        #   ind_alpha <- FALSE
+        # }
         ind_alpha <- FALSE
         ATTEMPTS <- 10
         
@@ -2945,7 +2977,6 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
           alpha <- -sqrt((sapply(prep_SQUAREM, FUN=function(i){i$norm_sq_r}))) /
             sqrt((sapply(prep_SQUAREM, FUN=function(i){i$norm_sq_v})))
           if (any(alpha > -1)){
-            ATTEMPTS <- 2
             alpha[which(alpha > -1)] <- -1.01
           }
           if (any(alpha < -10)){
@@ -2957,8 +2988,10 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
           }
         }else{
 
-          alpha <- -sqrt(sum(sapply(prep_SQUAREM, FUN=function(i){i$norm_sq_r}))) /
-            sqrt(sum(sapply(prep_SQUAREM, FUN=function(i){i$norm_sq_v})))
+          # keep_alpha <- !(names(prep_SQUAREM) %in% c('vi_FE_raw_var', 'vi_FE_mean'))
+          keep_alpha <- rep(TRUE, length(prep_SQUAREM))
+          alpha <- -sqrt(sum(sapply(prep_SQUAREM[keep_alpha], FUN=function(i){i$norm_sq_r}))) /
+            sqrt(sum(sapply(prep_SQUAREM[keep_alpha], FUN=function(i){i$norm_sq_v})))
           
           if (alpha > -1){
             ATTEMPTS <- 2
@@ -2982,7 +3015,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
           if (attempt_SQUAREM > 1){
             alpha <- (alpha - 1)/2
           }
-          if (!quiet_rho){print(mean(alpha))}
+          if (!quiet_rho){print(alpha)}
           
           prop_squarem <- mapply(prep_SQUAREM, squarem_structure, squarem_type, alpha, SIMPLIFY = FALSE,
              FUN=function(i, s_str, s_type, s_alpha){
@@ -3156,16 +3189,32 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
           }
           
           if (any_FE){
-            prop_ELBOargs$vi_FE_mean <- mapply(prop_ELBOargs$vi_FE_mean, Z.FE.size, SIMPLIFY = FALSE, FUN=function(i,j){matrix(i, ncol = j)})
-            reformat_var <- mapply(prop_ELBOargs$vi_FE_raw_var, Z.FE.size, SIMPLIFY = FALSE, FUN=function(i,j){
+            prop_ELBOargs$vi_FE_mean <- mapply(prop_ELBOargs$vi_FE_mean,
+              Z.FE.size, SIMPLIFY = FALSE, FUN=function(i,j){matrix(i, ncol = j)})
+            reformat_var <- mapply(prop_ELBOargs$vi_FE_raw_var, 
+                  Z.FE.size, SIMPLIFY = FALSE, FUN=function(i,j){
               lndet <- sum(log(i)) - log(sum(i))
               i <- i - i^2/sum(i)
               return(list(var = matrix(i, ncol = j^2), lndet = lndet))
             })
             prop_ELBOargs$vi_FE_var <- lapply(reformat_var, FUN=function(i){i$var})
+            names(prop_ELBOargs$vi_FE_var) <- names(ELBOargs$vi_FE_var)
             prop_ELBOargs$vi_FE_lndet <- sapply(reformat_var, FUN=function(i){i$lndet})
+            names(prop_ELBOargs$vi_FE_lndet) <- names(ELBOargs$vi_FE_lndet)
             squarem_par <- setdiff(squarem_par, 'vi_FE_raw_var')
             squarem_par <- c(squarem_par, 'vi_FE_mean', 'vi_FE_var', 'vi_FE_lndet')
+            
+            if (any_FE){
+              
+              prop_adjust_var <- 1/sqrt(prop_ELBOargs$vi_sigmasq_a/prop_ELBOargs$vi_sigmasq_b)
+            
+              prop_ELBOargs$vi_FE_var <- lapply(prop_ELBOargs$vi_FE_var,
+                    FUN=function(i){i * prop_adjust_var^2})
+              prop_ELBOargs$vi_FE_lndet <- prop_ELBOargs$vi_FE_lndet  + 
+                (Z.FE.levels - 1) * Z.FE.size * 
+                (log(prop_ELBOargs$vi_sigmasq_b) - log(prop_ELBOargs$vi_sigmasq_a))
+            }
+            
           }
 
           elbo_init <- do.call("calculate_ELBO", ELBOargs)
@@ -3244,7 +3293,6 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
           if (test_ELBO$ELBO != elbo_squarem$ELBO){stop('....')}
         }else{
           if (!quiet_rho){cat('FAIL')}
-
           squarem_success[1] <- squarem_success[1] + 1
           final.ELBO <- squarem.ELBO <- final.ELBO
         }

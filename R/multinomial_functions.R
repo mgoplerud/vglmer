@@ -286,7 +286,7 @@ update_poisson <- function(current_param, current_lowertri,
         method = 'CG', y = y, mask_lowertri = mask_lowertri,
         P = existing_P, Textend = Textend, joint.XZ = joint.XZ, 
         diag_position = diag_position), error = function(e){NULL})
-      
+
       opt_failed <- FALSE
       if (!is.null(opt_obj)){
         if (opt_obj$value < starting_obj){
@@ -775,7 +775,8 @@ eval_rho_poisson <- function(rho, tXy, tBy, X, W, B, pos_ij,
   }else{
     prior <- sum(mapply(Rmatrix, nu, Phi, ESigma, FUN=function(R_j, nu_j, Phi_j, ESigma.inv.j){
       inv_R_j <- solve(R_j)
-      out <- - nu_j * determinant(R_j)$modulus - 1/2 * sum(Matrix::diag(inv_R_j %*% Phi_j %*% t(inv_R_j) %*% ESigma.inv.j))
+      out <- - nu_j * determinant(R_j)$modulus + 
+        - 1/2 * sum(Matrix::diag(inv_R_j %*% Phi_j %*% t(inv_R_j) %*% ESigma.inv.j))
       return(out)
     }))
   }
@@ -901,11 +902,11 @@ update_rho_poisson <- function(X, B, W, y, W_pos_ij,
   opt_failed <- FALSE
   
   null_eval <- eval_rho_poisson(null_rho, tXy = tXy, tBy = tBy, 
-                                X = X, B = B, pos_ij = W_pos_ij, offset = offset,
-                                W = W, rho_idx = rho_idx, dim_rho = dim_rho,
-                                p.X = ncol(X), nu = nu, ESigma = ESigma, Phi = Phi, 
-                                nu_prior = nu_prior, hw_a = hw_a, A_prior = A_prior,
-                                do_huangwand = do_huangwand)
+    X = X, B = B, pos_ij = W_pos_ij, offset = offset,
+    W = W, rho_idx = rho_idx, dim_rho = dim_rho,
+    p.X = ncol(X), nu = nu, ESigma = ESigma, Phi = Phi, 
+    nu_prior = nu_prior, hw_a = hw_a, A_prior = A_prior,
+    do_huangwand = do_huangwand)
   
   opt_rho <- tryCatch(optim(par = null_rho, fn = eval_rho_poisson, 
                             gr = grad_rho_poisson,
