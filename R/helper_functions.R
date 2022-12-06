@@ -192,39 +192,39 @@ make_log_invwishart_constant <- function(nu, Phi) {
 }
 
 calculate_ELBO <- function(family, ELBO_type, factorization_method,
-                           # Fixed constants or priors
-                           d_j, g_j, prior_sigma_alpha_phi, prior_sigma_alpha_nu, 
-                           iw_prior_constant, choose_term,
-                           store_assignment_Z, store_design_Z, outer_alpha_RE_positions,
-                           # Data
-                           X, Z, s, y,
-                           # PolyaGamma Parameters
-                           vi_pg_b, vi_pg_mean, vi_pg_c,
-                           # Sigma Parameters
-                           vi_sigma_alpha, vi_sigma_alpha_nu, vi_sigma_outer_alpha,
-                           # Beta Parameters / Alpha Parameters
-                           vi_beta_mean, vi_beta_decomp,
-                           vi_alpha_mean, vi_alpha_decomp,
-                           log_det_beta_var , log_det_alpha_var,
-                           vi_alpha_var = NULL, vi_beta_var = NULL,
-                           cyclical_pos = NULL,
-                           log_det_joint_var = NULL,
-                           vi_joint_decomp = NULL,
-                           vi_P = NULL, log_det_M_var = NULL, log_det_C_var = NULL,
-                           vi_C_uncond = NULL, vi_C_mean = NULL,
-                           vi_M_var = NULL, vi_M_mean = NULL,
-                           vi_M_list = NULL, linpred_method = NULL,
-                           design_M = NULL,  vi_M_B = NULL, vi_M_var_flat = NULL,
-                           design_C = NULL,
-                           # r Parameters
-                           vi_r_mu = NULL, vi_r_mean = NULL,
-                           vi_r_sigma = NULL,
-                           #linear parameters
-                           vi_sigmasq_a = NULL, vi_sigmasq_b = NULL,
-                           vi_sigmasq_prior_a = NULL, vi_sigmasq_prior_b = NULL,
-                           # huang_wand parameters
-                           do_huangwand = NULL, vi_a_a_jp = NULL, vi_a_b_jp = NULL,
-                           vi_a_nu_jp = NULL, vi_a_APRIOR_jp = NULL
+   # Fixed constants or priors
+   d_j, g_j, prior_sigma_alpha_phi, prior_sigma_alpha_nu, 
+   iw_prior_constant, choose_term,
+   store_assignment_Z, store_design_Z, outer_alpha_RE_positions,
+   # Data
+   X, Z, s, y,
+   # PolyaGamma Parameters
+   vi_pg_b, vi_pg_mean, vi_pg_c,
+   # Sigma Parameters
+   vi_sigma_alpha, vi_sigma_alpha_nu, vi_sigma_outer_alpha,
+   # Beta Parameters / Alpha Parameters
+   vi_beta_mean, vi_beta_decomp,
+   vi_alpha_mean, vi_alpha_decomp,
+   log_det_beta_var , log_det_alpha_var,
+   vi_alpha_var = NULL, vi_beta_var = NULL,
+   cyclical_pos = NULL,
+   log_det_joint_var = NULL,
+   vi_joint_decomp = NULL,
+   vi_P = NULL, log_det_M_var = NULL, log_det_C_var = NULL,
+   vi_C_uncond = NULL, vi_C_mean = NULL,
+   vi_M_var = NULL, vi_M_mean = NULL,
+   vi_M_list = NULL, linpred_method = NULL,
+   design_M = NULL,  vi_M_B = NULL, vi_M_var_flat = NULL,
+   design_C = NULL,
+   # r Parameters
+   vi_r_mu = NULL, vi_r_mean = NULL,
+   vi_r_sigma = NULL,
+   #linear parameters
+   vi_sigmasq_a = NULL, vi_sigmasq_b = NULL,
+   vi_sigmasq_prior_a = NULL, vi_sigmasq_prior_b = NULL,
+   # huang_wand parameters
+   do_huangwand = NULL, vi_a_a_jp = NULL, vi_a_b_jp = NULL,
+   vi_a_nu_jp = NULL, vi_a_APRIOR_jp = NULL
 ) {
   
   ####

@@ -937,7 +937,8 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
 
     list2env(build_collapse_index(X = X, Z = Z, weight = vi_pg_b,
               cyclical_pos = cyclical_pos, 
-              names_of_RE = names_of_RE, k = control$collapse_size),
+              outer_alpha_RE_positions = outer_alpha_RE_positions,
+              names_of_RE = names_of_RE, k = control$collapse_size, d_j = d_j),
              envir = base::environment())
     block_collapse <- control$block_collapse
     position_block_j <- rep(0:number_of_RE, lengths(C_j))
@@ -976,7 +977,6 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     
     any_collapsed_C <- ncol(design_C) > 0
     any_collapsed_M <- ncol(design_M) > 0
-    stopifnot(all(d_j == 1))
     stopifnot(all(spline_REs == FALSE))
     
     vi_C_mean <- c(vi_beta_mean, vi_alpha_mean)[unlist(C_j)]
@@ -1021,6 +1021,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
         sapply(vi_M_list, ncol), c(1, d_j), SIMPLIFY = FALSE,
           FUN=function(i, j){matrix(0, nrow = i, ncol = j)})
       lagged_flat_M_var <- vi_M_var_flat
+      
     }else{
       vi_M_var <- lapply(M_j, FUN=function(i){as(joint_V_init[i,i,drop=F], 'dgCMatrix')})
       vi_C_uncond <- vi_C_var
@@ -1117,6 +1118,8 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
         #   joint_quad <- joint_quad + jq1 - 2 * jq2
         # }
         if (linpred_method == 'cyclical'){
+          
+          browser()
           # Variance of Collapsed 
           joint_quad <- rowSums( (design_C %*% vi_C_uncond) * design_C)
           # Variance of Marginal
@@ -1312,6 +1315,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
         running_log_det_M_var <- rep(0, length(M_j))
 
         vi_C_uncond <- vi_C_var
+
         for (j in seq_len(length(M_j))) {
           index_Mj <- M_j[[j]]
           if (length(index_Mj) == 0){
@@ -1942,6 +1946,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     # Update \Sigma_j
     ##
 
+    browser()
     if (factorization_method == "collapsed"){
       
       stopifnot(all(spline_REs == FALSE))
@@ -3405,7 +3410,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
   }
   
   if (control$return_data) {
-    output$data <- list(X = X, Z = Z, y = y, trials = trials)
+    output$data <- list(X = X, Z = Z, y = y, trials = trials, data = data)
   }
   
   output$spline <- list(attr = Z.spline.attr, size = Z.spline.size)
