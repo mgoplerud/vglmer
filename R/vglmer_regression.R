@@ -934,16 +934,40 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
       init_c <- NULL
       init_mean <- rep(1, nrow(Z)) 
     }
-
-    list2env(build_collapse_index(X = X, Z = Z, weight = vi_pg_b,
+    
+    if (family == 'linear'){
+      ci_weight <- rep(1, nrow(Z))
+    }else{
+      ci_weight <- vi_pg_b
+    }
+    
+    list2env(build_collapse_index(X = X, Z = Z, weight = ci_weight,
               cyclical_pos = cyclical_pos, 
               outer_alpha_RE_positions = outer_alpha_RE_positions,
               names_of_RE = names_of_RE, k = control$collapse_size, d_j = d_j),
              envir = base::environment())
+    
+    lookup_collapse <- mapply(store_assignment_Z, index_collapse, FUN=function(i,j){
+      sparseMatrix(i = 1:length(i), j = i, x = 1)[,j]
+    })
+    lookup_marginal <- mapply(store_assignment_Z, index_marginal, FUN=function(i,j){
+      sparseMatrix(i = 1:length(i), j = i, x = 1)[,j]
+    })
+
+    vi_FS_MM <- lapply(store_design_Z, FUN=function(i){FS(i,i)})
+    vi_FS_MM <- c(list('Fixed Effect' = matrix(nrow = nrow(Z), ncol = 0)), vi_FS_MM)
+    lookup_marginal <- c(list('Fixed Effect' = matrix(nrow = nrow(Z), ncol = 0)), lookup_marginal)
+    if (length(M_j$`Fixed Effect`) != 0){
+      stop('... set up M_j for FE')
+    }
+    
+    
+
     block_collapse <- control$block_collapse
     position_block_j <- rep(0:number_of_RE, lengths(C_j))
     
     if (block_collapse){
+      stop("SETUPBLOCK")
       orig_Cj <- C_j
       block_j <- unlist(C_j)
       if (length(block_j) == 0){
@@ -998,7 +1022,9 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     vi_C_var <- joint_V_init[unlist(C_j), unlist(C_j), drop = F]
     
     vi_M_list <- lapply(M_j, FUN=function(i){joint_XZ[,i, drop = F]})
-    
+    vi_FS_MC  <- lapply(vi_M_list, FUN=function(i){
+      FS(design_C, i)
+    })
     vi_P <- lapply(vi_M_list, FUN=function(i){
       vi_C_var %*% 
         t(design_C) %*% Diagonal(x = init_mean) %*% i
@@ -1014,13 +1040,16 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
          }
        }
       )
+      vi_M_B <- lapply(vi_M_B, as.vector)
       
       vi_C_uncond <- vi_C_var
       vi_C_uncond <- as(vi_C_uncond, 'dgCMatrix')
       vi_M_var_flat <- mapply(
         sapply(vi_M_list, ncol), c(1, d_j), SIMPLIFY = FALSE,
-          FUN=function(i, j){matrix(0, nrow = i, ncol = j)})
+          FUN=function(i, j){matrix(0, nrow = i/j, ncol = j^2)})
       lagged_flat_M_var <- vi_M_var_flat
+      
+      store_assignment_Z
       
     }else{
       vi_M_var <- lapply(M_j, FUN=function(i){as(joint_V_init[i,i,drop=F], 'dgCMatrix')})
@@ -1119,17 +1148,23 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
         # }
         if (linpred_method == 'cyclical'){
           
-          browser()
           # Variance of Collapsed 
           joint_quad <- rowSums( (design_C %*% vi_C_uncond) * design_C)
           # Variance of Marginal
-          joint_quad <- joint_quad + rowSums(mapply(vi_M_list, vi_M_var_flat, FUN=function(data_j, var_j){
-            rowSums( (data_j %*% Diagonal(x = var_j)) * data_j)
+          joint_quad <- joint_quad + rowSums(mapply(vi_FS_MM, vi_M_var_flat, lookup_marginal, names(lookup_marginal), FUN=function(xi,zi,gi, n){
+            if (ncol(xi) > 0){
+              rowSums( xi * (gi %*% zi))
+            }else{
+              return(rep(0, nrow(xi)))
+            }
           }))
+          # joint_quad <- joint_quad + rowSums(mapply(vi_M_list, vi_M_var_flat, FUN=function(data_j, var_j){
+          #   rowSums( (data_j %*% Diagonal(x = var_j)) * data_j)
+          # }))
           # Covariance
           joint_quad <- joint_quad + -2 * rowSums(
-            mapply(vi_M_list, vi_M_B, FUN=function(data_j, B_j){
-              rowSums((data_j %*% t(B_j)) * design_C)})
+            mapply(vi_FS_MC, vi_M_B, FUN=function(data_j, B_j){
+              as.vector(data_j %*% B_j)})
           )
           
         }else{
@@ -1316,6 +1351,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
 
         vi_C_uncond <- vi_C_var
 
+        aug_dj <- c(ncol(X), d_j)
         for (j in seq_len(length(M_j))) {
           index_Mj <- M_j[[j]]
           if (length(index_Mj) == 0){
@@ -1324,16 +1360,18 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
           index_Mj <- M_j[[j]]
           data_M_j <- vi_M_list[[j]]
           
-          ZtZinv_j <- solve(t(data_M_j) %*% diag_vi_pg_mean %*% data_M_j + bdiag(Tinv)[index_Mj, index_Mj])
+          ZtZinv_j <- solve(drop0(t(data_M_j) %*% diag_vi_pg_mean %*% data_M_j + bdiag(Tinv)[index_Mj, index_Mj]))
           P_j <- vi_P[[j]]
           
           if (any_collapsed_C){
             bread_j <- t(data_M_j) %*% diag_vi_pg_mean %*% design_C
-            chol_Cmeat <- Cholesky(
-              t(design_C) %*% diag_vi_pg_mean %*% design_C +
-                - t(bread_j) %*% ZtZinv_j %*% bread_j + 
+            meat_C <- t(design_C) %*% diag_vi_pg_mean %*% design_C +
+              - t(bread_j) %*% ZtZinv_j %*% bread_j + 
               Tinv_C
-            )
+            if (!isSymmetric(meat_C)){
+              meat_C <- forceSymmetric(meat_C)
+            }
+            chol_Cmeat <- Cholesky(meat_C)
             PZ_j <- P_j %*% ZtZinv_j
             scaled_ZX_j <- ZtZinv_j %*% (t(data_M_j) %*% diag_vi_pg_mean %*% design_C)
             
@@ -1341,9 +1379,24 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
             B_term_2 <- solve(chol_Cmeat, t(scaled_ZX_j))
             B <- B_term_1 %*% B_term_2
             
-            running_log_det_M_var[j] <- -2 * as.numeric(determinant(chol_Cmeat)$modulus) - log_det_C_var + sum(log(diag(ZtZinv_j)))
-            var_flat_j <- diag(ZtZinv_j) + rowSums( scaled_ZX_j * t(B_term_2) )
-            var_flat_j <- matrix(var_flat_j)
+            d_jm <- aug_dj[j]
+            if (d_jm == 1){
+              var_flat_j <- diag(ZtZinv_j) + rowSums( scaled_ZX_j * t(B_term_2) )
+              var_flat_j <- matrix(var_flat_j)
+              running_log_det_M_var[j] <- -2 * as.numeric(determinant(chol_Cmeat)$modulus) + 
+                -log_det_C_var + sum(log(diag(ZtZinv_j)))
+            }else{
+              
+              var_flat_j <- matrix(ZtZinv_j[which(ZtZinv_j != 0)], ncol = d_jm^2, byrow =T) 
+              var_flat_j <- var_flat_j +
+                block_diag_product(A = as.matrix(scaled_ZX_j), 
+                    B = as.matrix(t(B_term_2)),
+                    blocks = ncol(data_M_j)/d_jm, block_size = d_jm)
+              running_log_det_M_var[j] <- -2 * as.numeric(determinant(chol_Cmeat)$modulus) + 
+                -log_det_C_var + as.numeric(determinant(ZtZinv_j)$modulus)
+              if (it == 1){warning('fix determinant')}
+              
+            }
           }else{
             var_flat_j <- matrix(diag(ZtZinv_j))
             running_log_det_M_var[j] <- sum(log(diag(ZtZinv_j)))
@@ -1378,7 +1431,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
           running_lp <- running_lp + data_M_j %*% (diff_M_j) - design_C %*% (P_j %*% diff_M_j)
           running_Cadjust <- running_Cadjust + P_j %*% diff_M_j
           
-          vi_M_B[[j]] <- B
+          vi_M_B[[j]] <- as.vector(B)
           vi_M_mean[[j]] <- as.vector(update_Mj)
           vi_M_var_flat[[j]] <- var_flat_j
           vi_C_uncond <- vi_C_uncond + B %*% t(P_j)
@@ -1946,31 +1999,49 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     # Update \Sigma_j
     ##
 
-    browser()
     if (factorization_method == "collapsed"){
       
       stopifnot(all(spline_REs == FALSE))
-      stopifnot(all(d_j == 1))
 
       if (any_collapsed_M){
         if (linpred_method == 'joint'){
+          stop('SETUP JOINT')
           ssq_M <- sapply(vi_M_var, FUN=function(i){sum(diag(i))}) + 
             sapply(vi_M_mean, FUN=function(i){sum(i^2)})
         }else{
-          if (any(d_j > 1)){stop('..')}
-          ssq_M <- sapply(vi_M_var_flat, FUN=function(i){sum(i)}) + 
-            sapply(vi_M_mean, FUN=function(i){sum(i^2)})
+          
+          ssq_M <- mapply(vi_M_mean, vi_M_var_flat, aug_dj, SIMPLIFY = FALSE,
+           FUN=function(i,v,j){
+             if (length(i) > 0){
+               m <- crossprod(matrix(i,ncol=j, byrow = T))
+               v <- matrix(colSums(v), ncol = j)
+               return(m + v)
+             }else{return(matrix(0, nrow = j, ncol = j))}
+          })
+          
         }
       }else{
-        ssq_M <- rep(0, length(M_j))
+        ssq_M <- as.list(rep(0, length(M_j)))
       }
       
-      raw_Csq <- as.vector(vi_C_mean)^2 + diag(vi_C_uncond)
-      
-      ssq_C <- split(raw_Csq, position_block_j)[c_id_Mj]
-      ssq_C <- sapply(ssq_C, sum)
+      ssq_C_mean <- mapply(split(vi_C_mean, position_block_j)[c_id_Mj], aug_dj, SIMPLIFY = FALSE,
+       FUN=function(i,j){
+         if (length(i) > 0){
+           m <- crossprod(matrix(i,ncol=j, byrow = T))
+           return(m)
+         }else{return(matrix(0, nrow = j, ncol = j))}
+      })
+      ssq_C_var <- lapply(split(1:ncol(design_C), position_block_j), 
+        FUN=function(i){vi_C_uncond[i,i]})[c_id_Mj]
+      ssq_C_var <- mapply(ssq_C_var, aug_dj, FUN=function(i,j){
+          if (length(i) > 0){
+            if (j == 1){return(sum(diag(i)))}
+            block_diag_sum(A = i, g = ncol(i)/j, d = j)
+          }else{return(matrix(0, nrow = j, ncol = j))}
+      })
       
       if (block_collapse){
+        stop('setup blockcollapse')
         block_terms <- sapply(split(diag(vi_M_var[[position_of_blocked]]) + 
             vi_M_mean[[position_of_blocked]]^2, position_block_j), sum)
         block_terms <- block_terms[as.character(0:number_of_RE)]
@@ -1978,8 +2049,13 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
         ssq_C <- c(NA, block_terms)
       }
       
+      ssq_out <- mapply(ssq_C_var, ssq_C_mean, ssq_M, SIMPLIFY = FALSE, 
+        FUN=function(i,j,k){
+          i+j+k
+        })
+      
       variance_by_alpha_jg <- list()
-      variance_by_alpha_jg$outer_alpha <- as.list(ssq_M + ssq_C)[keep_id_Mj]
+      variance_by_alpha_jg$outer_alpha <- ssq_out[keep_id_Mj]
       names(variance_by_alpha_jg$outer_alpha) <- names(names_of_RE)
       vi_sigma_outer_alpha <- variance_by_alpha_jg$outer_alpha
     }else{
@@ -2066,6 +2142,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
         joint_quad <- cpp_zVz(Z = joint.XZ, V = as(vi_joint_decomp, "dgCMatrix"))
         vi_lp <- (s - as.vector(X %*% vi_beta_mean + Z %*% vi_alpha_mean))^2 + joint_quad
       } else if (factorization_method == "collapsed"){
+        
         
         joint_quad <- cpp_var_lp(design_C = design_C,
            vi_C_uncond = vi_C_uncond,
@@ -2577,9 +2654,11 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
         log_det_beta_var = log_det_beta_var, log_det_alpha_var = log_det_alpha_var,
         vi_beta_decomp = vi_beta_decomp, vi_alpha_decomp = vi_alpha_decomp,
         vi_joint_decomp = vi_joint_decomp, choose_term = choose_term,
-        vi_P = vi_P, vi_C_uncond = vi_C_uncond, vi_M_var = vi_M_var, vi_M_list = vi_M_list,
+        vi_P = vi_P, vi_C_uncond = vi_C_uncond, 
+        vi_FS_MM = vi_FS_MM, vi_FS_MC = vi_FS_MC, lookup_marginal = lookup_marginal,
         vi_M_mean = vi_M_mean, vi_C_mean = vi_C_mean, 
-        design_M = design_M, linpred_method = linpred_method, vi_M_B = vi_M_B, vi_M_var_flat = vi_M_var_flat,
+        design_M = design_M, 
+        vi_M_B = vi_M_B, vi_M_var_flat = vi_M_var_flat,
         design_C = design_C, log_det_M_var = log_det_M_var, log_det_C_var = log_det_C_var,
         vi_sigmasq_a = vi_sigmasq_a, vi_sigmasq_b = vi_sigmasq_b,
         vi_sigmasq_prior_a = vi_sigmasq_prior_a, vi_sigmasq_prior_b = vi_sigmasq_prior_b,
@@ -3335,8 +3414,14 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
       vi_M_var <- lapply(vi_M_var, FUN=function(i){adjust_var^2 * i})
       
     }else{
+      
       vi_C_uncond <- vi_C_var + 
-        Reduce('+', mapply(vi_M_B, vi_P, FUN=function(b,p){b %*% t(p)}))
+        Reduce('+', mapply(vi_M_B, vi_P, aug_dj, 
+         FUN=function(b,p,d){
+           if (length(b) > 0){
+             matrix(b, ncol = ncol(p), byrow = TRUE) %*% t(p)
+           }else{return(NULL)}
+         }))
       
       vi_M_var_flat <- lapply(vi_M_var_flat, FUN=function(i){adjust_var^2 * i})
     }
@@ -3359,7 +3444,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     }
     
     if (block_collapse){
-
+      stop("SETUPBLOCK")
       vi_C_mean <- vi_M_mean[[position_of_blocked]]
       vi_M_mean <- vi_M_mean[-position_of_blocked]
       
@@ -3370,6 +3455,8 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
       M_j <- M_j[names(M_j) != '...blocked']
       
     }
+    
+    browser()
     
     fmt_mean <- split(as.vector(vi_C_mean), rep(seq_len(length(C_j)), lengths(C_j)))
     names(fmt_mean) <- names(C_j[lengths(C_j) != 0])

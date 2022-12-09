@@ -54,6 +54,10 @@ test_f <- function(diag_vi_pg_mean, design_C, Tinv_C, s, vi_M_list) {
     .Call('_vglmer_test_f', PACKAGE = 'vglmer', diag_vi_pg_mean, design_C, Tinv_C, s, vi_M_list)
 }
 
+block_diag_product <- function(A, B, block_size, blocks) {
+    .Call('_vglmer_block_diag_product', PACKAGE = 'vglmer', A, B, block_size, blocks)
+}
+
 #' Cyclical Calculation of Variance Decomposition
 calculate_alpha_decomp_full_factor <- function(X, Z, P, omega, d_j, g_j, Tinv, re_position_list) {
     .Call('_vglmer_calculate_alpha_decomp_full_factor', PACKAGE = 'vglmer', X, Z, P, omega, d_j, g_j, Tinv, re_position_list)

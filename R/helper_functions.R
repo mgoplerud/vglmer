@@ -211,9 +211,9 @@ calculate_ELBO <- function(family, ELBO_type, factorization_method,
    log_det_joint_var = NULL,
    vi_joint_decomp = NULL,
    vi_P = NULL, log_det_M_var = NULL, log_det_C_var = NULL,
-   vi_C_uncond = NULL, vi_C_mean = NULL,
-   vi_M_var = NULL, vi_M_mean = NULL,
-   vi_M_list = NULL, linpred_method = NULL,
+   vi_C_uncond = NULL, vi_C_mean = NULL, vi_M_mean = NULL,
+   vi_FS_MC = NULL, lookup_marginal = NULL,
+   vi_FS_MM = NULL, 
    design_M = NULL,  vi_M_B = NULL, vi_M_var_flat = NULL,
    design_C = NULL,
    # r Parameters
@@ -258,28 +258,31 @@ calculate_ELBO <- function(family, ELBO_type, factorization_method,
     }
   } else if (factorization_method == "collapsed") {
     
-    if (linpred_method == 'joint'){
-      var_XBZA <- cpp_var_lp(design_C = design_C, vi_C_uncond = vi_C_uncond,
-                             vi_M_var = vi_M_var,
-                             vi_M_list = vi_M_list, vi_P = vi_P,
-                             skip_vector = sapply(vi_M_var, FUN=function(i){ncol(i) == 0}), 
-                             sparse_input = class(vi_M_var[[1]])[1] == 'dgCMatrix')
-    }else{
+    var_XBZA <- rowSums( (design_C %*% vi_C_uncond) * design_C)
+    
+    var_XBZA <- var_XBZA + rowSums(mapply(vi_FS_MM, vi_M_var_flat, lookup_marginal, names(lookup_marginal), FUN=function(xi,zi,gi, n){
+      if (ncol(xi) > 0){
+        rowSums( xi * (gi %*% zi))
+      }else{
+        return(rep(0, nrow(xi)))
+      }
+    }))
+    # Covariance
+    var_XBZA <- var_XBZA + -2 * rowSums(
+      mapply(vi_FS_MC, vi_M_B, FUN=function(data_j, B_j){
+        as.vector(data_j %*% B_j)})
+    )
+    
+    # # Variance of Marginal
+    # var_XBZA <- var_XBZA + rowSums(mapply(vi_M_list, vi_M_var_flat, FUN=function(data_j, var_j){
+    #   rowSums( (data_j %*% Diagonal(x = var_j)) * data_j)
+    # }))
+    # # Covariance
+    # var_XBZA <- var_XBZA + -2 * rowSums(
+    #   mapply(vi_M_list, vi_M_B, FUN=function(data_j, B_j){
+    #     rowSums((data_j %*% t(B_j)) * design_C)})
+    # )
       
-      # Variance of Collapsed 
-      var_XBZA <- rowSums( (design_C %*% vi_C_uncond) * design_C)
-      # Variance of Marginal
-      var_XBZA <- var_XBZA + rowSums(mapply(vi_M_list, vi_M_var_flat, FUN=function(data_j, var_j){
-        rowSums( (data_j %*% Diagonal(x = var_j)) * data_j)
-      }))
-      # Covariance
-      var_XBZA <- var_XBZA + -2 * rowSums(
-        mapply(vi_M_list, vi_M_B, FUN=function(data_j, B_j){
-          rowSums((data_j %*% t(B_j)) * design_C)})
-      )
-      
-    }
-
   } else {
     
     beta_quad <- rowSums((X %*% t(vi_beta_decomp))^2)
@@ -289,6 +292,7 @@ calculate_ELBO <- function(family, ELBO_type, factorization_method,
       var_XBZA <- var_XBZA + vi_r_sigma 
     }
   }
+  
   # Prepare vi_sigma_alpha
   moments_sigma_alpha <- mapply(vi_sigma_alpha, vi_sigma_alpha_nu, d_j, SIMPLIFY = FALSE, FUN = function(phi, nu, d) {
     inv_phi <- solve(phi)

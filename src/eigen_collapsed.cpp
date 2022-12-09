@@ -361,3 +361,26 @@ Rcpp::List test_f(
   );
 }
   
+  
+// [[Rcpp::export]]
+Eigen::MatrixXd block_diag_product(
+    const Eigen::MatrixXd A,
+    const Eigen::MatrixXd B,
+    const int block_size,
+    const int blocks
+){
+  
+  Eigen::MatrixXd out(blocks, block_size * block_size);
+  // Loop over each row
+  for (int i = 0; i < blocks; i++){
+    for (int s = 0; s < block_size; s++){
+      Eigen::ArrayXd A_i = A.row(i * block_size + s);
+      for (int sprime = 0; sprime < block_size; sprime ++){
+        Eigen::ArrayXd B_j = B.row(i * block_size + sprime);
+        double out_ij = (A_i * B_j).sum();
+        out(i, s + sprime * block_size) = out_ij;
+      }
+    }
+  }
+  return out;
+}

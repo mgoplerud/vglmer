@@ -2,9 +2,10 @@
 FS <- function(X,Y){
   t(KhatriRao(t(X),t(Y)))
 }
+
 build_collapse_index <- function(X, Z, cyclical_pos, outer_alpha_RE_positions,
     weight, names_of_RE, k, d_j){
-  
+
   mean_nonsparse_X <- colMeans(Diagonal(x = weight) %*% (X != 0))
   mean_nonsparse_Z <- colMeans(Diagonal(x = weight) %*% (Z != 0))
   # Get average of sparsity for each group "g" (relevant if d_j > 1)
@@ -21,6 +22,20 @@ build_collapse_index <- function(X, Z, cyclical_pos, outer_alpha_RE_positions,
     }
     collapse_Z <- unlist(cyclical_pos[which(names(names_of_RE) %in% k)])
     
+    index_collapse_Z <- lapply(names(names_of_RE), FUN=function(i){
+      if (i %in% k){
+        as.numeric(names(outer_alpha_RE_positions[[i]]))
+      }else{
+        vector(mode = 'numeric')
+      }
+    })
+    index_marginal_Z <- lapply(names(names_of_RE), FUN=function(i){
+      if (!(i %in% k)){
+        as.numeric(names(outer_alpha_RE_positions[[i]]))
+      }else{
+        vector(mode = 'numeric')
+      }
+    })
     thresh <- NULL
     
   }else if (!is.finite(k)){
@@ -35,11 +50,16 @@ build_collapse_index <- function(X, Z, cyclical_pos, outer_alpha_RE_positions,
       names(thresh) <- NULL
     }
   }
-  
+
   if (!is.null(thresh)){
     collapse_Z <- mapply(outer_alpha_RE_positions, mean_nonsparse_Z, 
       SIMPLIFY = FALSE, FUN=function(i,j){
         i[which(j >= thresh)]
+    })
+    
+    index_collapse_Z <- lapply(collapse_Z, FUN=function(i){as.numeric(names(i))})
+    index_marginal_Z <- mapply(outer_alpha_RE_positions, index_collapse_Z, SIMPLIFY = FALSE, FUN=function(i,j){
+      setdiff(as.numeric(names(i)), j)
     })
     collapse_Z <- unlist(collapse_Z)
     names(collapse_Z) <- NULL
@@ -60,9 +80,18 @@ build_collapse_index <- function(X, Z, cyclical_pos, outer_alpha_RE_positions,
   names_of_collapsed <- list(FE = names(collapse_X), RE = names(collapse_Z))  
   return(
     list(C_j = C_j, 
-         M_j = M_j,
+         M_j = M_j, 
+         index_collapse = index_collapse_Z,
+         index_marginal = index_marginal_Z,
          names_of_collapsed = names_of_collapsed)
   )
 }
 
-
+block_diag_sum <- function(A, g, d){
+  r <- 0:(d-1)
+  out <- Reduce('+', lapply(0:(g-1), FUN=function(i){
+    s <- 1 + d * i + r
+    return(A[s,s])
+  }))
+  return(out)
+}

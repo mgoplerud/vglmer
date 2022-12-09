@@ -6,11 +6,6 @@
 
 using namespace Rcpp;
 
-#ifdef RCPP_USE_GLOBAL_ROSTREAM
-Rcpp::Rostream<true>&  Rcpp::Rcout = Rcpp::Rcpp_cout_get();
-Rcpp::Rostream<false>& Rcpp::Rcerr = Rcpp::Rcpp_cerr_get();
-#endif
-
 // LinRegChol
 List LinRegChol(const Eigen::MappedSparseMatrix<double> X, const Eigen::MappedSparseMatrix<double> omega, const Eigen::MappedSparseMatrix<double> prior_precision, const Eigen::Map<Eigen::VectorXd> y, const bool save_chol);
 RcppExport SEXP _vglmer_LinRegChol(SEXP XSEXP, SEXP omegaSEXP, SEXP prior_precisionSEXP, SEXP ySEXP, SEXP save_cholSEXP) {
@@ -174,6 +169,20 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// block_diag_product
+Eigen::MatrixXd block_diag_product(const Eigen::MatrixXd A, const Eigen::MatrixXd B, const int block_size, const int blocks);
+RcppExport SEXP _vglmer_block_diag_product(SEXP ASEXP, SEXP BSEXP, SEXP block_sizeSEXP, SEXP blocksSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const Eigen::MatrixXd >::type A(ASEXP);
+    Rcpp::traits::input_parameter< const Eigen::MatrixXd >::type B(BSEXP);
+    Rcpp::traits::input_parameter< const int >::type block_size(block_sizeSEXP);
+    Rcpp::traits::input_parameter< const int >::type blocks(blocksSEXP);
+    rcpp_result_gen = Rcpp::wrap(block_diag_product(A, B, block_size, blocks));
+    return rcpp_result_gen;
+END_RCPP
+}
 // calculate_alpha_decomp_full_factor
 List calculate_alpha_decomp_full_factor(const Eigen::Map<Eigen::MatrixXd> X, const Eigen::MappedSparseMatrix<double> Z, const Eigen::Map<Eigen::MatrixXd> P, const Eigen::Map<Eigen::VectorXd> omega, const Eigen::Map<Eigen::ArrayXd> d_j, const Eigen::Map<Eigen::ArrayXd> g_j, const List Tinv, const Rcpp::List& re_position_list);
 RcppExport SEXP _vglmer_calculate_alpha_decomp_full_factor(SEXP XSEXP, SEXP ZSEXP, SEXP PSEXP, SEXP omegaSEXP, SEXP d_jSEXP, SEXP g_jSEXP, SEXP TinvSEXP, SEXP re_position_listSEXP) {
@@ -308,6 +317,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_vglmer_cpp_var_lp", (DL_FUNC) &_vglmer_cpp_var_lp, 7},
     {"_vglmer_cpp_update_m_var", (DL_FUNC) &_vglmer_cpp_update_m_var, 7},
     {"_vglmer_test_f", (DL_FUNC) &_vglmer_test_f, 5},
+    {"_vglmer_block_diag_product", (DL_FUNC) &_vglmer_block_diag_product, 4},
     {"_vglmer_calculate_alpha_decomp_full_factor", (DL_FUNC) &_vglmer_calculate_alpha_decomp_full_factor, 8},
     {"_vglmer_chol_sparse", (DL_FUNC) &_vglmer_chol_sparse, 3},
     {"_vglmer_cpp_zVz", (DL_FUNC) &_vglmer_cpp_zVz, 2},
