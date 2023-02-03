@@ -12,7 +12,7 @@
 #' @param omega Polya-Gamma weights
 #' @param prior_precision Prior Precision for Regression
 #' @param y Outcome
-#' @param save_chol
+#' @param save_chol Truefalse
 LinRegChol <- function(X, omega, prior_precision, y, save_chol = TRUE) {
     .Call('_vglmer_LinRegChol', PACKAGE = 'vglmer', X, omega, prior_precision, y, save_chol)
 }
@@ -56,6 +56,10 @@ test_f <- function(diag_vi_pg_mean, design_C, Tinv_C, s, vi_M_list) {
 
 block_diag_product <- function(A, B, block_size, blocks) {
     .Call('_vglmer_block_diag_product', PACKAGE = 'vglmer', A, B, block_size, blocks)
+}
+
+invert_rowwise <- function(X, vec_prior, dim_X) {
+    .Call('_vglmer_invert_rowwise', PACKAGE = 'vglmer', X, vec_prior, dim_X)
 }
 
 #' Cyclical Calculation of Variance Decomposition

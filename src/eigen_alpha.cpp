@@ -24,7 +24,7 @@ using namespace Rcpp;
 //' @param omega Polya-Gamma weights
 //' @param prior_precision Prior Precision for Regression
 //' @param y Outcome
-//' @param save_chol
+//' @param save_chol Truefalse
 // [[Rcpp::export]]
 List LinRegChol(
      const Eigen::MappedSparseMatrix<double> X,

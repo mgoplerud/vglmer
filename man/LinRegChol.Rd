@@ -14,6 +14,8 @@ LinRegChol(X, omega, prior_precision, y, save_chol = TRUE)
 \item{prior_precision}{Prior Precision for Regression}
 
 \item{y}{Outcome}
+
+\item{save_chol}{Truefalse}
 }
 \description{
 Do linear regression of form (X^T O X + P)^{-1} X^T y where O is omega, P is

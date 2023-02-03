@@ -58,10 +58,13 @@
 #' @export
 predict.vglmer <- function(object, newdata,
                            samples = 0, samples_only = FALSE,
-                           summary = TRUE, allow_missing_levels = FALSE, ...) {
+                           summary = TRUE, allow_missing_levels = FALSE, 
+                           type = c('link', 'lpmatrix'),
+                           ...) {
   if (length(list(...)) > 0) {
     stop("... not used for predict.vglmer")
   }
+  type <- match.arg(type)
   newdata <- as.data.frame(newdata)
   rownames(newdata) <- as.character(1:nrow(newdata))
 
@@ -252,10 +255,10 @@ predict.vglmer <- function(object, newdata,
     Z[match(obs_in_both, rownames(Z)), , drop = F]
   )
 
-  factorization_method <- object$control$factorization_method
-  if (grepl(factorization_method, pattern="collapsed")){
-    stop('Set up predict for collapsed sampler.')
+  if (type == 'lpmatrix'){
+    return(XZ)
   }
+  factorization_method <- object$control$factorization_method
   if (is.matrix(samples)) {
     if (ncol(samples) != ncol(XZ)) {
       stop("Samples must be {m, ncol(Z) + ncol(X)}")
@@ -268,7 +271,41 @@ predict.vglmer <- function(object, newdata,
     } else {
       only.lp <- FALSE
     }
-    if (factorization_method %in% c("strong", "partial")) {
+    if (factorization_method == 'collapsed'){
+      vi_alpha_mean <- object$alpha$mean
+      vi_beta_mean <- object$beta$mean
+      
+      if (!only.lp) {
+        
+        p.X <- nrow(vi_beta_mean)
+        
+        warning('Inefficient method for collapsed sampling')
+        # Extract precision from the estimated object
+        full_precision_VI <- extract_precision(object)
+        # Get the (dense) Cholesky factorization
+        chol_pre <- Cholesky(drop0(forceSymmetric(full_precision_VI)))
+        chol_pre <- expand(chol_pre)
+        z <- matrix(rnorm(nrow(full_precision_VI) * samples), ncol = samples)
+        # Use the efficient solve for triangular methods from Matrix
+        sim_init_joint <- t(chol_pre$P) %*% solve(t(chol_pre$L), z)
+        sim_init_beta <- sim_init_joint[1:p.X, , drop = F]
+        sim_init_alpha <- sim_init_joint[-1:-p.X, , drop = F]
+        
+        rm(sim_init_joint)
+        sim_init_alpha <- sweep(sim_init_alpha, MARGIN = 1, STATS = vi_alpha_mean, FUN = '+')
+        sim_init_beta <- sweep(sim_init_beta, MARGIN = 1, STATS = vi_beta_mean, FUN = '+')
+
+      } else {
+        
+        sim_init_alpha <- vi_alpha_mean
+        sim_init_beta <- vi_beta_mean
+        
+        
+      }
+      
+      
+      
+    }else if (factorization_method %in% c("strong", "partial")) {
       vi_alpha_mean <- object$alpha$mean
       vi_alpha_decomp <- object$alpha$decomp_var
 
@@ -282,11 +319,11 @@ predict.vglmer <- function(object, newdata,
       if (!only.lp) {
         sim_init_alpha <- matrix(rnorm(samples * p.Z), ncol = samples)
         sim_init_alpha <- t(vi_alpha_decomp) %*% sim_init_alpha
-        sim_init_alpha <- sim_init_alpha + kronecker(vi_alpha_mean, t(matrix(1, samples)))
+        sim_init_alpha <- sweep(sim_init_alpha, MARGIN = 1, STATS = vi_alpha_mean, FUN = '+')
 
         sim_init_beta <- matrix(rnorm(samples * p.X), ncol = samples)
         sim_init_beta <- t(vi_beta_decomp) %*% sim_init_beta
-        sim_init_beta <- sim_init_beta + kronecker(vi_beta_mean, t(matrix(1, samples)))
+        sim_init_beta <- sweep(sim_init_beta, MARGIN = 1, STATS = vi_beta_mean, FUN = '+')
       } else {
         sim_init_alpha <- vi_alpha_mean
         sim_init_beta <- vi_beta_mean
@@ -307,9 +344,9 @@ predict.vglmer <- function(object, newdata,
         sim_init_alpha <- sim_init_joint[-1:-p.X, , drop = F]
 
         rm(sim_init_joint)
-
-        sim_init_alpha <- sim_init_alpha + kronecker(vi_alpha_mean, t(matrix(1, samples)))
-        sim_init_beta <- sim_init_beta + kronecker(vi_beta_mean, t(matrix(1, samples)))
+        sim_init_alpha <- sweep(sim_init_alpha, MARGIN = 1, STATS = vi_alpha_mean, FUN = '+')
+        sim_init_beta <- sweep(sim_init_beta, MARGIN = 1, STATS = vi_beta_mean, FUN = '+')
+        
       } else {
         sim_init_alpha <- vi_alpha_mean
         sim_init_beta <- vi_beta_mean

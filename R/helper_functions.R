@@ -213,7 +213,7 @@ calculate_ELBO <- function(family, ELBO_type, factorization_method,
    vi_P = NULL, log_det_M_var = NULL, log_det_C_var = NULL,
    vi_C_uncond = NULL, vi_C_mean = NULL, vi_M_mean = NULL,
    vi_FS_MC = NULL, lookup_marginal = NULL,
-   vi_FS_MM = NULL, 
+   vi_FS_MM = NULL, vi_M_list = NULL,
    design_M = NULL,  vi_M_B = NULL, vi_M_var_flat = NULL,
    design_C = NULL,
    # r Parameters
@@ -273,16 +273,16 @@ calculate_ELBO <- function(family, ELBO_type, factorization_method,
         as.vector(data_j %*% B_j)})
     )
     
-    # # Variance of Marginal
+    # # # Variance of Marginal
     # var_XBZA <- var_XBZA + rowSums(mapply(vi_M_list, vi_M_var_flat, FUN=function(data_j, var_j){
     #   rowSums( (data_j %*% Diagonal(x = var_j)) * data_j)
     # }))
-    # # Covariance
+    # # # Covariance
     # var_XBZA <- var_XBZA + -2 * rowSums(
     #   mapply(vi_M_list, vi_M_B, FUN=function(data_j, B_j){
     #     rowSums((data_j %*% t(B_j)) * design_C)})
     # )
-      
+    #   
   } else {
     
     beta_quad <- rowSums((X %*% t(vi_beta_decomp))^2)
