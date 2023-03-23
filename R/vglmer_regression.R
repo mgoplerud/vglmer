@@ -944,7 +944,11 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
           EM_init <- list('beta' = vector(length = 0, mode = 'numeric'), 
                           'alpha' = rep(0, ncol(Z)))
         }else{
-          EM_init <- coef(glm(y ~ 0 + X, family = poisson))
+          if (control$force_whole){
+            EM_init <- coef(glm(y ~ 0 + X, family = poisson))
+          }else{
+            EM_init <- coef(suppressWarnings(glm(y ~ 0 + X, family = poisson)))
+          }
           names(EM_init) <- NULL
           EM_init <- list('beta' = EM_init, 'alpha' = rep(0, ncol(Z)))
         }
@@ -1235,7 +1239,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
       
       mask_lowertri <- mapply(d_j, g_j, spline_REs, SIMPLIFY = FALSE, FUN=function(di, gi, si){
         if (si == FALSE & di == 1){
-          return(Diagonal(x = rep(TRUE, gi)))
+          return(sparseMatrix(i = 1:gi, j = 1:gi, x = TRUE))
         }else if (si == FALSE & di > 1){
           adj <- seq(0, di * (gi - 1), by=di)
           combn_all <- rbind(t(combn(1:di, 2)), cbind(1:di, 1:di))
@@ -1244,7 +1248,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
                                return(Matrix(cbind(i[1] + adj, i[2] + adj)))
                              })
           combn_all <- do.call('rbind', combn_all)
-          combn_all <- sparseMatrix(i = combn_all[,2], j = combn_all[,1])
+          combn_all <- sparseMatrix(i = combn_all[,2], j = combn_all[,1], x = TRUE)
           return(combn_all)
         }else{
           return(drop0(Matrix(TRUE, nrow = gi, ncol = gi)))

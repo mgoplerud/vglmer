@@ -151,8 +151,13 @@ predict.vglmer <- function(object, newdata,
     
   }
   
-  # Extract the Specials
-  if (length(parse_formula$smooth.spec) > 0){
+  type_specials <- sapply(parse_formula$smooth.spec, FUN=function(i){i$type})
+  
+  fe_special <- parse_formula$smooth.spec[type_specials == 'fe']
+  spline_special <- parse_formula$smooth.spec[type_specials != 'fe']
+  
+  # If any splines, generate data
+  if (length(spline_special) > 0){
     base_specials <- length(parse_formula$smooth.spec)
     # Number of splines + one for each "by"...
     n.specials <- base_specials +
@@ -234,6 +239,32 @@ predict.vglmer <- function(object, newdata,
     Z.spline.attr <- NULL
     Z.spline <- NULL
     Z.spline.size <- NULL
+  }
+  
+  if (length(fe_special) > 0 & FALSE){
+    
+    base_FE <- length(fe_special)
+    Z.FE.attr <- object$internal_parameters$special_fe$attr
+    Z.FE.data <- as.list(rep(NA, base_FE))
+
+    for (i in 1:base_FE){
+      
+      browser()
+      special_i <- fe_special[[i]]
+      # all_FE_i <- vglmer_build_fe(group = newdata[[special_i$term]],  
+      #     levels = 
+      #     inter = model.matrix(as.formula(special_i$interactions), data = newdata))
+      Z.FE.size[i] <- all_FE_i$fe_size
+      Z.FE.lookup[[i]] <- all_FE_i$lookup
+      Z.FE.attr[[i]] <- c(all_FE_i$attr, 
+                          list(type = special_i$type, interactions = special_i$interactions))
+      Z.FE.name[i] <- special_i$term
+      Z.FE.levels[i] <- ncol(all_FE_i$lookup)
+      Z.FE.data[[i]] <- all_FE_i$x
+    }
+    
+  }else{
+    message('SKIPPING FIXED EFFECTS')
   }
   
   #####
