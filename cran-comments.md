@@ -1,6 +1,6 @@
 ## Resubmission
 
-This is a patch on vglmer 1.0.2 to address updates to the `Matrix` package (1.5-2).
+This is an update on vglmer 1.0.3 that addresses a bottleneck in the prediction function.
 
 ## R CMD check results
 

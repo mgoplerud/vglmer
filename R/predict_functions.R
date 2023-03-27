@@ -260,22 +260,38 @@ predict.vglmer <- function(object, newdata,
     }
   }
 
+  # Select overlapping columns
   in_both <- intersect(fmt_names_Z, orig_Z_names)
-  recons_Z <- drop0(sparseMatrix(i = 1, j = 1, x = 0, dims = c(nrow(Z), length(orig_Z_names))))
-  colnames(recons_Z) <- orig_Z_names
-  rownames(recons_Z) <- rownames_Z
-
-  recons_Z[, match(in_both, orig_Z_names)] <- Z[, match(in_both, fmt_names_Z)]
-
+  # Find the ones that are missing
+  missing_cols <- setdiff(orig_Z_names, in_both)
+  recons_Z <- Z[, match(in_both, fmt_names_Z), drop = F]
+  if (length(missing_cols) > 0){
+    # Create a matrix of zeros to padfor the missing columns
+    pad_zero <- sparseMatrix(i = 1, j = 1, x = 0, 
+                             dims = c(nrow(Z), length(missing_cols)))
+    colnames(pad_zero) <- missing_cols
+    # Combine and then reorder to be lined-up correctly
+    recons_Z <- cbind(recons_Z, pad_zero)
+  }
+  recons_Z <- recons_Z[, match(orig_Z_names, colnames(recons_Z)), drop = F]
+    
+  # Old method for prediction
+  # in_both <- intersect(fmt_names_Z, orig_Z_names)
+  # recons_Z <- drop0(sparseMatrix(i = 1, j = 1, x = 0, dims = c(nrow(Z), length(orig_Z_names))))
+  # colnames(recons_Z) <- orig_Z_names
+  # rownames(recons_Z) <- rownames_Z
+  # recons_Z[, match(in_both, orig_Z_names)] <- Z[, match(in_both, fmt_names_Z)]
+  
   # Check that the entirely missing columns match those not in the original
-  checksum_align <- setdiff(not_in_new_Z, sort(names(which(colSums(recons_Z != 0) == 0))))
+  checksum_align <- setdiff(not_in_new_Z,
+    sort(names(which(colSums(recons_Z != 0) == 0))))
   if (length(checksum_align) > 0) {
     stop("Alignment Error")
   }
-
-  Z <- recons_Z
-  rm(recons_Z)
   
+  Z <- recons_Z
+  rm(recons_Z); gc()
+
   ####
   
   total_obs <- rownames(newdata)
@@ -285,6 +301,8 @@ predict.vglmer <- function(object, newdata,
     X[match(obs_in_both, rownames(X)), , drop = F],
     Z[match(obs_in_both, rownames(Z)), , drop = F]
   )
+  gc()
+  
   factorization_method <- object$control$factorization_method
   if (is.matrix(samples)) {
     if (ncol(samples) != ncol(XZ)) {
@@ -366,9 +384,14 @@ predict.vglmer <- function(object, newdata,
       lp <- lp[match(total_obs, obs_in_both), ]
       rownames(lp) <- NULL
     } else {
-      lp <- as.vector(t(apply(lp, MARGIN = 1, FUN = function(i) {
-        mean(i)
-      })))
+      
+      if (ncol(lp) != 1){
+        lp <- as.vector(lp)
+      }else{
+        lp <- as.vector(t(apply(lp, MARGIN = 1, FUN = function(i) {
+          mean(i)
+        })))
+      }
       lp <- lp[match(total_obs, obs_in_both)]
       rownames(lp) <- NULL
     }

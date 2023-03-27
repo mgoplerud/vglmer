@@ -1,3 +1,7 @@
+# vglmer 1.0.4
+
+* Adjust `predict.vglmer` to allow for faster predictions on large datasets by not copying and filling in a large sparse matrix. Thank you to Michael Auslen for pointing out this issue.
+
 # vglmer 1.0.3
 
 * Adjust `vglmer` to not throw deprecation messages with Matrix 1.5. Thank you to Mikael Jagan for suggestions on how to adapt the code.
