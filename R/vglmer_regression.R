@@ -360,13 +360,18 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     # Add the linear spline terms to the main effect.
     fe_update <- sapply(fe_fmla$smooth.spec, FUN=function(i){i$type}) != 'fe'
     fe_update <- sapply(fe_fmla$smooth.spec[fe_update], FUN=function(i){
+      if (i$add_linear == FALSE){
+        return("")
+      }
       if (i$by != "NA" & i$by_re == FALSE){
         fe_i <- paste0(i$term, ' * ', i$by)
       }else{
         fe_i <- i$term
       }
     })
-    
+    if (length(fe_update) > 0){
+      fe_update <- fe_update[sapply(fe_update, FUN=function(i){!identical(i, "")})]
+    }
     fe_update <- paste0(fe_update, collapse = ' + ')
     
     if (fe_update != ""){
@@ -405,6 +410,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     
     for (v in sapply(character_re, FUN=function(i){i[2]})){
       if (!(is.factor(data[[v]]) | is.character(data[[v]]))){
+        if (is.null(data[[v]])){warning('NULL found for renaming factor.'); next}
         data[[v]] <- as.character(data[[v]])
       }
     } 
@@ -1256,7 +1262,12 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
       })
       mask_lowertri <- c(drop0(lower.tri(matrix(1, p.X, p.X), diag = T)), mask_lowertri)
       mask_lowertri <- lapply(mask_lowertri, FUN=function(mi){
-        diag_mask <- which(band(mi, 0, 0))
+        diag_mask <- tryCatch(which(band(mi, 0, 0)), error = function(e){
+          NULL
+        })
+        if (is.null(diag_mask)){
+          diag_mask <- which(band(as(mi, 'lgCMatrix'), 0 , 0))
+        }
         mask_lowertri <- which(mi)
         diag_position <- match(diag_mask, mask_lowertri)
         return(list(mask = mask_lowertri, diag = diag_position))
@@ -2201,7 +2212,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
       
       if (sum(spline_REs)){
         R_spline_design <- sapply(cyclical_pos[spline_REs], FUN=function(i){
-          as.vector(Z[,i] %*% vi_alpha_mean[i,])
+          as.vector(Z[,i, drop = F] %*% vi_alpha_mean[i,, drop = F])
         })
       }else{
         R_spline_design <- matrix(nrow = nrow(X), ncol = 0)
@@ -3564,9 +3575,9 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     output$hw <- list(a = vi_a_a_jp, b = vi_a_b_jp)
   }
 
-  if (any_FE | sum(spline_REs)){
+  if (any_FE | (sum(spline_REs) > 0)){
     special <- list()
-    if (sum(spline_REs)){
+    if (sum(spline_REs) > 0){
       special$spline <- list(attr = Z.spline.attr, size = Z.spline.size)
     }
     if (any_FE){
@@ -3577,6 +3588,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
   }
   
   output$internal_parameters <- list(
+    special = special,
     it_used = it, it_max = iterations,
     parameter.change = change_all,
     parameter.vi = store_vi,

@@ -2,6 +2,7 @@
 # Face-Splitting Product or Row-Tensor Product
 FS <- function(X,Z){t(KhatriRao(t(X), t(Z)))}
 
+#' @export
 v_fe <- function(group, interactions = ~ 1){
   # Using mgcv's syntax for "s" to make it work with "interpret.gam"
   vars <- as.list(substitute(list(group)))[-1]

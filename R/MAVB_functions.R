@@ -159,7 +159,7 @@ get_RE_groups <- function(formula, data) {
   names(bars) <- barnames(bars)
   
   fr <- data
-  blist <- lapply(bars, simple_blist, fr, drop.unused.levels = F, reorder.vars = FALSE)
+  blist <- lapply(bars, simple_blist, fr, drop.unused.levels = TRUE, reorder.vars = FALSE)
   blist <- lapply(blist, FUN=function(i){i[c('ff', 'mm')]})
 
   ff <- lapply(blist, FUN=function(i){i$ff})

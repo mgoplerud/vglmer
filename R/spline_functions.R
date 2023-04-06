@@ -40,7 +40,7 @@ formOmega <- function(a,b,intKnots){
 #' 50(2): 179-198.
 #' @export
 v_s <- function(..., type = 'tpf', knots = NULL, by = NA,
-                by_re = TRUE,
+                by_re = TRUE, add_linear = TRUE,
                 outer_okay = FALSE){
   if (!(type %in% c('tpf', 'o', 'fe'))){stop('type must be "tpf", "o", or "fe".')}
   # Using mgcv's syntax for "s" to make it work with "interpret.gam"
@@ -58,7 +58,7 @@ v_s <- function(..., type = 'tpf', knots = NULL, by = NA,
   
   ret <- list(term = term, outer_okay = outer_okay,
               by = by.var, type = type, knots = knots,
-              by_re = by_re)
+              by_re = by_re, add_linear = add_linear)
   class(ret) <- 'vglmer_special'
   
   return(ret)
@@ -66,7 +66,8 @@ v_s <- function(..., type = 'tpf', knots = NULL, by = NA,
 
 #' @importFrom splines spline.des
 vglmer_build_spline <- function(x, knots = NULL, Boundary.knots = NULL, 
-  by, type, override_warn = FALSE, outer_okay = FALSE, by_re = NULL){
+  by, type, add_linear = TRUE,
+  override_warn = FALSE, outer_okay = FALSE, by_re = NULL){
 
   if (is.null(knots)){
     ux <- length(unique(x))
@@ -138,6 +139,7 @@ vglmer_build_spline <- function(x, knots = NULL, Boundary.knots = NULL,
   }else{stop('splines only set up for tpf and o')}
   
   spline_attr$by_re <- by_re
+  spline_attr$add_linear <- add_linear
   
   if (!is.null(by)){
     
@@ -204,7 +206,7 @@ vglmer_interpret.gam0 <- function(gf, textra = NULL, extra.special = NULL){
   if (is.null(extra.special)) {
     zp <- NULL
   }else{
-    zp <- unlist(attr(tf, "specials")[extra.special])
+    zp <- sort(unlist(attr(tf, "specials")[extra.special]))
     names(zp) <- NULL
   }
   

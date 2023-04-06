@@ -4,7 +4,15 @@
 \alias{v_s}
 \title{Spline Creator}
 \usage{
-v_s(..., type = "tpf", knots = NULL, by = NA, by_re = TRUE, outer_okay = FALSE)
+v_s(
+  ...,
+  type = "tpf",
+  knots = NULL,
+  by = NA,
+  by_re = TRUE,
+  add_linear = TRUE,
+  outer_okay = FALSE
+)
 }
 \arguments{
 \item{...}{variable name}
