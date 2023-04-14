@@ -171,7 +171,7 @@ print.vglmer <- function(x, ...) {
   cat(paste(format(formula(x, form = 'original')), collapse = "\n\n"))
   cat("\n\n")
   if (missing_obs > 0) {
-    missing_info <- paste0("after ", missing_obs, " deleted because of missing data and")
+    missing_info <- paste0(" after ", missing_obs, " deleted because of missing data and")
   } else {
     missing_info <- " and"
   }

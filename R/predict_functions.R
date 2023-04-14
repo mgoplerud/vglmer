@@ -11,6 +11,10 @@
 #'   expectation of the linear predictor. A positive integer draws
 #'   \code{samples} samples from the variational distributions and calculates
 #'   the linear predictor.
+#' @param type Default (\code{"link"}) returns the linear predictor;
+#'   \code{"terms"} returns the predicted value for each random effect (or
+#'   spline) separately as well as one that collects all fixed effects. At the
+#'   moment, other options are not enabled.
 #' @param samples_only Default (\code{FALSE}) returns the samples from the
 #'   variational distributions, \bold{not} the prediction. Each row is a sample and
 #'   each column is a parameter.
@@ -60,11 +64,14 @@
 #'   term of the prediction.
 #' @importFrom stats delete.response terms na.pass
 #' @export
-predict.vglmer <- function(object, newdata,
+predict.vglmer <- function(object, newdata, type = 'link',
                            samples = 0, samples_only = FALSE,
                            summary = TRUE, allow_missing_levels = FALSE, ...) {
   if (length(list(...)) > 0) {
     stop("... not used for predict.vglmer")
+  }
+  if (!(type %in% c('link', 'terms'))){
+    stop('vglmer only uses "terms" and "link" for "type" in predict.')
   }
   newdata <- as.data.frame(newdata)
   rownames(newdata) <- as.character(1:nrow(newdata))
@@ -297,10 +304,31 @@ predict.vglmer <- function(object, newdata,
   total_obs <- rownames(newdata)
   obs_in_both <- intersect(rownames(X), rownames(Z))
 
-  XZ <- cbind(
-    X[match(obs_in_both, rownames(X)), , drop = F],
-    Z[match(obs_in_both, rownames(Z)), , drop = F]
-  )
+  if (type == 'terms'){
+    if (samples != 0){stop('"terms" only enabled for samples=0.')}
+    # Calculate the linear predictor separately for each random effect
+    # (and fixed effects) and report a matrix of those predictions.
+    
+    X <- X[match(obs_in_both, rownames(X)), , drop = F]
+    Z <- Z[match(obs_in_both, rownames(Z)), , drop = F]
+    gc()
+    lp_FE <- as.vector(X %*% object$beta$mean)
+    vi_alpha_mean <- object$alpha$mean
+    
+    lp_terms <- sapply(object$internal_parameters$cyclical_pos, FUN=function(i){
+      as.vector(Z[,i,drop=F] %*% vi_alpha_mean[i,drop=F])
+    })
+    colnames(lp_terms) <- names(object$internal_parameters$names_of_RE)
+    lp_terms <- cbind('FE' = lp_FE, lp_terms)
+    lp_terms <- lp_terms[match(total_obs, obs_in_both), , drop = F]
+    return(lp_terms)
+    
+  }else{
+    XZ <- cbind(
+      X[match(obs_in_both, rownames(X)), , drop = F],
+      Z[match(obs_in_both, rownames(Z)), , drop = F]
+    )
+  }
   gc()
   
   factorization_method <- object$control$factorization_method

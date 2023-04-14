@@ -120,9 +120,14 @@ vglmer_build_spline <- function(x, knots = NULL, Boundary.knots = NULL,
     # Sort user provided knots
     knots <- sort(knots)
     
-    if (any(knots > max(x, na.rm=T)) | any(knots < min(x, na.rm=T))){
+    # Is any knot big above the maximum in the data?
+    cond_1 <- any(knots >= max(x, na.rm=T))
+    # Is any knot below the minimum in the data?
+    cond_2 <- any(knots <= min(x, na.rm=T))
+    # If so, issue warning
+    if (!cond_1 | !cond_2){
       if (!override_warn){
-        warning('self-provided knots are outside of the observed data.')
+        warning('observed data is outside of the self-provided knots')
       }
     }
     intKnots <- knots
@@ -173,7 +178,18 @@ vglmer_build_spline <- function(x, knots = NULL, Boundary.knots = NULL,
     
     base_x <- x
     u_by <- sort(unique(by))
-    x_by <- sparseMatrix(i = 1:length(by), j = match(by, u_by), x = 1)
+    
+    if (!outer_okay){
+      x_by <- sparseMatrix(i = 1:length(by), j = match(by, u_by), x = 1)
+    }else{
+      match_j <- match(by, u_by)
+      match_i <- 1:length(by)
+      
+      match_i <- match_i[!is.na(match_j)]
+      match_j <- match_j[!is.na(match_j)]
+      x_by <- sparseMatrix(i = match_i, j= match_j, x = 1, dims = c(length(by), length(u_by)))
+    }
+    
     
     names_x <- as.vector(outer(1:ncol(x), u_by, FUN=function(x,y){paste(y,x, sep = ' @ ')}))
     x <- t(KhatriRao(t(x_by), t(x)))

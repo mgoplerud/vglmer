@@ -2941,6 +2941,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
 
   output$internal_parameters <- list(
     it_used = it, it_max = iterations,
+    cyclical_pos = cyclical_pos,
     lp = as.vector(X %*% vi_beta_mean + Z %*% vi_alpha_mean - vi_r_mu),
     parameter.change = change_all,
     parameter.vi = store_vi,

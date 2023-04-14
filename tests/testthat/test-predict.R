@@ -154,7 +154,32 @@ test_that("Prediction Matches for Simulation", {
   test_data <- rbind(mixed_data, data.frame(x = x, g = g, g2 = g2)[sample(1:length(y), 100, replace = T), ])
 
   point_predict <- predict(example_vglmer, newdata = test_data, allow_missing_levels = T)
+  terms_predict <- predict(example_vglmer, newdata = test_data, allow_missing_levels = TRUE, type = 'terms')
+  
+  manual_fe <- test_data$x * coef(example_vglmer)['x'] + coef(example_vglmer)[1]
+  expect_equal(
+    terms_predict[,'FE'], 
+    ifelse(is.na(point_predict), NA, manual_fe)
+  )
+  
+  manual_g <- rowSums(ranef(example_vglmer)$g[test_data$g,2:3] * cbind(1, test_data$x))
+  manual_g[is.na(manual_g) & !is.na(test_data$g)] <- 0
+  expect_equal(
+    terms_predict[,'g'], 
+    ifelse(is.na(point_predict), NA, manual_g)
+  )
 
+  manual_g2 <- ranef(example_vglmer)$g2[test_data$g2,2]
+  manual_g2[is.na(manual_g2) & !is.na(test_data$g2)] <- 0
+  expect_equal(
+    terms_predict[,'g2'], 
+    ifelse(is.na(point_predict), NA, manual_g2)
+  )
+  
+  expect_equivalent(
+    manual_fe + manual_g + manual_g2, point_predict
+  )
+  
   if (env_test == "local"){
     n_samples <- 2 * 10^4
   }else{

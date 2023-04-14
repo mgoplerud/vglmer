@@ -15,6 +15,8 @@ if (isTRUE(as.logical(Sys.getenv("CI")))){
   env_test <- 'local'
 }
 
+env_test <- 'local'
+NITER <- 2000
 print(paste0(NITER, ' for tests because ', env_test))
 
 test_that("fit with non-default options", {
@@ -28,7 +30,7 @@ test_that("fit with non-default options", {
   dat$y <- rbinom(100, 1, plogis(dat$x * runif(5)[match(dat$f, letters)]))
   
   # Custom knots as argument
-  custom_knots <- quantile(dat$x, c(0.25, 0.75, 0.6))
+  custom_knots <- quantile(dat$x, c(0, 0.25, 0.75, 0.6, 1))
   fit_knots <- vglmer(y ~ v_s(x, knots = custom_knots),
                       data = dat, family = 'binomial',
                       control = vglmer_control(iterations = 15))
@@ -40,7 +42,7 @@ test_that("fit with non-default options", {
     control = vglmer_control(iterations = NITER))
   
   
-  expect_identical(fit_knots$internal_parameters$spline$attr[[1]]$knots, quantile(dat$x, c(0.25, 0.6, 0.75)))
+  expect_identical(fit_knots$internal_parameters$spline$attr[[1]]$knots, quantile(dat$x, c(0, 0.25, 0.6, 0.75, 1)))
 
   expect_gt(min(diff(ELBO(fit_tpf, 'trajectory'))), -sqrt(.Machine$double.eps))
   expect_gt(min(diff(ELBO(fit_o, 'trajectory'))), -sqrt(.Machine$double.eps))
@@ -73,13 +75,14 @@ test_that("fit splines works with one knot", {
   }
   
   expect_error(vglmer(y ~ v_s(x, knots = 0.5), data = dat, family = 'linear'), regexp = 'If an integer')
-  est_vglmer <- vglmer(y ~ v_s(x, knots = 0.5, force_vector = T), 
-    data = dat, control = vglmer_control(iterations = 2), family = 'linear')
+  expect_warning(est_vglmer <- vglmer(y ~ v_s(x, knots = 0.5, force_vector = T), 
+    data = dat, control = vglmer_control(iterations = 2), family = 'linear'),
+    regexp = 'observed data')
   expect_equivalent(0.5, est_vglmer$internal_parameters$spline$attr[[1]]$knots)
   
-  est_vglmer <- vglmer(y ~ v_s(x, knots = 1.2, force_vector = T),
+  est_vglmer <- expect_warning(vglmer(y ~ v_s(x, knots = 1.2, force_vector = T),
          control = vglmer_control(iterations = 2),
-         data = dat, family = 'linear')
+         data = dat, family = 'linear'), regexp = 'observed data')
   expect_equivalent(est_vglmer$internal_parameters$spline$attr[[1]]$knots, 1.2)
   expect_vector(predict(est_vglmer, newdata = data.frame(x = seq(-3,3,length.out=5))), 5)
   expect_warning(vglmer(y ~ v_s(x, knots = 1.2),
@@ -94,13 +97,12 @@ test_that("fit splines works with one knot", {
   expect_length(est_vglmer$internal_parameters$spline$attr[[1]]$knots, floor(length(unique(dat$x))/4))
 })
 
-test_that("fit splines with missing data", {
-  
-  skip_on_cran()
+test_that("fit and predict with splines and missing data", {
   
   dat <- data.frame(x = rnorm(100), x2 = rexp(100),
-                    g = sample(state.abb[1:5], 100, replace = T),
-                    f = sample(letters[1:5], 100, replace = T))
+    g = sample(state.abb[1:5], 100, replace = T),
+    f = sample(letters[1:5], 100, replace = T), 
+    stringsAsFactors = F)
   
   dat$y <- rbinom(100, 1, plogis(dat$x * runif(5)[match(dat$f, letters)]))
   dat$y[sample(100, 5)] <- NA
@@ -109,10 +111,36 @@ test_that("fit splines with missing data", {
   dat$f[sample(100, 5)] <- NA
   
   fit_spline <- vglmer(y ~ v_s(x, by = f) + (1 | g), 
-               data = dat, family = 'binomial', control = vglmer_control(iterations = 5))
+               data = dat, family = 'binomial', control = vglmer_control(iterations = NITER))
   expect_s3_class(fit_spline, 'vglmer')
   expect_gt(min(diff(fit_spline$ELBO_trajectory$ELBO)), -sqrt(.Machine$double.eps))
+  
+  dat$f[6] <- 'h'
+  pred_spline <- predict(fit_spline, newdata = dat, allow_missing_levels = TRUE)
+  pred_spline_terms <- predict(fit_spline,
+    newdata = dat, type = 'terms', allow_missing_levels = TRUE)  
+  
+  expect_equivalent(pred_spline, rowSums(pred_spline_terms))
+  
+  raw_X <- vglmer_build_spline(x = dat$x, 
+    knots = fit_spline$internal_parameters$spline$attr[[1]]$knots,
+    type = fit_spline$internal_parameters$spline$attr[[1]]$type,
+    Boundary.knots = fit_spline$internal_parameters$spline$attr[[1]]$Boundary.knots, 
+    by = NULL)[[1]]$x
 
+  expect_equivalent(
+    pred_spline_terms[, 'spline-x-1-base'],
+    ifelse(is.na(pred_spline), NA, as.vector(raw_X %*% ranef(fit_spline)[['spline-x-1-base']][,2]))
+  )  
+
+  reshape_spline <- matrix(ranef(fit_spline)[['spline-x-1-int']][,2], ncol = 5)
+  pred_spline_inter <- rowSums(raw_X * t(reshape_spline)[match(dat$f, letters[1:5]),])
+  pred_spline_inter[!is.na(dat$f) & is.na(pred_spline_inter)] <- 0
+  expect_equivalent(
+    pred_spline_terms[, 'spline-x-1-int'],
+    ifelse(is.na(pred_spline), NA, pred_spline_inter)
+  ) 
+  
 })
 
 test_that("Check failures of spline fitting", {
@@ -295,8 +323,13 @@ test_that("Prediction spline test", {
     raw_X <- vglmer_build_spline(x = predict_dat$x, knots = m1$internal_parameters$spline$attr[[1]]$knots,
                                  type = m1$internal_parameters$spline$attr[[1]]$type,
                                  Boundary.knots = m1$internal_parameters$spline$attr[[1]]$Boundary.knots, by = NULL)[[1]]$x
-    direct_predict <- as.vector(raw_X %*% m1$alpha$mean + cbind(1, 0, predict_dat$x) %*% m1$beta$mean)
-    expect_equivalent(direct_predict, predict_vglmer)    
+    term_1 <- raw_X %*% m1$alpha$mean
+    term_2 <- cbind(1, 0, predict_dat$x) %*% m1$beta$mean
+    direct_predict <- as.vector(term_1 + term_2)
+    expect_equivalent(direct_predict, predict_vglmer)   
+    terms_predict <- predict(m1, newdata = predict_dat, type = 'terms')
+    expect_equivalent(term_1[,1], terms_predict[, 'spline-x-1-base'])
+    expect_equivalent(term_2[,1], terms_predict[, 'FE'])
   }
 
   if (TRUE){
@@ -345,31 +378,33 @@ test_that("Compare against mgcv", {
   
   if (env_test == 'local'){
     N <- 1000
-    dat <- data.frame(x = rnorm(N), x2 = rexp(N),
+    dat <- data.frame(x = c(-3.1, rnorm(N-1)), x2 = rexp(N),
                       g = sample(state.abb[1:5], N, replace = T),
                       f = sample(letters[1:5], N, replace = T))
     
     dat$y <- rbinom(N, 1, plogis(2 * sin(3 * dat$x) + rnorm(5)[match(dat$f, letters)]))
     
     dat$f <- factor(dat$f)
-    est_gam <- mgcv::gam(y ~ s(x) + s(f, bs = 're'), data = dat, family = binomial())  
+    est_gam <- mgcv::gam(y ~ s(x, bs = 'bs') + s(f, bs = 're'), method = 'REML', data = dat, family = binomial())  
     est_vglmer <- vglmer(y ~ v_s(x, type = 'o') + (1 | f), data = dat, family = 'binomial')
     
-    pred_estgam <- predict(est_gam, newdata = data.frame(x = seq(min(dat$x), max(dat$x), length.out=100), f = 'b'))
-    pred_estvglmer <- predict(est_vglmer, newdata = data.frame(x = seq(min(dat$x), max(dat$x), length.out=100), f = 'b'))
+    gx <- seq(quantile(dat$x, 0.2), quantile(dat$x, 0.8), length.out=100)
+    pred_estgam <- predict(est_gam, newdata = data.frame(x = gx, f = 'b'))
+    pred_estvglmer <- predict(est_vglmer, newdata = data.frame(x = gx, f = 'b'))
     
     expect_gte(cor(plogis(pred_estvglmer), plogis(pred_estgam)), 0.95)
     
-    est_gam <- mgcv::gam(y ~ s(x), data = dat, family = gaussian())  
+    est_gam <- mgcv::gam(y ~ s(x), data = dat, method = 'REML', family = gaussian())  
     est_vglmer <- vglmer(y ~ v_s(x, type = 'o'), data = dat, family = 'linear')
     
     knots_custom <- seq(-3, 3, length.out=35)
-    est_vglmer_2 <- vglmer(y ~ v_s(x, knots = knots_custom, type = 'tpf'), data = dat, family = 'linear')
-    
-    grid_x <- seq(min(dat$x), max(dat$x), length.out=100)
-    pred_estgam <- predict(est_gam, newdata = data.frame(x = grid_x, f = 'b'))
-    pred_estvglmer <- predict(est_vglmer, newdata = data.frame(x = grid_x, f = 'b'))
-    pred_estvglmer_2 <- predict(est_vglmer_2, newdata = data.frame(x = grid_x, f = 'b'))
+    est_vglmer_2 <- expect_warning(
+      vglmer(y ~ v_s(x, knots = knots_custom, type = 'tpf'), data = dat, family = 'linear'),
+      regexp = 'observed data is outside of the self-provided knots'
+    )
+    pred_estgam <- predict(est_gam, newdata = data.frame(x = gx, f = 'b'))
+    pred_estvglmer <- predict(est_vglmer, newdata = data.frame(x = gx, f = 'b'))
+    pred_estvglmer_2 <- predict(est_vglmer_2, newdata = data.frame(x = gx, f = 'b'))
     
     expect_gte(cor(pred_estvglmer, pred_estgam), 0.95)
     expect_gte(cor(pred_estgam, pred_estvglmer_2), 0.95)

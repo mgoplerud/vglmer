@@ -9,6 +9,7 @@
 \method{predict}{vglmer}(
   object,
   newdata,
+  type = "link",
   samples = 0,
   samples_only = FALSE,
   summary = TRUE,
@@ -30,6 +31,11 @@ predict_MAVB(
 \item{object}{Model fit using \code{vglmer}.}
 
 \item{newdata}{Dataset to use for predictions. It cannot be missing.}
+
+\item{type}{Default (\code{"link"}) returns the linear predictor;
+\code{"terms"} returns the predicted value for each random effect (or
+spline) separately as well as one that collects all fixed effects. At the
+moment, other options are not enabled.}
 
 \item{samples}{Number of samples to draw. Using \code{0} (default) gives the
 expectation of the linear predictor. A positive integer draws
