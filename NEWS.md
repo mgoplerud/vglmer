@@ -4,7 +4,7 @@
 
 * Add the option for `terms` to `predict` to allow for predictions for each random effect separately
 
-* Address a bug where predictions with `NA` in new data.frame would fail for certain splines
+* Address a bug where predictions with `NA` in new data.frame would fail for certain splines or for cases where `newdata` had a single row.
 
 # vglmer 1.0.3
 

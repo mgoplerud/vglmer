@@ -228,7 +228,7 @@ predict.vglmer <- function(object, newdata, type = 'link',
     rownames(Z.spline) <- rownames(newdata)
     
     if (ncol(Z) > 0){
-      Z.spline <- Z.spline[match(rownames(Z), rownames(Z.spline)),]
+      Z.spline <- Z.spline[match(rownames(Z), rownames(Z.spline)),, drop = FALSE]
       Z <- drop0(cbind(Z, Z.spline))
     }else{
       Z <- Z.spline
@@ -271,9 +271,10 @@ predict.vglmer <- function(object, newdata, type = 'link',
   in_both <- intersect(fmt_names_Z, orig_Z_names)
   # Find the ones that are missing
   missing_cols <- setdiff(orig_Z_names, in_both)
+
   recons_Z <- Z[, match(in_both, fmt_names_Z), drop = F]
   if (length(missing_cols) > 0){
-    # Create a matrix of zeros to padfor the missing columns
+    # Create a matrix of zeros to pad the missing columns
     pad_zero <- sparseMatrix(i = 1, j = 1, x = 0, 
                              dims = c(nrow(Z), length(missing_cols)))
     colnames(pad_zero) <- missing_cols
@@ -311,16 +312,16 @@ predict.vglmer <- function(object, newdata, type = 'link',
     
     X <- X[match(obs_in_both, rownames(X)), , drop = F]
     Z <- Z[match(obs_in_both, rownames(Z)), , drop = F]
-    gc()
     lp_FE <- as.vector(X %*% object$beta$mean)
     vi_alpha_mean <- object$alpha$mean
-    
-    lp_terms <- sapply(object$internal_parameters$cyclical_pos, FUN=function(i){
+    lp_terms <- lapply(object$internal_parameters$cyclical_pos, FUN=function(i){
       as.vector(Z[,i,drop=F] %*% vi_alpha_mean[i,drop=F])
     })
+    lp_terms <- do.call('cbind', lp_terms)
     colnames(lp_terms) <- names(object$internal_parameters$names_of_RE)
     lp_terms <- cbind('FE' = lp_FE, lp_terms)
     lp_terms <- lp_terms[match(total_obs, obs_in_both), , drop = F]
+    gc()
     return(lp_terms)
     
   }else{

@@ -168,3 +168,42 @@ test_that("Run without FE for corresponding random slope", {
   expect_s3_class(fit_noFE_for_RE, 'vglmer')
   
 })
+
+test_that("predict works with N=1", {
+  
+  N <- 25
+  G <- 2
+  G_names <- paste(sample(letters, G, replace = T), 1:G)
+  x <- rnorm(N)
+  g <- sample(G_names, N, replace = T)
+  alpha <- rnorm(G)
+  
+  y <- rbinom(n = N, size = 1, prob = plogis(-1 + x + alpha[match(g, G_names)]))
+  
+  est_simple <- suppressMessages(vglmer(y ~ x + (1 | g),
+      data = NULL,
+      control = vglmer_control(iterations = 1),
+      family = "linear"
+  ))
+  pred_single <- predict(est_simple, newdata = data.frame(x = x[1], g = 'NEW'), 
+     allow_missing_levels = TRUE)
+  term_single <- predict(est_simple, newdata = data.frame(x = x[1], g = 'NEW'),
+     type = 'terms', allow_missing_levels = TRUE)
+  expect_equal(pred_single, sum(coef(est_simple) * c(1, x[1])))
+  expect_equivalent(c(pred_single, 0), term_single)
+  
+  est_spline <- suppressMessages(vglmer(y ~ v_s(x) + (1 | g),
+      data = NULL,
+      control = vglmer_control(iterations = 1),
+      family = "linear"
+  ))
+  pred_spline <- predict(est_spline, 
+    newdata = data.frame(x = x[1], g = 'NEW'), 
+    allow_missing_levels = TRUE)
+  term_spline <- predict(est_spline, type = 'terms',
+    newdata = data.frame(x = x[1], g = 'NEW'), 
+    allow_missing_levels = TRUE)
+  expect_equal(pred_spline, rowSums(term_spline))
+  expect_equivalent(term_spline[, 'FE'], sum(c(1, x[1]) * coef(est_spline)))
+  
+})
