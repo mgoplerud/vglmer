@@ -3472,6 +3472,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
   }
 
   rownames(vi_beta_mean) <- colnames(X)
+  rownames(vi_alpha_mean) <- colnames(Z)
   
   output <- list(
     beta = list(mean = vi_beta_mean),

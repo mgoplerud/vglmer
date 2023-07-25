@@ -279,6 +279,8 @@ update_poisson <- function(current_param, current_lowertri,
     # optimization...
     
     if (is.null(damp_par) | force_ascent){
+      
+      current_lowertri[current_lowertri == -Inf] <- -10
       opt_obj <- tryCatch(optim(par = c(current_param, current_lowertri), 
         fn = obj_poisson, gr = grad_poisson,
         control = list(fnscale = -1, maxit = 30),
