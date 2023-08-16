@@ -298,7 +298,9 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
   }
   
   if (!is.null(re_fmla)){
-    mk_Z <- mkReTrms(re_fmla, data, reorder.terms = FALSE, reorder.vars = FALSE)
+    mk_Z <- mkReTrms(re_fmla, data, 
+        drop.unused.levels = control$drop.unused.levels,
+        reorder.terms = FALSE, reorder.vars = FALSE)
     Z <- t(mk_Z$Zt)
     
     p.X <- ncol(X)
@@ -489,7 +491,8 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     store_design_Z <- parsed_RE_groups$design
     store_design_Z <- lapply(store_design_Z, as.matrix)
     store_assignment_Z <- parsed_RE_groups$factor
-
+    store_levels_Z <- parsed_RE_groups$nl
+    stopifnot(all.equal(g_j, unlist(store_levels_Z)))
     rm(parsed_RE_groups); gc()
   }
   
@@ -944,11 +947,11 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
               names_of_RE = names_of_RE, k = control$collapse_size, d_j = d_j),
              envir = base::environment())
     
-    lookup_collapse <- mapply(store_assignment_Z, index_collapse, FUN=function(i,j){
-      sparseMatrix(i = 1:length(i), j = i, x = 1)[,j, drop = F]
+    lookup_collapse <- mapply(store_assignment_Z, index_collapse, store_levels_Z, FUN=function(i,j,nl){
+      sparseMatrix(i = 1:length(i), j = i, x = 1, dims = c(length(i), nl))[,j, drop = F]
     })
-    lookup_marginal <- mapply(store_assignment_Z, index_marginal, FUN=function(i,j){
-      sparseMatrix(i = 1:length(i), j = i, x = 1)[,j, drop = F]
+    lookup_marginal <- mapply(store_assignment_Z, index_marginal, store_levels_Z, FUN=function(i,j,nl){
+      sparseMatrix(i = 1:length(i), j = i, x = 1, dims = c(length(i), nl))[,j, drop = F]
     })
 
     lookup_marginal <- c(list('Fixed Effect' = matrix(data = 1, nrow = nrow(Z), ncol = 1)), lookup_marginal)
@@ -3722,6 +3725,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
 #' @export
 vglmer_control <- function(iterations = 1000, 
    collapse_size = "FE", block_collapse = FALSE,
+   drop.unused.levels = TRUE,
    prior_variance = "mean_exists", factorization_method = "weak",
    tolerance_elbo = 1e-8, tolerance_parameters = 1e-5,
    prevent_degeneracy = FALSE, force_whole = TRUE, verbose_time = TRUE,
@@ -3764,7 +3768,7 @@ vglmer_control <- function(iterations = 1000,
     prevent_degeneracy, force_whole, verbose_time, do_SQUAREM,
     parameter_expansion, random_seed, do_timing, debug_param, return_data,
     linpred_method, vi_r_method, vi_r_val, debug_ELBO, print_prog, quiet, init,
-    collapse_size, block_collapse
+    collapse_size, block_collapse, drop.unused.levels
   )
 
   class(output) <- c("vglmer_control")

@@ -8,6 +8,7 @@ vglmer_control(
   iterations = 1000,
   collapse_size = "FE",
   block_collapse = FALSE,
+  drop.unused.levels = TRUE,
   prior_variance = "mean_exists",
   factorization_method = "weak",
   tolerance_elbo = 1e-08,
