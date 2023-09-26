@@ -59,7 +59,7 @@
 predict.vglmer <- function(object, newdata,
                            samples = 0, samples_only = FALSE,
                            summary = TRUE, allow_missing_levels = FALSE, 
-                           type = c('link', 'lpmatrix'),
+                           type = c('link', 'lpmatrix', 'terms'),
                            ...) {
   if (length(list(...)) > 0) {
     stop("... not used for predict.vglmer")
@@ -356,14 +356,34 @@ predict.vglmer <- function(object, newdata,
     }
 
     samples <- rbind(sim_init_beta, sim_init_alpha)
+    rownames(samples) <- c(rownames(vi_beta_mean), rownames(vi_alpha_mean))
     rm(sim_init_beta, sim_init_alpha)
   }
 
   if (samples_only) {
     return(samples)
   }
-
-  lp <- XZ %*% samples
+  if (type == 'terms'){
+    warning('Inefficient way to compute terms')
+    group <- strsplit(rownames(samples), ' @ ')
+    group <- sapply(group, FUN=function(i){
+      if (length(i) == 1){return(NA)}else{return(i[1])}
+    })
+    ugroup <- unique(group)
+    out_terms <- lapply(ugroup, FUN=function(i){
+      id_i <- which(group %in% i)
+      lp_i <- XZ[,id_i, drop = F] %*% samples[id_i, , drop = F]
+      out_i <- data.frame(mean = rowMeans(lp_i), 
+                          var = apply(lp_i, MARGIN = 1, var))
+      out_i <- out_i[match(total_obs, obs_in_both), ]
+      rownames(out_i) <- NULL
+      return(out_i)
+    })
+    names(out_terms) <- ugroup
+    return(out_terms)
+  }else{
+    lp <- XZ %*% samples
+  }
   if (summary) {
     if (!only.lp) {
       lp <- t(apply(lp, MARGIN = 1, FUN = function(i) {
