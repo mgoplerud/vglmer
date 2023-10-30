@@ -19,7 +19,8 @@ Imports:
 	methods, 
 	lmtest, 
 	splines,
-	checkmate
+	checkmate,
+	dplyr
 Suggests: 
 	glue, 
 	MASS,
