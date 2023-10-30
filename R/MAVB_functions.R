@@ -1,38 +1,58 @@
 #' Perform MAVB after fitting vglmer
 #'
-#' Given a model from vglmer, perform marginally augmented variational Bayes
-#' (MAVB) to improve approximation quality; Goplerud (2020) provides details. At
-#' present, it is only enabled for binomial models.
+#' @description Given a model estimated using \code{vglmer}, this function
+#'   performs marginally augmented variational Bayes (MAVB) to improve the
+#'   approximation quality.
+#'   
+#' @details This function returns the improved estimates of the
+#'   \emph{parameters}. To use MAVB when generating predictions, one should use
+#'   \link{predict_MAVB}. At present, MAVB is only enabled for binomial models.
 #'
-#' This should only be used if the parameters of the model are of interest; to
-#' use MAVB to improve prediction accuracy, use predict_MAVB.
+#' @return This function returns a matrix with \code{samples} rows and columns
+#'   for each fixed and random effect.
 #'
-#' @param object Model fit using vglmer
-#' @param samples Samples to draw from MAVB distribution.
-#' @param var_px Default (Inf); variance of working prior. Higher is more
-#'   diffuse and thus likely better.
-#' @param verbose Show progress of MAVB.
+#' @param object Model fit using \code{vglmer}.
+#' @param samples Number of samples to draw.
+#' @param var_px Variance of working prior for marginal augmentation. Default
+#'   (\code{Inf}) is a flat, improper, prior.
+#' @param verbose Show progress in drawing samples.
 #' @import CholWishart
 #' @importFrom mvtnorm rmvnorm
+#' 
+#' @references 
+#' Goplerud, Max. 2022a. "Fast and Accurate Estimation of Non-Nested Binomial
+#' Hierarchical Models Using Variational Inference." \emph{Bayesian Analysis}. 17(2):
+#' 623-650.
 #' @export
 MAVB <- function(object, samples, verbose = FALSE, var_px = Inf) {
+  
   if (!inherits(object, "vglmer")) {
     stop("Must provide object from vglmer")
   }
+  
   if (object$family != "binomial") {
     stop("MAVB only implemented for binomial at present.")
   }
-
-  M_prime <- object$MAVB_parameters$M_prime
-  M_prime_one <- object$MAVB_parameters$M_prime_one
-  M_mu_to_beta <- object$MAVB_parameters$M_mu_to_beta
-  d_j <- object$MAVB_parameters$d_j
-  g_j <- object$MAVB_parameters$g_j
-  outer_alpha_RE_positions <- object$MAVB_parameters$outer_alpha_RE_positions
+  
+  M_prime <- object$internal_parameters$MAVB_parameters$M_prime
+  M_prime_one <- object$internal_parameters$MAVB_parameters$M_prime_one
+  M_mu_to_beta <- object$internal_parameters$MAVB_parameters$M_mu_to_beta
+  B_j <- object$internal_parameters$MAVB_parameters$B_j
+  
+  if (!isDiagonal(B_j)){
+    stop('MAVB not set up for non-diagonal mean expansion; do all REs have a corresponding FE?')
+  }else{
+    if (!isTRUE(all.equal(B_j@x, rep(1, nrow(B_j))))){
+      stop('B_j is diagonal but not identity matrix; do all REs have a corresponding FE?')
+    }
+  }
+  d_j <- object$internal_parameters$MAVB_parameters$d_j
+  g_j <- object$internal_parameters$MAVB_parameters$g_j
+  outer_alpha_RE_positions <- object$internal_parameters$MAVB_parameters$outer_alpha_RE_positions
   factorization_method <- object$control$factorization_method
 
   if (factorization_method == "weak") {
-    decomp_joint <- object$joint
+    decomp_joint <- object$joint$decomp_var
     joint_mean <- rbind(object$beta$mean, object$alpha$mean)
     p.XZ <- ncol(decomp_joint)
     p.X <- nrow(object$beta$mean)
@@ -112,21 +132,6 @@ MAVB <- function(object, samples, verbose = FALSE, var_px = Inf) {
   return(MAVB_sims)
 }
 
-# Prediction and MAVB
-#' @inheritParams MAVB
-#' @inheritParams vglmer_predict
-#' @rdname vglmer_predict
-#' @export
-predict_MAVB <- function(object, newdata, samples = 0, samples_only = FALSE,
-                         var_px = Inf, summary = TRUE, allow_missing_levels = FALSE) {
-  pxSamples <- MAVB(object = object, samples = samples, var_px = var_px)
-  lp <- predict.vglmer(object,
-    newdata = newdata, samples = pxSamples, samples_only = samples_only,
-    summary = summary, allow_missing_levels = allow_missing_levels
-  )
-  return(lp)
-}
-
 
 #' @import lme4
 get_RE_groups <- function(formula, data) {
@@ -140,9 +145,8 @@ get_RE_groups <- function(formula, data) {
     return(list(factor = NA, design = NA))
   }  
   
-  #lme4:::barnames -> not exported so used here instead.
-  # names(bars) <- vapply(bars, function(x) paste(deparse(x, 500L)(x[[3]]), "")
-  names(bars) <- lme4:::barnames(bars)
+  barnames <- utils::getFromNamespace('barnames', 'lme4')
+  names(bars) <- barnames(bars)
   
   fr <- data
   blist <- lapply(bars, simple_blist, fr, drop.unused.levels = F, reorder.vars = FALSE)
@@ -156,11 +160,12 @@ get_RE_groups <- function(formula, data) {
   return(list(factor = ff, design = mm, nl = nl))
 }
 
-#' @import lme4
+#' @import lme4 
+#' @importFrom utils getFromNamespace
 simple_blist <- function(x, frloc, drop.unused.levels = TRUE, reorder.vars = FALSE) {
-  # stop("figure out workaround for lme4:::")
   frloc <- factorize(x, frloc)
-  if (is.null(ff <- tryCatch(eval(substitute(lme4:::makeFac(fac),
+  makeFac <- utils::getFromNamespace('makeFac', 'lme4')
+  if (is.null(ff <- tryCatch(eval(substitute(makeFac(fac),
                                              list(fac = x[[3]])), frloc), error = function(e) NULL)))
     stop("couldn't evaluate grouping factor ", deparse(x[[3]]),
          " within model frame:", " try adding grouping factor to data ",
@@ -174,7 +179,9 @@ simple_blist <- function(x, frloc, drop.unused.levels = TRUE, reorder.vars = FAL
   mm <- model.matrix(eval(substitute(~foo, list(foo = x[[2]]))),
                      frloc)
   if (reorder.vars) {
-    mm <- mm[lme4:::colSort(colnames(mm)), ]
+    
+    colSort <- utils::getFromNamespace("colSort", "lme4")
+    mm <- mm[colSort(colnames(mm)), ]
   }
   list(ff = ff, nl = nl, mm = mm, cnms = colnames(mm))
 }
@@ -194,64 +201,6 @@ rowVar <- function(matrix) {
 #' @rdname var_mat
 colVar <- function(matrix) {
   apply(matrix, MARGIN = 2, var)
-}
-
-
-#' @param data Data to get predictions on.
-#' @rdname hmc_samples
-custom_HMC_linpred <- function(HMC, data) {
-  if (!requireNamespace("rstanarm", quietly = TRUE)) {
-    stop("rstanarm must be installed to analyze HMC objects.")
-  }
-  hmc_samples <- as.matrix(HMC)
-  hmc_samples <- hmc_samples[, !grepl(colnames(hmc_samples), pattern = "^Sigma")]
-
-  parse_stan_names <- strsplit(colnames(hmc_samples), split = "^b\\[| |\\]")
-
-  fmt_stan_names <- sapply(parse_stan_names, FUN = function(i) {
-    if (length(i) == 1) {
-      return(i)
-    } else {
-      i_one <- unlist(strsplit(i[3], split = ":"))
-      return(paste(i_one[1], i[2], i_one[2], sep = " @ "))
-    }
-  })
-  colnames(hmc_samples) <- fmt_stan_names
-
-  hmc.XZ <- rstanarm::posterior_linpred(HMC, data = data, XZ = TRUE)
-
-  hmc.linpred <- hmc.XZ %*% t(hmc_samples)
-
-  return(hmc.linpred)
-}
-
-#' Get HMC samples but ordered to match vector of names provided
-#' @keywords internal
-#' @name hmc_samples
-#' @param HMC Object from rstanarm
-#' @param ordering vector of names to order the posterior samples.
-#' @importFrom mvtnorm rmvnorm
-custom_HMC_samples <- function(HMC, ordering) {
-  if (!requireNamespace("rstanarm", quietly = TRUE)) {
-    stop("rstanarm must be installed to analyze HMC objects.")
-  }
-
-  hmc_samples <- as.matrix(HMC)
-  hmc_samples <- hmc_samples[, !grepl(colnames(hmc_samples), pattern = "^Sigma")]
-
-  parse_stan_names <- strsplit(colnames(hmc_samples), split = "^b\\[| |\\]")
-
-  fmt_stan_names <- sapply(parse_stan_names, FUN = function(i) {
-    if (length(i) == 1) {
-      return(i)
-    } else {
-      i_one <- unlist(strsplit(i[3], split = ":"))
-      return(paste(i_one[1], i[2], i_one[2], sep = " @ "))
-    }
-  })
-  colnames(hmc_samples) <- fmt_stan_names
-  hmc_samples <- hmc_samples[, match(ordering, colnames(hmc_samples))]
-  return(return(hmc_samples))
 }
 
 #' Get samples from GLMER
@@ -275,27 +224,33 @@ custom_glmer_samples <- function(glmer, samples, ordering) {
   return(glmer_samples)
 }
 
-#' Draw samples from the (non-MAVB) posterior
+#' Draw samples from the variational distribution
 #' 
-#' @param object Model fit using vglmer
-#' @param samples Samples to draw from MAVB distribution.
-#' @param verbose Print the progress of the samples.
+#' @description This function draws samples from the estimated variational
+#'   distributions. If using \code{MAVB} to improve the quality of the
+#'   approximating distribution, please use \link{MAVB} or \link{predict_MAVB}.
+#' @param object Model fit using \code{vglmer}.
+#' @param samples Number of samples to draw.
+#' @param verbose Show progress in drawing samples.
+#' 
+#' @return This function returns a matrix with \code{samples} rows and columns
+#'   for each fixed and random effect.
+#' 
 #' @export
-posterior_samples.vglmer <- function (object, samples, verbose = FALSE) 
-{
+posterior_samples.vglmer <- function(object, samples, verbose = FALSE) {
   if (!inherits(object, "vglmer")) {
     stop("Must provide object from vglmer")
   }
   
-  M_prime <- object$MAVB_parameters$M_prime
-  M_prime_one <- object$MAVB_parameters$M_prime_one
-  M_mu_to_beta <- object$MAVB_parameters$M_mu_to_beta
-  d_j <- object$MAVB_parameters$d_j
-  g_j <- object$MAVB_parameters$g_j
-  outer_alpha_RE_positions <- object$MAVB_parameters$outer_alpha_RE_positions
+  M_prime <- object$internal_parameters$MAVB_parameters$M_prime
+  M_prime_one <- object$internal_parameters$MAVB_parameters$M_prime_one
+  M_mu_to_beta <- object$internal_parameters$MAVB_parameters$M_mu_to_beta
+  d_j <- object$internal_parameters$MAVB_parameters$d_j
+  g_j <- object$internal_parameters$MAVB_parameters$g_j
+  outer_alpha_RE_positions <- object$internal_parameters$MAVB_parameters$outer_alpha_RE_positions
   factorization_method <- object$control$factorization_method
   if (factorization_method == "weak") {
-    decomp_joint <- object$joint
+    decomp_joint <- object$joint$decomp_var
     joint_mean <- rbind(object$beta$mean, object$alpha$mean)
     p.XZ <- ncol(decomp_joint)
     p.X <- nrow(object$beta$mean)

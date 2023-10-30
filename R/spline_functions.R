@@ -1,4 +1,10 @@
 
+#' Code from Wand and Ormerod (2008)
+#' Found here here: 10.1111/j.1467-842X.2008.00507.x
+#' @param a lower boundary
+#' @param b upper boundary
+#' @param intKnots internal knots
+#' @keywords internal
 formOmega <- function(a,b,intKnots){
   allKnots <- c(rep(a,4),intKnots,rep(b,4))
   K <- length(intKnots) ; L <- 3 * (K+8)
@@ -11,12 +17,48 @@ formOmega <- function(a,b,intKnots){
   return(Omega)
 }
 
-
-# Special function to impose SMOOTHING
-# on a spline basis
+#' Create splines for use in vglmer
+#' 
+#' This function estimates splines in \code{vglmer}, similar to \code{s(...)} in
+#' \code{mgcv} albeit with many fewer options than \code{mgcv}. It allows for
+#' truncated (linear) splines or O'Sullivan splines. Please see \link{vglmer}
+#' for more discussion and examples.
+#' 
+#' @param ... Variable name, e.g. \code{v_s(x)}
+#' @param type Default (\code{"tpf"}) uses truncated linear splines for the
+#'   basis. The other option (\code{"o"}) uses O'Sullivan splines (Wand and
+#'   Ormerod 2008).
+#' @param knots Default (\code{NULL}) uses \eqn{K=min(N/4,35)} knots evenly
+#'   spaced at quantiles of the covariate \code{x}. A single number specifies a
+#'   specific number of knots; a vector can set custom locations for knots.
+#' @param by A categorical or factor covariate to interact the spline with; for
+#'   example, \code{v_s(x, by = g)}.
+#' @param by_re Default (\code{TRUE}) regularizes the interactions between the
+#'   categorical factor and the covariate. See "Details" in \link{vglmer} for
+#'   more discussion.
+#' @param force_vector Force that argument to \code{knots} is treated as vector.
+#'   This is usually not needed unless \code{knots} is a single integer that
+#'   should be treated as a single knot (vs. the number of knots).
+#' @param outer_okay Default (\code{FALSE}) does not permit values in \code{x}
+#'   to exceed the outer knots.
 #' @importFrom splines bs
+#' 
+#' @return This function returns a list of class of \code{vglmer_spline} that is
+#'   passed to unexported functions. It contains the arguments noted above where
+#'   \code{...} is parsed into an argument called \code{term}.
+#'   
+#' @references 
+#' Wand, Matt P. and Ormerod, John T. 2008. "On Semiparametric Regression with
+#' O'Sullivan Penalized Splines". \emph{Australian & New Zealand Journal of
+#' Statistics}. 50(2): 179-198.
+#' 
+#' Wood, Simon N. 2017. \emph{Generalized Additive Models: An Introduction with
+#' R}. Chapman and Hall/CRC.
 #' @export
-v_s <- function(..., type = 'tpf', knots = NULL, outer_okay = FALSE, by = NA){
+v_s <- function(..., type = 'tpf', knots = NULL, by = NA,
+                by_re = TRUE, force_vector = FALSE,
+                outer_okay = FALSE){
+  
   if (!(type %in% c('tpf', 'o'))){stop('non tpf not set up yet...')}
   # Using mgcv's syntax for "s" to make it work with "interpret.gam"
   vars <- as.list(substitute(list(...)))[-1]
@@ -35,16 +77,17 @@ v_s <- function(..., type = 'tpf', knots = NULL, outer_okay = FALSE, by = NA){
 
   label <- paste0("v_s(", term[1], ")")
   
-  ret <- list(term = term, outer_okay = outer_okay,
-              by = by.var, type = type, knots = knots)
+  ret <- list(term = term, outer_okay = outer_okay, force_vector = force_vector,
+              by = by.var, type = type, knots = knots,
+              by_re = by_re)
   class(ret) <- 'vglmer_spline'
-  
   return(ret)
 }
 
 #' @importFrom splines spline.des
 vglmer_build_spline <- function(x, knots = NULL, Boundary.knots = NULL, 
-  by, type, override_warn = FALSE, outer_okay = FALSE){
+  by, type, override_warn = FALSE, 
+  outer_okay = FALSE, by_re = NULL, force_vector = FALSE){
 
   if (is.null(knots)){
     ux <- length(unique(x))
@@ -53,10 +96,21 @@ vglmer_build_spline <- function(x, knots = NULL, Boundary.knots = NULL,
     # Keeps the size of the problem feasible.
     numIntKnots <- floor(c(min(ux/4, 35)))
 
-    intKnots <- quantile(unique(x),seq(0,1,length=
-                                         (numIntKnots+2))[-c(1,(numIntKnots+2))])
+    intKnots <- quantile(unique(x),
+      seq(0,1,length=(numIntKnots+2)
+    )[-c(1,(numIntKnots+2))])
     names(intKnots) <- NULL
-  }else if (length(knots) == 1){
+  }else if (length(knots) == 1 & !force_vector){
+
+    if (knots < 1){
+      stop('If an integer, at least one knot must be provided. force_vector=TRUE may be useful here.')
+    }
+    if (as.integer(knots) != knots){
+      warning('knots appears to be not be an integer. Using "as.integer"')
+      knots <- as.integer(knots)
+      message(paste0('knots argument turned into ', knots, ' by coercion.'))
+    }
+
     numIntKnots <- knots
     
     intKnots <- quantile(unique(x),seq(0,1,length=
@@ -66,9 +120,14 @@ vglmer_build_spline <- function(x, knots = NULL, Boundary.knots = NULL,
     # Sort user provided knots
     knots <- sort(knots)
     
-    if (any(knots > max(x, na.rm=T)) | any(knots < min(x, na.rm=T))){
+    # Is any knot above the maximum in the data?
+    cond_1 <- any(c(Boundary.knots, knots) >= max(x, na.rm=T))
+    # Is any knot below the minimum in the data?
+    cond_2 <- any(c(Boundary.knots, knots) <= min(x, na.rm=T))
+    # If either is *not* true, issue warning
+    if (!cond_1 | !cond_2){
       if (!override_warn){
-        warning('self-provided knots are outside of the observed data.')
+        warning('observed data is outside of the self-provided knots')
       }
     }
     intKnots <- knots
@@ -95,9 +154,6 @@ vglmer_build_spline <- function(x, knots = NULL, Boundary.knots = NULL,
     # eigen decompose
     eD <- eigen(D)
     # transform spline design
-
-    # x <- splineDesign(knots = sort(c(rep(Boundary.knots, 4), intKnots)), 
-    #     x = x, sparse = FALSE, outer.ok = outer_okay, ord = 4)
     if (override_warn){
       wrapper_bs <- function(x){suppressWarnings(x)}
     }else{
@@ -106,19 +162,34 @@ vglmer_build_spline <- function(x, knots = NULL, Boundary.knots = NULL,
     x <- wrapper_bs(splines::bs(x = x, knots = intKnots, 
                      degree = 3, intercept = TRUE,
                      Boundary.knots = Boundary.knots))
+    
     x <- x %*% eD$vectors[,seq_len(ncol(D)-2)] %*% 
       Diagonal(x = 1/sqrt(eD$values[seq_len(ncol(D) - 2)]))
     
-    spline_attr <- list(D = Diagonal(n = ncol(x)), Boundary.knots = Boundary.knots,
-                        knots = intKnots, eigen_D = eD)
+    spline_attr <- list(D = Diagonal(n = ncol(x)), 
+      Boundary.knots = Boundary.knots,
+      knots = intKnots, eigen_D = eD)
 
   }else{stop('splines only set up for tpf and o')}
+  
+  spline_attr$by_re <- by_re
   
   if (!is.null(by)){
     
     base_x <- x
     u_by <- sort(unique(by))
-    x_by <- sparseMatrix(i = 1:length(by), j = match(by, u_by), x = 1)
+    
+    if (!outer_okay){
+      x_by <- sparseMatrix(i = 1:length(by), j = match(by, u_by), x = 1)
+    }else{
+      match_j <- match(by, u_by)
+      match_i <- 1:length(by)
+      
+      match_i <- match_i[!is.na(match_j)]
+      match_j <- match_j[!is.na(match_j)]
+      x_by <- sparseMatrix(i = match_i, j= match_j, x = 1, dims = c(length(by), length(u_by)))
+    }
+    
     
     names_x <- as.vector(outer(1:ncol(x), u_by, FUN=function(x,y){paste(y,x, sep = ' @ ')}))
     x <- t(KhatriRao(t(x_by), t(x)))
@@ -148,10 +219,16 @@ print.spline_sparse <- function(x){
 }
 image.spline_sparse <- function(x){image(x$x)}
 
-#' A modified version of interpret.gam0 from mgcv.
-#' Copied almost verbatim but adjusted to allow custom objects
-#' to be parsed as arguments to "v_s"
-vglmer_interpret.gam0 <- function(gf, textra = NULL, extra.special = NULL){
+#' Interpret a vglmer formula for splines
+#' @description A modified version of interpret.gam0 from mgcv. Used when mgcv's
+#'   interpret.gam fails; usually when some environment object is passed to v_s.
+#' @param gf A vglmer formula
+#' @param textra Unused internal argument
+#' @param extra.special Allow extra special terms to be passed
+#' @importFrom stats reformulate terms.formula as.formula formula update.formula
+#'   quantile
+#' @keywords internal
+fallback_interpret.gam0 <- function(gf, textra = NULL, extra.special = NULL){
   
   p.env <- environment(gf)
   
@@ -228,9 +305,10 @@ vglmer_interpret.gam0 <- function(gf, textra = NULL, extra.special = NULL){
         st <- try(eval(parse(text = paste("vglmer::", 
                                           terms[i], sep = "")), envir = p.env), 
                   silent = TRUE)
-        if (inherits(st, "try-error")) 
+        if (inherits(st, "try-error")) {
           st <- eval(parse(text = terms[i]), enclos = p.env, 
                      envir = mgcvns)
+        }
         if (!is.null(textra)) {
           pos <- regexpr("(", st$lab, fixed = TRUE)[1]
           st$label <- paste(substr(st$label, start = 1, 
@@ -290,7 +368,7 @@ vglmer_interpret.gam0 <- function(gf, textra = NULL, extra.special = NULL){
     pred.formula <- as.formula(paste("~", paste(av, 
                                                 collapse = "+")))
     pav <- all.vars(pred.formula)
-    pred.formula <- reformulate(pav)
+    pred.formula <- stats::reformulate(pav)
   }
   else pred.formula <- ~1
   ret <- list(pf = as.formula(pf, p.env), pfok = pfok, smooth.spec = smooth.spec, 

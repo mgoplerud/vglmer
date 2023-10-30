@@ -1,6 +1,22 @@
 context("C++ Verification")
 
+if (isTRUE(as.logical(Sys.getenv("CI")))){
+  # If on CI
+  NITER <- 2
+  env_test <- "CI"
+}else if (!identical(Sys.getenv("NOT_CRAN"), "true")){
+  # If on CRAN
+  NITER <- 2
+  env_test <- "CRAN"
+  set.seed(111)
+}else{
+  # If on local machine
+  NITER <- 2000
+  env_test <- 'local'
+}
+
 test_that("Calculate E[alpha alpha^T] comparing cpp and base R", {
+  
   loop_outer_alpha <- function(vi_alpha_mean, vi_alpha_decomp, outer_alpha_RE_positions) {
     # Must be such that t(vi_alpha_decomp) %*% vi_alpha_decomp = VAR
     store_oa <- as.list(rep(NA, length(outer_alpha_RE_positions)))
@@ -36,7 +52,7 @@ test_that("Calculate E[alpha alpha^T] comparing cpp and base R", {
   })
 
   vi_alpha_var <- drop0(rWishart(n = 1, df = nrow(mk_Z$Zt) + 10, Sigma = diag(nrow(mk_Z$Zt)))[, , 1])
-  vi_alpha_chol <- as(drop0((chol(vi_alpha_var))), "dgCMatrix")
+  vi_alpha_chol <- as(drop0((chol(vi_alpha_var))), "generalMatrix")
   expect_equal(as.matrix(t(vi_alpha_chol) %*% vi_alpha_chol), as.matrix(vi_alpha_var))
 
   vi_alpha_mean <- Matrix(rnorm(nrow(vi_alpha_var)))
@@ -46,7 +62,13 @@ test_that("Calculate E[alpha alpha^T] comparing cpp and base R", {
     a + b
   })
 
-  cpp_method <- calculate_expected_outer_alpha(L = vi_alpha_chol, alpha_mu = as.vector(vi_alpha_mean), re_position_list = outer_alpha_RE_positions)
+  cpp_method <- calculate_expected_outer_alpha(
+    factorization_method = 'strong',
+    alpha_decomp_var = vi_alpha_chol, 
+    alpha_mu = as.vector(vi_alpha_mean), alpha_var = NULL,
+    re_position_list = outer_alpha_RE_positions,
+    tP = matrix(), L_beta = matrix(), do_adjustment = FALSE)
+  
   cpp_method <- cpp_method$outer_alpha
 
 

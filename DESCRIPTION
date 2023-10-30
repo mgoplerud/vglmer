@@ -1,15 +1,23 @@
 Package: vglmer
 Type: Package
-Title: Variational Inference for Hierarchical Non-Linear Models
+Title: Variational Inference for Hierarchical Generalized Linear Models
 Version: 0.1.0
-Author: Max Goplerud <mgoplerud@pitt.edu>
-Maintainer: Max Goplerud <mgoplerud@pitt.edu>
+Authors@R: 
+  c(person("Max", "Goplerud", email = "mgoplerud@pitt.edu", 
+    role = c("aut", "cre")),
+  person("Omiros", "Papaspiliopoulos", role = c("aut")),
+  person("Giacomo", "Zanella", role = c("aut")))
 Encoding: UTF-8
 License: GPL (>= 2)
-Description: This package includes methods for estimating non-linear hierarchical models using mean-field variational Bayes. At present, it can estimate logistic and negative binomial models. It can accommodate models with an arbitrary number of random effects and requires no integration to solve. It also provides the ability to improve the quality of the approximation using marginal augmentation.
+Description: Estimates hierarchical models using mean-field variational Bayes. 
+    At present, it can estimate logistic, linear, and negative binomial models. 
+    It can accommodate models with an arbitrary number of random effects and 
+    requires no integration to estimate. It also provides the ability to improve 
+    the quality of the approximation using marginal augmentation. 
+    Goplerud (2022) <doi:10.1214/21-BA1266> and Goplerud (2023) <doi:10.1017/S0003055423000035> 
+    provide details on the variational algorithms.
 Imports: 
 	Rcpp (>= 1.0.1), 
-	RcppEigen (>= 0.3.3.4.0), 
 	lme4, 
 	CholWishart,
 	mvtnorm, 
@@ -18,18 +26,16 @@ Imports:
 	graphics, 
 	methods, 
 	lmtest, 
-	splines,
-	checkmate,
-	dplyr
+	splines, 
+	mgcv
+Depends:
+ R (>= 3.0.2)
 Suggests: 
-	glue, 
+	SuperLearner,
 	MASS,
 	tictoc,
-	stringr,
-	rstan,
-    rstanarm, 
-	brms,
-    testthat,
-    covr
-LinkingTo: Rcpp, RcppEigen
+  testthat
+LinkingTo: Rcpp, RcppEigen (>= 0.3.3.4.0)
 RoxygenNote: 7.2.3
+URL: https://github.com/mgoplerud/vglmer
+BugReports: https://github.com/mgoplerud/vglmer/issues

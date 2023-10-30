@@ -1,20 +1,49 @@
 
 #' Generic Functions after Running vglmer
 #'
-#' Allows the use of standard methods from lm or lmer to sumarize the posterior
-#' output.
+#' \code{vglmer} uses many standard methods from \code{lm} and \code{lme4} with
+#' limited changes. These provide summaries of the estimated variational
+#' distributions.
 #'
-#' @return \code{coef} and \code{vcov} return the mean and variance of the fixed
-#' effects. \code{fixef} is a synonym for \code{coef}. \code{ranef} extracts the
-#' random effects in a similar, although slightly different, format to
-#' \code{lme4}.
+#' @details The accompanying functions are briefly described below. 
+#' 
+#' \code{coef} and \code{vcov} return the mean and variance of the fixed effects
+#' (\eqn{\beta}). \code{fixef} returns the mean of the fixed effects.
 #'
+#' \code{ranef} extracts the random effects (\eqn{\alpha}) in a similar,
+#' although slightly different format, to \code{lme4}. It includes the estimated
+#' posterior mean and variance in a list of data.frames with one entry per
+#' random effect \eqn{j}.
+#' 
+#' \code{fitted} extracts the estimated expected \emph{linear predictor}, i.e.
+#' \eqn{E_{q(\theta)}[x_i^T \beta + z_i^T \alpha]} at convergence.
+#' 
+#' \code{summary} reports the estimates for all fixed effects as in \code{lm} as
+#' well as some summaries of the random effects (if \code{display_re=TRUE}).
+#' 
 #' \code{format_vglmer} collects the mean and variance of the fixed and random
-#' effects into a data.frame
+#' effects into a single data.frame. This is useful for examining all of the
+#' posterior estimates simultaneously. \code{format_glmer} converts an object
+#' estimated with \code{[g]lmer} into a comparable format.
 #'
+#' \code{ELBO} extracts the ELBO from the estimated model. \code{type} can be
+#' set equal to \code{"trajectory"} to get the estimated ELBO at each iteration
+#' and assess convergence.
+#'   
+#' \code{sigma} extracts the square root of the posterior mode of
+#' \eqn{q(\sigma^2)} if a linear model is used.
+#' 
+#' \code{formula} extracts the formula associated with the \code{vglmer} object.
+#' By default, it returns the formula provided. The fixed and random effects
+#' portions can be extracted separately using the \code{form} argument.
+#' 
 #' @name vglmer-class
 #' @param object Model fit using vglmer
 #'
+#' @return The functions here return a variety of different objects depending on
+#'   the specific function. "Details" describes the behavior of each one. Their
+#'   output is similar to the typical behavior for the corresponding generic
+#'   functions.
 
 #' @rdname vglmer-class
 #' @export
@@ -88,14 +117,7 @@ ranef.vglmer <- function(object, ...) {
 }
 
 #' @rdname vglmer-class
-#' @export
-ELBO <- function(object) UseMethod("ELBO")
-
-ELBO.vglmer <- function(object){
-  return(object$ELBO$ELBO)
-}
-
-#' @rdname vglmer-class
+#' @method coef vglmer
 #' @export
 coef.vglmer <- function(object, ...) {
   if (length(list(...)) > 0) {
@@ -115,8 +137,19 @@ vcov.vglmer <- function(object, ...) {
 }
 
 #' @rdname vglmer-class
-#' @param x Model fit using vglmer
-#' @param ... Not used.
+#' @method fitted vglmer
+#' @export
+fitted.vglmer <- function(object, ...){
+  if (length(list(...)) > 0) {
+    stop("... not used for vcov.vglmer")
+  }
+  return(object$internal_parameters$lp)
+}
+
+#' @rdname vglmer-class
+#' @param x Model fit using \code{vglmer}.
+#' @param ... Not used; included to maintain compatibility with existing
+#'   methods.
 #' @method print vglmer
 #' @export
 print.vglmer <- function(x, ...) {
@@ -127,7 +160,7 @@ print.vglmer <- function(x, ...) {
   missing_obs <- x$internal_parameters$missing_obs
   it_used <- x$internal_parameters$it_used
   it_max <- x$internal_parameters$it_max
-  final_param_change <- round(max(x$parameter.change), 6)
+  final_param_change <- round(max(x$internal_parameters$parameter.change), 6)
   final_ELBO_change <- round(tail(diff(x$ELBO_trajectory$ELBO), 1), 8)
   converged <- it_max != it_used
   p.X <- nrow(x$beta$mean)
@@ -135,10 +168,10 @@ print.vglmer <- function(x, ...) {
   J <- length(x$sigma$cov)
 
   cat(paste0("Formula: J = ", J, ", |Z| = ", p.Z, ", |X| = ", p.X, "\n\n"))
-  cat(paste(format(formula(x)), collapse = "\n\n"))
+  cat(paste(format(formula(x, form = 'original')), collapse = "\n\n"))
   cat("\n\n")
   if (missing_obs > 0) {
-    missing_info <- paste0("after ", missing_obs, " deleted because of missing data and")
+    missing_info <- paste0(" after ", missing_obs, " deleted because of missing data and")
   } else {
     missing_info <- " and"
   }
@@ -160,7 +193,8 @@ print.vglmer <- function(x, ...) {
 }
 
 #' @rdname vglmer-class
-#' @param display_re Print summary of random effects. Default is TRUE
+#' @param display_re Default (\code{TRUE}) prints a summary of the
+#'   random effects alongside the fixed effects.
 #' @importFrom lmtest coeftest
 #' @method summary vglmer
 #' @export
@@ -175,7 +209,7 @@ summary.vglmer <- function(object, display_re = TRUE, ...) {
     return(i)
   })
   re_names <- names(object$internal_parameters$names_of_RE)
-  cat(paste0("Output from vglmer using ", object$factorization_method, " factorization.\n"))
+  cat(paste0("Output from vglmer using '", object$control$factorization_method, "' factorization.\n"))
   cat("\nSummary of Fixed Effects\n")
   print(sum_obj)
   cat("\n")
@@ -213,15 +247,20 @@ summary.vglmer <- function(object, display_re = TRUE, ...) {
 }
 
 #' @rdname vglmer-class
+#' @param form Describes the type of formula to report:
+#'   \code{"original"} returns the user input, \code{"fe"} returns the fixed
+#'   effects only, \code{"re"} returns the random effects only.
 #' @export
-formula.vglmer <- function(x, type = 'original', ...) {
-  if (type == 'original'){
+formula.vglmer <- function(x, form = "original", ...) {
+  
+  if (form == 'original'){
     x$formula$formula
-  }else if (type == 'fe'){
+  }else if (form == 'fe'){
     x$formula$fe
-  }else if (type == 're'){
+  }else if (form == 're'){
     x$formula$re
-  }else{stop('type must be "original", "fe", or "re".')}
+  }else{stop('form must be "original", "fe", or "re".')}
+  
 }
 
 #' @importFrom stats qnorm
@@ -245,25 +284,52 @@ fmt_IW_mean <- function(Phi, nu, digits = 2) {
 format_vglmer <- function(object) {
   beta.output <- data.frame(name = rownames(object$beta$mean), mean = as.vector(object$beta$mean), var = diag(object$beta$var), stringsAsFactors = F)
   alpha.output <- data.frame(name = rownames(object$alpha$mean), mean = as.vector(object$alpha$mean), var = as.vector(object$alpha$dia.var), stringsAsFactors = F)
-  output <- bind_rows(beta.output, alpha.output)
+  output <- rbind(beta.output, alpha.output)
   return(output)
 }
 
-#' Get ELBO from fitted variational model
-#' 
-#' @param type Default is "final" giving ELBO at convergence. "trajectory" gives
-#'   full sequence of ELBOs at each iteration.
+#' @rdname vglmer-class
+#' @importFrom stats vcov
 #' @export
+format_glmer <- function(object) {
+  
+  output <- do.call('rbind', mapply(ranef(object), names(ranef(object)), SIMPLIFY = FALSE, FUN = function(i,j) {
+    obj <- data.frame(
+      var = as.vector(apply(attributes(i)$postVar, MARGIN = 3, FUN = function(i) {
+        diag(i)
+      })),
+      mean = as.vector(t(as.matrix(i))),
+      name = paste0(rep(colnames(i), nrow(i)), " @ ", rep(rownames(i), each = ncol(i))), stringsAsFactors = F
+    )
+    obj[[".re"]] <- j
+    return(obj)
+  }))
+  output$name <- paste0(output[[".re"]], ' @ ', output[["name"]])
+  output_fe <- data.frame(mean = fixef(object), var = diag(stats::vcov(object)))
+  output_fe$name <- rownames(output_fe)
+  output_fe[[".re"]] <- NA
+  output <- rbind(output, output_fe)
+  output <- output[, (names(output) != ".re")]
+  
+  rownames(output) <- NULL
+  
+  return(output)
+}
 
-ELBO <- function(x, type = c('final', 'trajectory')){
+#' @rdname vglmer-class
+#' @param object Model fit using \code{vglmer}.
+#' @param type Default (\code{"final"}) gives the ELBO at convergence.
+#'   \code{"trajectory"} gives the ELBO estimated at each iteration. This is
+#'   used to assess model convergence.
+#' @export
+ELBO <- function(object, type = c('final', 'trajectory')){
   
   type <- match.arg(type)
 
   if (type == 'final'){
-    x$ELBO$ELBO
-  }else if (type == 'trajectory'){
-    x$ELBO_trajectory$ELBO
+    object$ELBO$ELBO
   }else{
-    stop('type must be "final" or "trajectory".')
+    object$ELBO_trajectory$ELBO
   }
+  
 }

@@ -156,11 +156,11 @@ prepare_total_variance <- function(
   
   if (block_collapse){
     stop('setup blockcollapse')
-    block_terms <- sapply(split(diag(vi_M_var[[position_of_blocked]]) + 
-                                  vi_M_mean[[position_of_blocked]]^2, position_block_j), sum)
-    block_terms <- block_terms[as.character(0:number_of_RE)]
-    block_terms[is.na(block_terms)] <- 0
-    ssq_C <- c(NA, block_terms)
+    # block_terms <- sapply(split(diag(vi_M_var[[position_of_blocked]]) + 
+    #                               vi_M_mean[[position_of_blocked]]^2, position_block_j), sum)
+    # block_terms <- block_terms[as.character(0:number_of_RE)]
+    # block_terms[is.na(block_terms)] <- 0
+    # ssq_C <- c(NA, block_terms)
   }
   
   ssq_out <- mapply(ssq_C_var, ssq_C_mean, ssq_M, SIMPLIFY = FALSE, 

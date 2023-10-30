@@ -5,9 +5,11 @@ safe_convert <- function(x){
     lout <- seq_len(length(out)) - 1
     out <- cbind(lout, lout, out)
     colnames(out) <- c('i', 'j', 'x')
-    # out <- with(attributes(as(as(as.matrix(x), "sparseMatrix"), "dgTMatrix")), cbind(i, j, x))
   }else{
-    out <- with(attributes(as(as(x, "sparseMatrix"), "dgTMatrix")), cbind(i, j, x))
+    if (inherits(x, 'matrix')){
+      x <- drop0(x)  
+    }
+    out <- with(attributes(as(as(x, "generalMatrix"), "TsparseMatrix")), cbind(i, j, x))
   }
   return(out)
 }
@@ -128,7 +130,7 @@ EM_prelim_logit <- function(X, Z, s, pg_b, iter, ridge = 2) {
   
   for (it in 1:iter) {
     EM_pg_c <- jointXZ %*% EM_beta
-    EM_pg_mean <- pg_b / (2 * EM_pg_c) * tanh(EM_pg_c / 2)
+    EM_pg_mean <- as.vector(pg_b / (2 * EM_pg_c) * tanh(EM_pg_c / 2))
     if (any(abs(EM_pg_c) < 1e-10)) {
       tiny_c <- which(abs(EM_pg_c) < 1e-10)
       EM_pg_mean[tiny_c] <- pg_b[tiny_c] / 4
@@ -314,6 +316,7 @@ calculate_ELBO <- function(family, ELBO_type, factorization_method,
   ## of the log-complete data given the variational distribution.
   if (ELBO_type == "augmented") {
     if (family == "linear") {
+      
       e_ln_sigmasq <- log(vi_sigmasq_b) - digamma(vi_sigmasq_a)
       e_inv_sigmasq <- vi_sigmasq_a/vi_sigmasq_b
       logcomplete_1 <- sum(-1/2 * ((y - ex_XBZA)^2 + var_XBZA) * e_inv_sigmasq) +
@@ -338,7 +341,7 @@ calculate_ELBO <- function(family, ELBO_type, factorization_method,
           sum(diag(a %*% b))
         }))
       logcomplete_2 <-  logcomplete_2 +
-        -1/2 * sum(d_j * g_j) * e_ln_sigmasq
+        -1/2 * sum(d_j * g_j) * (e_ln_sigmasq)
     }else{
       
       logcomplete_2 <- sum(-d_j * g_j / 2 * log(2 * pi) - g_j / 2 * ln_det_sigma_alpha) +
@@ -434,13 +437,6 @@ calculate_ELBO <- function(family, ELBO_type, factorization_method,
             sum(diag(a %*% b))
           })
       )
-    # inv_sigma_alpha <<- inv_sigma_alpha
-    # iw_prior_constant <<- iw_prior_constant
-    # ln_det_sigma_alpha <<- ln_det_sigma_alpha
-    # d_j <<- d_j; vi_a_a_jp <<- vi_a_a_jp
-    # vi_a_b_jp <<- vi_a_b_jp
-    # E_ln_vi_a <<- E_ln_vi_a
-    # vi_a_APRIOR_jp <<- vi_a_APRIOR_jp
     logcomplete_3_a <- mapply(d_j, vi_a_a_jp, vi_a_b_jp, E_ln_vi_a, 
                               vi_a_APRIOR_jp, 
                               FUN=function(d, tilde.a, tilde.b, E_ln_vi_a.j, APRIOR.j){

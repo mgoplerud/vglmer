@@ -1,26 +1,37 @@
 #' Predict after vglmer
 #'
-#' Get linear predictor for new observations after using vglmer. Use predict_MAVB
-#' to combine linear prediction after performing MAVB.
-#'
+#' @description These functions calculate the estimated linear predictor using
+#'   the variational distributions. \code{predict.vglmer} draws predictions
+#'   using the estimated variational distributions; \code{predict_MAVB} does so
+#'   using the MAVB procedure described in Goplerud (2022a).
 #' @name vglmer_predict
-#' @param object Object from vglmer.
-#' @param newdata Data to get predictions on.
-#' @param samples How many samples to draw? 0, default, gets the expected value.
-#'   Two methods:
-#'   \itemize{
-#'   \item Number - draw that many samples.
-#'   \item Matrix - use previous samples for prediction. Currently used for MAVB
-#'   but will be depreciated in updated version.
-#'   }
-#' @param samples_only Return only samples *not* linear predictor.
-#' @param summary Return summary of linear predictor, not full posterior.
-#' @param allow_missing_levels Allow prediction for random effects not in object.
-#'   As is standard, give an estimate of "0" for that effect.
-#' @param ... Not used; included to maintain compatability
+#' @param object Model fit using \code{vglmer}.
+#' @param newdata Dataset to use for predictions. It cannot be missing.
+#' @param samples Number of samples to draw. Using \code{0} (default) gives the
+#'   expectation of the linear predictor. A positive integer draws
+#'   \code{samples} samples from the variational distributions and calculates
+#'   the linear predictor.
+#' @param type Default (\code{"link"}) returns the linear predictor;
+#'   \code{"terms"} returns the predicted value for each random effect (or
+#'   spline) separately as well as one that collects all fixed effects. At the
+#'   moment, other options are not enabled.
+#' @param samples_only Default (\code{FALSE}) returns the samples from the
+#'   variational distributions, \bold{not} the prediction. Each row is a sample and
+#'   each column is a parameter.
+#' @param summary Default (\code{TRUE}) returns the mean and variance of the
+#'   samples for each observation. \code{FALSE} returns a matrix of the sampled
+#'   linear predictor for each observation. Each row is a sample and each column
+#'   is an observation.
+#' @param allow_missing_levels Default (\code{FALSE}) does not allow prediction
+#'   for levels not observed in the original data. \code{TRUE} allows for
+#'   prediction on unseen levels; the value of \code{0} (with no uncertainty) is
+#'   used for the corresponding random effect.
+#' @param ... Not used; included to maintain compatibility with existing
+#'   methods.
 #'
 #' @examples
-#'
+#' 
+#' set.seed(123)
 #' sim_data <- data.frame(
 #'   x = rnorm(100),
 #'   y = rbinom(100, 1, 0.5),
@@ -34,37 +45,36 @@
 #' predict(est_vglmer, newdata = sim_data)
 #' # Return 10 posterior draws of the linear predictor for each observation.
 #' predict_MAVB(est_vglmer, newdata = sim_data, summary = FALSE, samples = 10)
-#' \dontrun{
-#' # Fails!
-#' predict(est_vglmer, newdata = data.frame(g = "AB", x = 0))
-#' }
-#' # Works
+#' # Predict with a new level; note this would fail if 
+#' # allow_missing_levels = FALSE (the default)
 #' predict(est_vglmer,
 #'   newdata = data.frame(g = "AB", x = 0),
 #'   allow_missing_levels = TRUE
 #' )
-#' @return Returns an estimate of the linear predictor. The default returns the
-#'   predicted posterior mean. If "samples > 0", then it returns a summary of
-#'   the prediction for each observation, i.e. its mean and variance. Setting "summary = FALSE" will return \code{samples} posterior samples of
-#'   the linear predictor for each observation.
-#'
-#'   \code{predict_MAVB} performs MAVB as described in Goplerud (2020) and then
-#'   returns either a posterior summary or the samples using the same options as
-#'   the generic predict.
-#'   If "allow_missing_levels = TRUE", then observations with a new
-#'   (unseen) level for the random effect get a "zero" for that term of the
-#'   prediction.
-#' @importFrom stats delete.response terms
+#' @return This function returns an estimate of the linear predictor. The
+#'   default returns the expected mean, i.e. \eqn{E_{q(\alpha,\beta)}[x_i^T
+#'   \beta + z_i^T\alpha]}. If \code{samples > 0}, these functions return a
+#'   summary of the prediction for each observation, i.e. the estimated mean and
+#'   variance. If \code{summary = FALSE}, the sampled values of the linear
+#'   predictor are returned as a matrix. \code{predict_MAVB} performs MAVB as
+#'   described in Goplerud (2022a) before returning the linear predictor.
+#'   
+#'   If \code{allow_missing_levels = TRUE}, then observations with a new
+#'   (unseen) level for the random effect are given a value of zero for that
+#'   term of the prediction.
+#' @importFrom stats delete.response terms na.pass
 #' @export
-predict.vglmer <- function(object, newdata,
+predict.vglmer <- function(object, newdata, 
+                           type = c('link', 'lpmatrix', 'terms'),
                            samples = 0, samples_only = FALSE,
                            summary = TRUE, allow_missing_levels = FALSE, 
-                           type = c('link', 'lpmatrix', 'terms'),
                            ...) {
   if (length(list(...)) > 0) {
     stop("... not used for predict.vglmer")
   }
+  
   type <- match.arg(type)
+  
   newdata <- as.data.frame(newdata)
   rownames(newdata) <- as.character(1:nrow(newdata))
 
@@ -76,28 +86,49 @@ predict.vglmer <- function(object, newdata,
         paste(missing_columns, collapse =', '))
     )
   }
-  fmla <- formula(object)
-  # Extract X (FE design matrix)
-  X <- model.matrix(delete.response(terms(nobars(formula(object, type = 'fe')))), data = newdata)
-
+  fmla <- formula(object, form = 'original')
+  
+  newdata_FE <- model.frame(delete.response(object$formula$fe_terms), 
+      data = newdata, xlev = object$formula$fe_Xlevels, na.action = na.pass)
+  X <- model.matrix(
+    delete.response(object$formula$fe_terms), newdata_FE, 
+      contrasts.arg = object$formula$fe_contrasts)
+  
   orig_X_names <- rownames(object$beta$mean)
   if (!identical(colnames(X), orig_X_names)) {
     print(all.equal(colnames(X), orig_X_names))
     stop("Misaligned Fixed Effects")
   }
 
-  if (!is.null(object$formula$re)){
+  mk_Z <- model.frame(delete.response(terms(object$formula$interpret_gam$fake.formula)), 
+                      data = newdata, drop.unused.levels = TRUE)
+  rownames_Z <- rownames(mk_Z)
+  
+
+  if (!is.null(object$formula$re) & (length(object$formula$re) > 0) ){
     
     # Extract the Z (Random Effect) design matrix.
-    
-    mk_Z <- model.frame(delete.response(terms(object$formula$interpret_gam$fake.formula)), 
-          data = newdata)
-    rownames_Z <- rownames(mk_Z)
-    mk_Z <- mkReTrms(formula(object, type = 're'), mk_Z, reorder.terms = FALSE, reorder.vars = FALSE)
+    mk_Z <- mkReTrms(formula(object, form = 're'), mk_Z, reorder.terms = FALSE, reorder.vars = FALSE)
     Z <- t(mk_Z$Zt)
     
     # RE names and names of variables included for each.
     names_of_RE <- mk_Z$cnms
+    
+    if (anyDuplicated(names(names_of_RE)) > 0){
+      warning('Some random effects names are duplicated. Re-naming for stability by adding "-[0-9]" at end.')
+      nre <- names(names_of_RE)
+      unre <- unique(nre)
+      for (u in unre){
+        nre_u <- which(nre == u)
+        if (length(nre_u) > 1){
+          nre[nre_u] <- paste0(nre[nre_u], '-', seq_len(length(nre_u)))
+        }
+      }
+      names(names_of_RE) <- nre
+      if (anyDuplicated(names(names_of_RE)) > 0){
+        stop('Renaming duplicates failed. Please rename random effects to proceed.')
+      }
+    }
     
     number_of_RE <- length(mk_Z$Gp) - 1
     # The position that demarcates each random effect.
@@ -138,7 +169,7 @@ predict.vglmer <- function(object, newdata,
   }
   
   # Extract the Specials
-  if (length(parse_formula$smooth.spec) > 1){
+  if (length(parse_formula$smooth.spec) > 0){
     base_specials <- length(parse_formula$smooth.spec)
     # Number of splines + one for each "by"...
     n.specials <- base_specials +
@@ -147,7 +178,7 @@ predict.vglmer <- function(object, newdata,
     
     Z.spline <- as.list(rep(NA, n.specials))
     Z.spline.size <- rep(NA, n.specials)
-    Z.spline.attr <- object$spline$attr
+    Z.spline.attr <- object$internal_parameters$spline$attr
     
     special_counter <- 1
     store_spline_type <- rep(NA, n.specials)
@@ -159,11 +190,13 @@ predict.vglmer <- function(object, newdata,
          knots = Z.spline.attr[[i]]$knots, 
          Boundary.knots =  Z.spline.attr[[i]]$Boundary.knots,
          by = newdata[[Z.spline.attr[[i]]$by]], outer_okay = TRUE,
-         type = Z.spline.attr[[i]]$type, override_warn = TRUE)
+         type = Z.spline.attr[[i]]$type, override_warn = TRUE,
+         force_vector = TRUE)
       
       spline_counter <- 1
       
       for (spline_i in all_splines_i){
+        
         stopifnot(spline_counter %in% 1:2)
         
         colnames(spline_i$x) <- paste0('spline @ ', special_i$term, ' @ ', colnames(spline_i$x))
@@ -196,11 +229,18 @@ predict.vglmer <- function(object, newdata,
     Z.spline <- drop0(do.call('cbind', Z.spline))
     rownames(Z.spline) <- rownames(newdata)
     
-    Z.spline <- Z.spline[match(rownames(Z), rownames(Z.spline)),]
-
-    Z <- drop0(cbind(Z, Z.spline))
+    if (ncol(Z) > 0){
+      Z.spline <- Z.spline[match(rownames(Z), rownames(Z.spline)),, drop = FALSE]
+      Z <- drop0(cbind(Z, Z.spline))
+    }else{
+      Z <- Z.spline
+    }
     
-    if (!isTRUE(identical(object$spline$size[store_spline_type %in% 1], 
+    if (!isTRUE(all.equal(names_of_RE, object$internal_parameters$names_of_RE))){
+      stop('Names of REs do not match estimation data. This may occur when REs have to be re-named.')
+    }
+    
+    if (!isTRUE(identical(object$internal_parameters$spline$size[store_spline_type %in% 1], 
                           Z.spline.size[store_spline_type  %in% 1]))){
       stop('Misalignment of splines in prediction.')
     }
@@ -229,22 +269,39 @@ predict.vglmer <- function(object, newdata,
     }
   }
 
+  # Select overlapping columns
   in_both <- intersect(fmt_names_Z, orig_Z_names)
-  recons_Z <- drop0(sparseMatrix(i = 1, j = 1, x = 0, dims = c(nrow(Z), length(orig_Z_names))))
-  colnames(recons_Z) <- orig_Z_names
-  rownames(recons_Z) <- rownames_Z
+  # Find the ones that are missing
+  missing_cols <- setdiff(orig_Z_names, in_both)
 
-  recons_Z[, match(in_both, orig_Z_names)] <- Z[, match(in_both, fmt_names_Z)]
-
+  recons_Z <- Z[, match(in_both, fmt_names_Z), drop = F]
+  if (length(missing_cols) > 0){
+    # Create a matrix of zeros to pad the missing columns
+    pad_zero <- sparseMatrix(i = 1, j = 1, x = 0, 
+                             dims = c(nrow(Z), length(missing_cols)))
+    colnames(pad_zero) <- missing_cols
+    # Combine and then reorder to be lined-up correctly
+    recons_Z <- cbind(recons_Z, pad_zero)
+  }
+  recons_Z <- recons_Z[, match(orig_Z_names, colnames(recons_Z)), drop = F]
+    
+  # Old method for prediction
+  # in_both <- intersect(fmt_names_Z, orig_Z_names)
+  # recons_Z <- drop0(sparseMatrix(i = 1, j = 1, x = 0, dims = c(nrow(Z), length(orig_Z_names))))
+  # colnames(recons_Z) <- orig_Z_names
+  # rownames(recons_Z) <- rownames_Z
+  # recons_Z[, match(in_both, orig_Z_names)] <- Z[, match(in_both, fmt_names_Z)]
+  
   # Check that the entirely missing columns match those not in the original
-  checksum_align <- setdiff(not_in_new_Z, sort(names(which(colSums(recons_Z != 0) == 0))))
+  checksum_align <- setdiff(not_in_new_Z,
+    sort(names(which(colSums(recons_Z != 0) == 0))))
   if (length(checksum_align) > 0) {
     stop("Alignment Error")
   }
-
-  Z <- recons_Z
-  rm(recons_Z)
   
+  Z <- recons_Z
+  rm(recons_Z); gc()
+
   ####
   
   total_obs <- rownames(newdata)
@@ -258,6 +315,34 @@ predict.vglmer <- function(object, newdata,
   if (type == 'lpmatrix'){
     return(XZ)
   }
+  
+  if (type == 'terms'){
+    if (samples != 0){stop('"terms" only enabled for samples=0.')}
+    # Calculate the linear predictor separately for each random effect
+    # (and fixed effects) and report a matrix of those predictions.
+    
+    X <- X[match(obs_in_both, rownames(X)), , drop = F]
+    Z <- Z[match(obs_in_both, rownames(Z)), , drop = F]
+    lp_FE <- as.vector(X %*% object$beta$mean)
+    vi_alpha_mean <- object$alpha$mean
+    lp_terms <- lapply(object$internal_parameters$cyclical_pos, FUN=function(i){
+      as.vector(Z[,i,drop=F] %*% vi_alpha_mean[i,drop=F])
+    })
+    lp_terms <- do.call('cbind', lp_terms)
+    colnames(lp_terms) <- names(object$internal_parameters$names_of_RE)
+    lp_terms <- cbind('FE' = lp_FE, lp_terms)
+    lp_terms <- lp_terms[match(total_obs, obs_in_both), , drop = F]
+    gc()
+    return(lp_terms)
+    
+  }else{
+    XZ <- cbind(
+      X[match(obs_in_both, rownames(X)), , drop = F],
+      Z[match(obs_in_both, rownames(Z)), , drop = F]
+    )
+  }
+  gc()
+  
   factorization_method <- object$control$factorization_method
   if (is.matrix(samples)) {
     if (ncol(samples) != ncol(XZ)) {
@@ -336,7 +421,7 @@ predict.vglmer <- function(object, newdata,
       p.X <- nrow(vi_beta_mean)
 
       if (!only.lp) {
-        vi_joint_decomp <- object$joint
+        vi_joint_decomp <- object$joint$decomp_var
         sim_init_joint <- matrix(rnorm(samples * (p.X + p.Z)), ncol = samples)
         sim_init_joint <- t(vi_joint_decomp) %*% sim_init_joint
 
@@ -361,7 +446,7 @@ predict.vglmer <- function(object, newdata,
   }
 
   if (samples_only) {
-    return(samples)
+    return(t(samples))
   }
   if (type == 'terms'){
     warning('Inefficient way to compute terms')
@@ -393,9 +478,14 @@ predict.vglmer <- function(object, newdata,
       lp <- lp[match(total_obs, obs_in_both), ]
       rownames(lp) <- NULL
     } else {
-      lp <- as.vector(t(apply(lp, MARGIN = 1, FUN = function(i) {
-        mean(i)
-      })))
+      
+      if (ncol(lp) != 1){
+        lp <- as.vector(lp)
+      }else{
+        lp <- as.vector(t(apply(lp, MARGIN = 1, FUN = function(i) {
+          mean(i)
+        })))
+      }
       lp <- lp[match(total_obs, obs_in_both)]
       rownames(lp) <- NULL
     }
@@ -403,6 +493,21 @@ predict.vglmer <- function(object, newdata,
   } else {
     lp <- lp[match(total_obs, obs_in_both), , drop = F]
     rownames(lp) <- NULL
-    return(lp)
+    return(t(lp))
   }
+}
+
+
+#' @inheritParams MAVB
+#' @inheritParams vglmer_predict
+#' @rdname vglmer_predict
+#' @export
+predict_MAVB <- function(object, newdata, samples = 0, samples_only = FALSE,
+                         var_px = Inf, summary = TRUE, allow_missing_levels = FALSE) {
+  pxSamples <- MAVB(object = object, samples = samples, var_px = var_px)
+  lp <- predict.vglmer(object,
+                       newdata = newdata, samples = pxSamples, samples_only = samples_only,
+                       summary = summary, allow_missing_levels = allow_missing_levels
+  )
+  return(lp)
 }

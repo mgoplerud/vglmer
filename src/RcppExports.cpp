@@ -201,21 +201,14 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
-// calculate_alpha_decomp_full_factor
-List calculate_alpha_decomp_full_factor(const Eigen::Map<Eigen::MatrixXd> X, const Eigen::MappedSparseMatrix<double> Z, const Eigen::Map<Eigen::MatrixXd> P, const Eigen::Map<Eigen::VectorXd> omega, const Eigen::Map<Eigen::ArrayXd> d_j, const Eigen::Map<Eigen::ArrayXd> g_j, const List Tinv, const Rcpp::List& re_position_list);
-RcppExport SEXP _vglmer_calculate_alpha_decomp_full_factor(SEXP XSEXP, SEXP ZSEXP, SEXP PSEXP, SEXP omegaSEXP, SEXP d_jSEXP, SEXP g_jSEXP, SEXP TinvSEXP, SEXP re_position_listSEXP) {
+// prepare_Z_for_px
+Rcpp::List prepare_Z_for_px(Rcpp::IntegerMatrix& Mmap);
+RcppExport SEXP _vglmer_prepare_Z_for_px(SEXP MmapSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< const Eigen::Map<Eigen::MatrixXd> >::type X(XSEXP);
-    Rcpp::traits::input_parameter< const Eigen::MappedSparseMatrix<double> >::type Z(ZSEXP);
-    Rcpp::traits::input_parameter< const Eigen::Map<Eigen::MatrixXd> >::type P(PSEXP);
-    Rcpp::traits::input_parameter< const Eigen::Map<Eigen::VectorXd> >::type omega(omegaSEXP);
-    Rcpp::traits::input_parameter< const Eigen::Map<Eigen::ArrayXd> >::type d_j(d_jSEXP);
-    Rcpp::traits::input_parameter< const Eigen::Map<Eigen::ArrayXd> >::type g_j(g_jSEXP);
-    Rcpp::traits::input_parameter< const List >::type Tinv(TinvSEXP);
-    Rcpp::traits::input_parameter< const Rcpp::List& >::type re_position_list(re_position_listSEXP);
-    rcpp_result_gen = Rcpp::wrap(calculate_alpha_decomp_full_factor(X, Z, P, omega, d_j, g_j, Tinv, re_position_list));
+    Rcpp::traits::input_parameter< Rcpp::IntegerMatrix& >::type Mmap(MmapSEXP);
+    rcpp_result_gen = Rcpp::wrap(prepare_Z_for_px(Mmap));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -337,7 +330,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_vglmer_test_f", (DL_FUNC) &_vglmer_test_f, 5},
     {"_vglmer_block_diag_product", (DL_FUNC) &_vglmer_block_diag_product, 4},
     {"_vglmer_invert_rowwise", (DL_FUNC) &_vglmer_invert_rowwise, 3},
-    {"_vglmer_calculate_alpha_decomp_full_factor", (DL_FUNC) &_vglmer_calculate_alpha_decomp_full_factor, 8},
+    {"_vglmer_prepare_Z_for_px", (DL_FUNC) &_vglmer_prepare_Z_for_px, 1},
     {"_vglmer_chol_sparse", (DL_FUNC) &_vglmer_chol_sparse, 3},
     {"_vglmer_cpp_zVz", (DL_FUNC) &_vglmer_cpp_zVz, 2},
     {"_vglmer_cpp_zAz_nonfact", (DL_FUNC) &_vglmer_cpp_zAz_nonfact, 2},

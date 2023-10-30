@@ -12,7 +12,7 @@
 #' @param omega Polya-Gamma weights
 #' @param prior_precision Prior Precision for Regression
 #' @param y Outcome
-#' @param save_chol Truefalse
+#' @param save_chol Save cholesky factor
 LinRegChol <- function(X, omega, prior_precision, y, save_chol = TRUE) {
     .Call('_vglmer_LinRegChol', PACKAGE = 'vglmer', X, omega, prior_precision, y, save_chol)
 }
@@ -25,7 +25,6 @@ direct_calculate_expected_outer_alpha <- function(V, alpha_mu, re_position_list)
     .Call('_vglmer_direct_calculate_expected_outer_alpha', PACKAGE = 'vglmer', V, alpha_mu, re_position_list)
 }
 
-#' Conjugate Gradient for Large VI Problems
 cg_custom <- function(X, Z, P, omega, ridge_Z, ridge_X, s, offset_ridge_X, old_alpha, tol, it_max = 0L, low_dimension = 5L) {
     .Call('_vglmer_cg_custom', PACKAGE = 'vglmer', X, Z, P, omega, ridge_Z, ridge_X, s, offset_ridge_X, old_alpha, tol, it_max, low_dimension)
 }
@@ -63,8 +62,10 @@ invert_rowwise <- function(X, vec_prior, dim_X) {
 }
 
 #' Cyclical Calculation of Variance Decomposition
-calculate_alpha_decomp_full_factor <- function(X, Z, P, omega, d_j, g_j, Tinv, re_position_list) {
-    .Call('_vglmer_calculate_alpha_decomp_full_factor', PACKAGE = 'vglmer', X, Z, P, omega, d_j, g_j, Tinv, re_position_list)
+NULL
+
+prepare_Z_for_px <- function(Mmap) {
+    .Call('_vglmer_prepare_Z_for_px', PACKAGE = 'vglmer', Mmap)
 }
 
 chol_sparse <- function(X, omega, precision) {

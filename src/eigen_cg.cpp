@@ -1,11 +1,9 @@
 #include "RcppEigen.h"
-#include "eigen_helpers.h"
 
 // [[Rcpp::depends(RcppEigen)]]
 
 using namespace Rcpp;
 
-//' Conjugate Gradient for Large VI Problems
 // [[Rcpp::export]]
 List cg_custom(
     const Eigen::MappedSparseMatrix<double> X,
@@ -31,8 +29,8 @@ List cg_custom(
   Eigen::SparseMatrix<double> ridge = ridge_Z + P.adjoint() * ridge_X * P;
     
   adj_s = s.cwiseQuotient(sqrt_omega_k);
-  Eigen::SparseMatrix<double> scaled_Z = sparse_diag(sqrt_omega_k) * Z;
-  Eigen::SparseMatrix<double> scaled_X = sparse_diag(sqrt_omega_k) * X;
+  Eigen::SparseMatrix<double> scaled_Z = sqrt_omega_k.asDiagonal() * Z;
+  Eigen::SparseMatrix<double> scaled_X = sqrt_omega_k.asDiagonal() * X;
   
   Eigen::VectorXd diag_ridge = ridge.diagonal();
   

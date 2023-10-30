@@ -1,12 +1,10 @@
 #include "RcppEigen.h"
-#include "eigen_helpers.h"
 
 // [[Rcpp::depends(RcppEigen)]]
 
 using namespace Rcpp;
 
 //' Cyclical Calculation of Variance Decomposition
-// [[Rcpp::export]]
 List calculate_alpha_decomp_full_factor(
     const Eigen::Map<Eigen::MatrixXd> X,
     const Eigen::MappedSparseMatrix<double> Z,
@@ -21,8 +19,8 @@ List calculate_alpha_decomp_full_factor(
   int n_REs = re_position_list.length();
   
   Eigen::VectorXd sqrt_omega_k = omega.cwiseSqrt();
-  Eigen::SparseMatrix<double> scaled_Z = sparse_diag(sqrt_omega_k) * Z;
-  Eigen::MatrixXd scaled_X = sparse_diag(sqrt_omega_k) * X;
+  Eigen::SparseMatrix<double> scaled_Z = sqrt_omega_k.asDiagonal() * Z;
+  Eigen::MatrixXd scaled_X = sqrt_omega_k.asDiagonal() * X;
 
   Eigen::ArrayXd size_lower_tri = d_j * d_j;
   size_lower_tri += d_j;

@@ -1,24 +1,37 @@
-# vglmer: Variational Generalized Linear Mixed Effects Regression [![Travis build status](https://travis-ci.com/mgoplerud/vglmer.svg?token=xHM2cTJdHAzcsxnP4SwG&branch=master)](https://travis-ci.com/mgoplerud/vglmer) [![codecov](https://codecov.io/gh/mgoplerud/vglmer/branch/master/graph/badge.svg?token=L8C4260BUW)](https://codecov.io/gh/mgoplerud/vglmer)   [![Lifecycle: experimental](https://img.shields.io/badge/lifecycle-experimental-orange.svg)](https://www.tidyverse.org/lifecycle/#experimental)
+# vglmer: Variational Generalized Linear Mixed Effects Regression   
+[![CRAN status](https://www.r-pkg.org/badges/version/vglmer)](https://CRAN.R-project.org/package=vglmer) [![R-CMD-check](https://github.com/mgoplerud/vglmer/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/mgoplerud/vglmer/actions/workflows/R-CMD-check.yaml) [![codecov](https://codecov.io/gh/mgoplerud/vglmer/branch/master/graph/badge.svg?token=L8C4260BUW)](https://app.codecov.io/gh/mgoplerud/vglmer)
 
-*Note this version (collapsed branch) is preliminary and used for the results in Goplerud, Papaspiliopoulos, and Zanella (2023); for the results in Goplerud (2022, 2023), please install the master branch; they will be eventually be integrated*
+*Note this version (collapsed branch) is preliminary and used for the results in
+Goplerud, Papaspiliopoulos, and Zanella (2023); for the results in Goplerud
+(2022, 2023), please install the master branch; this branch will be eventually
+be integrated into the main/CRAN version*
 
-A package to estimate non-linear hierarchical models using the variational algorithms described in [Goplerud (2022)](https://doi.org/10.1214/21-BA1266) and subsequent developments ([Goplerud 2023](https://doi.org/10.1017/S0003055423000035), Goplerud, Papaspiliopoulos, and Zanella 2023. It also provides the option to improve an initial approximation using marginally augmented variational Bayes (MAVB) also described in the same paper. It can be installed using `devtools`
+A package to estimate non-linear hierarchical models using the variational algorithms described in [Goplerud (2022)](https://doi.org/10.1214/21-BA1266) and subsequent developments ([Goplerud 2023](https://doi.org/10.1017/S0003055423000035), Goplerud, Papaspiliopoulos, and Zanella 2023). It can be installed from CRAN or the most-to-update version can be installed using `devtools`.
+
 ```
-library(devtools); devtools::install_github("mgoplerud/vglmer", dependencies = TRUE)
+# CRAN
+install.packages("vglmer")
+# Up-to-Date GitHub Version
+library(devtools)
+devtools::install_github("mgoplerud/vglmer", dependencies = TRUE)
 ```
 
-At present, it can fit logistic and negative binomial outcomes with an arbitrary number of random effects. Details on negative binomial inference can be found [here](https://j.mp/goplerud_MAVB_extra) and are more experimential at the moment.
+At present, it can fit logistic, linear, and negative binomial outcomes with an arbitrary number of random effects. Details on negative binomial inference can be found [here](https://github.com/mgoplerud/vglmer/blob/master/.github/model_addendum.pdf) and are more experimental at the moment.
 
-This model accepts "standard" glmer syntax of the form:
+This package accepts "standard" glmer syntax of the form:
 
 ```
 vglmer(formula = y ~ x + (x | g), data = data, family = 'binomial')
-
-vglmer(formula = y ~ x + (x | g), data = data, family = 'negbin')
 ```
 
-Many standard methods from `lme4` work, e.g. `fixef`, `coef`, `vcov`, `ranef`, `predict`. Use `format_vglmer` to parse all parameters into a single data.frame. Estimation can be controlled via the numerous arguments to `control` using `vglmer_control`. At the moment, Schemes I, II, and III in Goplerud (2020) correspond to `strong`, `partial`, and `weak`. Unless the model is extremely large, the default (`weak`) should be used.
+Splines can be estimated using `v_s(x)`, similar to the functionality in `mgcv`, although with many fewer options.
 
-The package is still "experimental" so some of the inputs and outputs may change! Please make an issue with any concerns you have. 
+```
+vglmer(formula = y ~ v_s(x) + (x | g), data = data, family = 'binomial')
+```
 
-One known issue is that it is not possible to include a random effect without a main effect (e.g. ``y ~ x + (b | g)`` will fail). This will be fixed shortly.
+Many standard methods from `lme4` work, e.g. `fixef`, `coef`, `vcov`, `ranef`, `predict`. Use `format_vglmer` to parse all parameters into a single data.frame. Estimation can be controlled via the numerous arguments to `control` using `vglmer_control`. At the moment, Schemes I, II, and III in Goplerud (2022) correspond to `strong`, `intermediate`, and `weak`. The "partially factorized" scheme explored in Goplerud, Papaspiliopoulos, and Zanella (2023) can be used with `partially_factorized`, although some features such as splines are currently not enabled for this factorization scheme. 
+
+The default is `strong` which correspond to the strongest (worst) approximation. If the variance of the parameters is of interest, then `partially_factorized` or `weak` will return better results.
+
+Please make an issue on GitHub with any concerns you have.
