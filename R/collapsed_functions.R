@@ -13,7 +13,7 @@ build_collapse_index <- function(X, Z, cyclical_pos, outer_alpha_RE_positions,
   
   if (is.character(k)){
     
-    if (!all(k %in% c('FE', names(names_of_RE)))){stop('collapsed_size must be vector of named REs or number.')}
+    if (!all(k %in% c('FE', names(names_of_RE)))){stop('collapsed_set must be vector of named REs or number.')}
     
     if ('FE' %in% k){
       collapse_X <- 1:ncol(X)
@@ -221,7 +221,7 @@ extract_precision <- function(object){
       vi_precision <- vi_precision * adjust_prec
     }
     
-  }else if (object$control$factorization_method == 'collapsed'){
+  }else if (object$control$factorization_method == 'partially_factorized'){
     
     design_C <- object$data$C_design
     vi_M_list <- object$data$M_design

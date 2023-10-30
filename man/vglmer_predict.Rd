@@ -23,7 +23,7 @@ predict_MAVB(
   samples_only = FALSE,
   summary = TRUE,
   allow_missing_levels = FALSE,
-  type = c("link", "lpmatrix"),
+  type = c("link", "lpmatrix", "terms"),
   ...
 )
 }

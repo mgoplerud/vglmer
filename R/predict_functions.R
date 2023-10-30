@@ -271,7 +271,7 @@ predict.vglmer <- function(object, newdata,
     } else {
       only.lp <- FALSE
     }
-    if (factorization_method == 'collapsed'){
+    if (factorization_method == 'partially_factorized'){
       vi_alpha_mean <- object$alpha$mean
       vi_beta_mean <- object$beta$mean
       
@@ -305,7 +305,7 @@ predict.vglmer <- function(object, newdata,
       
       
       
-    }else if (factorization_method %in% c("strong", "partial")) {
+    }else if (factorization_method %in% c("strong", "intermediate")) {
       vi_alpha_mean <- object$alpha$mean
       vi_alpha_decomp <- object$alpha$decomp_var
 

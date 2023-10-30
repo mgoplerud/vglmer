@@ -486,7 +486,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     Z.spline.size <- NULL
   }
 
-  if (factorization_method == 'collapsed' | control$parameter_expansion %in% c('translation', 'diagonal')){
+  if (factorization_method == 'partially_factorized' | control$parameter_expansion %in% c('translation', 'diagonal')){
     parsed_RE_groups <- get_RE_groups(formula = re_fmla, data = data)
     store_design_Z <- parsed_RE_groups$design
     store_design_Z <- lapply(store_design_Z, as.matrix)
@@ -813,7 +813,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
 
   running_log_det_alpha_var <- rep(NA, number_of_RE)
 
-  if (factorization_method != "collapsed"){
+  if (factorization_method != "partially_factorized"){
     lagged_alpha_mean <- rep(-Inf, p.Z)
     lagged_beta_mean <- rep(-Inf, p.X)
     lagged_sigma_alpha <- vi_sigma_alpha
@@ -830,7 +830,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
   accepted_times <- NA
 
   skip_translate <- FALSE
-  if (factorization_method == "collapsed" | (parameter_expansion %in%  c("translation", "diagonal") & any_Mprime)) {
+  if (factorization_method == "partially_factorized" | (parameter_expansion %in%  c("translation", "diagonal") & any_Mprime)) {
     
     if (do_timing){
       tic('Build PX R Terms')
@@ -916,10 +916,10 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
   adjust_ceoa <- FALSE
   vi_alpha_var <- vi_beta_var <- NULL
   
-  if (factorization_method == "collapsed"){
+  if (factorization_method == "partially_factorized"){
     
     if (do_SQUAREM){
-      warning('Turning off SQUAREM for "collapsed')
+      warning('Turning off SQUAREM for "partially_factorized"')
       do_SQUAREM <- FALSE
     }
     
@@ -944,7 +944,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     list2env(build_collapse_index(X = X, Z = Z, weight = ci_weight,
               cyclical_pos = cyclical_pos, 
               outer_alpha_RE_positions = outer_alpha_RE_positions,
-              names_of_RE = names_of_RE, k = control$collapse_size, d_j = d_j),
+              names_of_RE = names_of_RE, k = control$collapse_set, d_j = d_j),
              envir = base::environment())
     
     lookup_collapse <- mapply(store_assignment_Z, index_collapse, store_levels_Z, FUN=function(i,j,nl){
@@ -1094,7 +1094,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
   }
   
   if (debug_param) {
-    if (factorization_method == "collapsed"){
+    if (factorization_method == "partially_factorized"){
       store_beta <- array(NA, dim = c(iterations, size_Cj))
       store_alpha <- array(NA, dim = c(iterations, size_Mj))
       store_sigma <- array(NA, dim = c(iterations, sum(d_j^2)))
@@ -1149,7 +1149,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
           joint_quad <- joint_quad + vi_r_sigma
         }
         vi_pg_c <- sqrt(as.vector(X %*% vi_beta_mean + Z %*% vi_alpha_mean - vi_r_mu)^2 + joint_quad)
-      } else if (factorization_method == "collapsed"){
+      } else if (factorization_method == "partially_factorized"){
       
         # joint_quad <- rowSums( (design_C %*% vi_C_uncond) * design_C)
         # for (j in seq_len(length(M_j))){
@@ -1288,7 +1288,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
       })
     }
     
-    if (factorization_method == "collapsed"){
+    if (factorization_method == "partially_factorized"){
       Tinv <- bdiag(Diagonal(x = rep(0, p.X)), Tinv)
     }
     
@@ -1323,7 +1323,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
         vi_joint_L_nonpermute <- vi_joint_decomp
         vi_joint_LP <- Diagonal(n = ncol(vi_joint_decomp))
       }
-    } else if (factorization_method == "collapsed") {
+    } else if (factorization_method == "partially_factorized") {
       
       if (linpred_method == 'cyclical'){
         
@@ -1717,7 +1717,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
       }else{stop('linpred_method must be "joint" or "cyclical" if collapsed.')}
 
       
-    } else if (factorization_method == "partial") {
+    } else if (factorization_method == "intermediate") {
       if (linpred_method == "cyclical") {
         # Do not run except as backup
         # ###Non optimized
@@ -1802,7 +1802,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
         }
         
       } else {
-        stop("Invalid linpred method for partial scheme")
+        stop("Invalid linpred method for intermediate scheme")
       }
     } else if (factorization_method == "strong") {
       running_log_det_alpha_var <- rep(NA, number_of_RE)
@@ -1974,7 +1974,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
       adjust_var <- 1/sqrt(vi_sigmasq_a/vi_sigmasq_b)
       e_ln_sigmasq <- log(vi_sigmasq_b) - digamma(vi_sigmasq_a)
       
-      if (factorization_method == "collapsed"){
+      if (factorization_method == "partially_factorized"){
         
         if (linpred_method == 'joint'){
           vi_M_var <- lapply(vi_M_var, FUN=function(i){adjust_var^2 * i})
@@ -2004,7 +2004,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     }
 
     if (debug_ELBO & it != 1) {
-      if (factorization_method == "collapsed"){
+      if (factorization_method == "partially_factorized"){
         
         ssq_out <- prepare_total_variance(vi_C_mean = vi_C_mean, 
           vi_M_mean = vi_M_mean,
@@ -2074,7 +2074,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     # Update \Sigma_j
     ##
 
-    if (factorization_method == "collapsed"){
+    if (factorization_method == "partially_factorized"){
       
       stopifnot(all(spline_REs == FALSE))
       if (linpred_method == 'joint'){stop()}
@@ -2176,7 +2176,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
       if (factorization_method == 'weak'){
         joint_quad <- cpp_zVz(Z = joint.XZ, V = as(vi_joint_decomp, "dgCMatrix"))
         vi_lp <- (s - as.vector(X %*% vi_beta_mean + Z %*% vi_alpha_mean))^2 + joint_quad
-      } else if (factorization_method == "collapsed"){
+      } else if (factorization_method == "partially_factorized"){
         
         # Variance of Collapsed 
         joint_quad <- rowSums( (design_C %*% vi_C_uncond) * design_C)
@@ -2275,7 +2275,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
       
       # Remove the "excess mean" mu_j from each random effect \alpha_{j,g}
       # and add the summd mass back to the betas.
-      if (factorization_method == "collapsed"){
+      if (factorization_method == "partially_factorized"){
 
         stopifnot(all(spline_REs == FALSE))
         stopifnot(all(d_j == 1))
@@ -2731,7 +2731,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     
     if (do_SQUAREM){
       
-      if (factorization_method %in% c('weak', 'collapsed')){
+      if (factorization_method %in% c('weak', 'partially_factorized')){
         vi_alpha_L_nonpermute <- vi_beta_L_nonpermute <- NULL
         vi_alpha_LP <- vi_beta_LP <- NULL
       }else{
@@ -2775,7 +2775,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
            vi_a_nu_jp = vi_a_nu_jp, vi_a_APRIOR_jp = vi_a_APRIOR_jp
         )
         
-        if (factorization_method %in% c('weak', 'collapsed')){
+        if (factorization_method %in% c('weak', 'partially_factorized')){
           squarem_par <- c('vi_a_b_jp', 'vi_sigma_alpha', 'vi_pg_c',
                            'vi_alpha_mean', 'vi_beta_mean', 'vi_joint_L_nonpermute')
           squarem_type <- c('positive', 'matrix', 'positive',
@@ -3007,8 +3007,8 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
             squarem_par <- c(squarem_par, 'log_det_joint_var')
             squarem_par <- c(squarem_par, 'vi_joint_decomp')
             
-          }else if (factorization_method == 'collapsed'){
-            stop('Setup squarem for collapsed')
+          }else if (factorization_method == 'partially_factorized'){
+            stop('Setup squarem for partially_factorized')
             if (squarem_type[squarem_par == 'vi_joint_L_nonpermute'] == 'lu'){
               prop_squarem$vi_joint_decomp <- prop_squarem$vi_joint_L_nonpermute$M              
               prop_ELBOargs$log_det_joint_var <- prop_squarem$vi_joint_L_nonpermute$logdet_M
@@ -3134,8 +3134,8 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
                 joint_quad <- joint_quad + prop_ELBOargs$vi_r_sigma
               }
               prop_ELBOargs$vi_pg_c <- sqrt(as.vector(X %*% prop_ELBOargs$vi_beta_mean + Z %*% prop_ELBOargs$vi_alpha_mean - prop_ELBOargs$vi_r_mu)^2 + joint_quad)
-            } else if (grepl(factorization_method, pattern='collapsed')) {
-              stop('Setup Squarem for "collapsed"')
+            } else if (grepl(factorization_method, pattern='partially_factorized')) {
+              stop('Setup Squarem for "partially_factorized"')
             } else {
               beta_quad <- rowSums((X %*% t(prop_ELBOargs$vi_beta_decomp))^2)
               alpha_quad <- rowSums((Z %*% t(prop_ELBOargs$vi_alpha_decomp))^2)
@@ -3254,7 +3254,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     
     change_elbo <- final.ELBO$ELBO - lagged_ELBO
 
-    if (factorization_method == "collapsed"){
+    if (factorization_method == "partially_factorized"){
       if (any_collapsed_M){
         change_alpha_mean <- max(abs(do.call('c', vi_M_mean) - lagged_M_mean))
       }else{
@@ -3284,7 +3284,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     if (factorization_method == "weak") {
       change_joint_var <- 0 # change_joint_var <- max(abs(vi_joint_decomp - lagged_joint_decomp))
       change_alpha_var <- change_beta_var <- 0
-    } else if (factorization_method == "collapsed") {
+    } else if (factorization_method == "partially_factorized") {
       
       if (any_collapsed_M){
         if (linpred_method == 'joint'){
@@ -3311,7 +3311,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
       toc(quiet = verbose_time, log = T)
     }
     if (debug_param) {
-      if (factorization_method == "collapsed"){
+      if (factorization_method == "partially_factorized"){
         store_beta[it, ] <- as.vector(vi_C_mean)
         store_alpha[it, ] <- unlist(vi_M_mean)
         store_sigma[it,] <- do.call('c', lapply(vi_sigma_alpha, as.vector))
@@ -3344,7 +3344,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
       message(paste0("Other Parameter Changes: ", max(change_all)))
     }
 
-    if (factorization_method != "collapsed"){
+    if (factorization_method != "partially_factorized"){
       lagged_alpha_mean <- vi_alpha_mean
       lagged_beta_mean <- vi_beta_mean
       lagged_alpha_decomp <- vi_alpha_decomp
@@ -3437,7 +3437,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
   }
   if (factorization_method == "weak") {
     output$joint <- vi_joint_decomp
-  }else if (factorization_method == "collapsed") {
+  }else if (factorization_method == "partially_factorized") {
   
     if (any_collapsed_C){
       vi_C_var <- solve(drop0(
@@ -3608,7 +3608,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
       diag_vi_pg_mean = diag_vi_pg_mean,
       Tinv = Tinv, cyclical_pos = cyclical_pos
     )
-    if (factorization_method == 'collapsed'){
+    if (factorization_method == 'partially_factorized'){
       output$data$C_design <- design_C
       output$data$M_design <- vi_M_list
       output$data$vi_B_raw <- vi_B_raw
@@ -3624,7 +3624,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
      interpret_gam = parse_formula)
   
   
-  if (factorization_method != "collapsed"){
+  if (factorization_method != "partially_factorized"){
     output$alpha$dia.var <- unlist(lapply(variance_by_alpha_jg$variance_jg, FUN = function(i) {
       as.vector(sapply(i, diag))
     }))
@@ -3675,9 +3675,12 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
 #'
 #' @param iterations Number of iterations for the model.
 #' @param factorization_method The factorization method to use. Described in
-#'   detail in the dissertation. strong, partial, and weak correspond to Schemes
-#'   I, II, and III respectively. "weak" should have best performance but is
-#'   slowest.
+#'   detail in Goplerud (2022). "strong", "intermediate", and "weak" correspond to
+#'   Schemes I, II, and III respectively. "weak" should have best performance
+#'   but is slowest. "partially_factorized" corresponds to the partially collapsed scheme
+#'   discussed in Goplerud, Papaspiliopoulos, and Zanella (2023).
+#' @param collapsed_set If \code{factorization_method} = "partially_factorized", this defines
+#'   the set of random
 #' @param prior_variance Options are jeffreys, mcmcglmm, mvD, mean_exists,
 #'   limit, and uniform. They are defined as an Inverse Wishart with the
 #'   following parameters where d is the dimensionality of the random effect. At
@@ -3724,7 +3727,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
 #' @importFrom checkmate assert check_double check_logical check_choice check_int check_integerish
 #' @export
 vglmer_control <- function(iterations = 1000, 
-   collapse_size = "FE", block_collapse = FALSE,
+   collapse_set = "FE",
    drop.unused.levels = TRUE,
    prior_variance = "mean_exists", factorization_method = "weak",
    tolerance_elbo = 1e-8, tolerance_parameters = 1e-5,
@@ -3735,6 +3738,7 @@ vglmer_control <- function(iterations = 1000,
    debug_ELBO = FALSE, print_prog = NULL, quiet = T, quiet_rho = TRUE,
    init = "EM_FE") {
   
+  block_collapse <- FALSE
   # use checkmate package to verify arguments
   assert(
     check_integerish(iterations, lower = 1),
@@ -3743,7 +3747,7 @@ vglmer_control <- function(iterations = 1000,
       prevent_degeneracy, force_whole, verbose_time, do_timing,
       debug_param, return_data, debug_ELBO, quiet
     ), len = 8),
-    check_choice(factorization_method, c("weak", "strong", "collapsed", "partial")),
+    check_choice(factorization_method, c("weak", "strong", "intermediate", "partially_factorized")),
     check_choice(prior_variance, c("kn", "hw", "mean_exists", "jeffreys", "mcmcglmm", "mvD", "limit", "uniform")),
     check_choice(linpred_method, c("joint", "cyclical", "solve_normal")),
     check_choice(vi_r_method, c("VEM", "fixed", "Laplace", "delta")),
@@ -3758,8 +3762,8 @@ vglmer_control <- function(iterations = 1000,
     stop('vi_r_val must not be NA if vi_r_method = "fixed"')
   }
   
-  if (factorization_method == 'collapsed' & linpred_method != 'cyclical'){
-    warning('Should set linpred_method="cyclical" for collapsed')
+  if (factorization_method == 'partially_factorized' & linpred_method != 'cyclical'){
+    warning('Should set linpred_method="cyclical" for partially_factorized')
   }
 
   output <- namedList(
@@ -3768,7 +3772,7 @@ vglmer_control <- function(iterations = 1000,
     prevent_degeneracy, force_whole, verbose_time, do_SQUAREM,
     parameter_expansion, random_seed, do_timing, debug_param, return_data,
     linpred_method, vi_r_method, vi_r_val, debug_ELBO, print_prog, quiet, init,
-    collapse_size, block_collapse, drop.unused.levels
+    collapse_set, block_collapse, drop.unused.levels
   )
 
   class(output) <- c("vglmer_control")
@@ -3790,7 +3794,7 @@ namedList <- function(...) {
 calculate_expected_outer_alpha <- function(alpha_decomp_var, alpha_var, alpha_mu, re_position_list, 
       tP, L_beta, do_adjustment, factorization_method){
   
-  if (factorization_method != 'collapsed'){
+  if (factorization_method != 'partially_factorized'){
     out <- decomp_calculate_expected_outer_alpha(L = alpha_decomp_var, alpha_mu = alpha_mu,
       re_position_list = re_position_list,
       tP = tP, L_beta = L_beta, do_adjustment = do_adjustment)

@@ -11,7 +11,7 @@ test_that("Joint vs Cyclical Update", {
   y <- rbinom(n = N, size = 1, prob = plogis(-1 + x + alpha[g]))
 
 
-  for (v in c("weak", "partial", "strong")) {
+  for (v in c("weak", "intermediate", "strong")) {
     ex_vglmer_cyclic <- vglmer(
       formula = y ~ x + (1 | g), family = "binomial",
       data = NULL, control = vglmer_control(factorization_method = v, linpred_method = "cyclical", init = "zero")

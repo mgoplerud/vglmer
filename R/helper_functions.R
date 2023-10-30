@@ -233,7 +233,7 @@ calculate_ELBO <- function(family, ELBO_type, factorization_method,
   
   N <- nrow(X)
   
-  if (factorization_method == "collapsed"){
+  if (factorization_method == "partially_factorized"){
     ex_XBZA <- design_C %*% vi_C_mean 
     if (ncol(design_M) > 0){
       ex_XBZA <- ex_XBZA + design_M %*% do.call('c', vi_M_mean) 
@@ -256,7 +256,7 @@ calculate_ELBO <- function(family, ELBO_type, factorization_method,
     if (family == 'negbin'){
       var_XBZA <- var_XBZA + vi_r_sigma
     }
-  } else if (factorization_method == "collapsed") {
+  } else if (factorization_method == "partially_factorized") {
     
     var_XBZA <- rowSums( (design_C %*% vi_C_uncond) * design_C)
     
@@ -352,7 +352,7 @@ calculate_ELBO <- function(family, ELBO_type, factorization_method,
     if (factorization_method == "weak") {
       entropy_1 <- ncol(vi_joint_decomp) / 2 * log(2 * pi * exp(1)) +
         1 / 2 * log_det_joint_var
-    } else if (factorization_method == "collapsed") {
+    } else if (factorization_method == "partially_factorized") {
       entropy_1 <- ncol(design_C) / 2 * log(2 * pi * exp(1)) + 1 / 2 * log_det_C_var +
         ncol(design_M) / 2 * log(2 * pi * exp(1)) + 1 / 2 * log_det_M_var
     } else {

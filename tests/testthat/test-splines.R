@@ -127,7 +127,7 @@ test_that("Basic spline tests (run and predict)", {
   # Check runs with 2
   m2 <- vglmer(y ~ v_s(x2) + v_s(x), 
                control = vglmer_control(iterations = 20, 
-                                        factorization_method = 'partial'),
+                                        factorization_method = 'intermediate'),
                data = dat, family = 'binomial')
   # Check runs with "by"
   m3 <- vglmer(y ~ v_s(x2) + v_s(x, by = f), data = dat, 

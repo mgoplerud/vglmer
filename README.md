@@ -1,8 +1,8 @@
 # vglmer: Variational Generalized Linear Mixed Effects Regression [![Travis build status](https://travis-ci.com/mgoplerud/vglmer.svg?token=xHM2cTJdHAzcsxnP4SwG&branch=master)](https://travis-ci.com/mgoplerud/vglmer) [![codecov](https://codecov.io/gh/mgoplerud/vglmer/branch/master/graph/badge.svg?token=L8C4260BUW)](https://codecov.io/gh/mgoplerud/vglmer)   [![Lifecycle: experimental](https://img.shields.io/badge/lifecycle-experimental-orange.svg)](https://www.tidyverse.org/lifecycle/#experimental)
 
-*Note this version (collapsed branch) is experimental and will change considerably; please install the master branch for now*
+*Note this version (collapsed branch) is preliminary and used for the results in Goplerud, Papaspiliopoulos, and Zanella (2023); for the results in Goplerud (2022, 2023), please install the master branch; they will be eventually be integrated*
 
-A package to estimate non-linear hierarchical models using the variational algorithms described in [Goplerud (2020)](https://arxiv.org/abs/2007.12300). It also provides the option to improve an initial approximation using marginally augmented variational Bayes (MAVB) also described in the same paper. It can be installed using `devtools`
+A package to estimate non-linear hierarchical models using the variational algorithms described in [Goplerud (2022)](https://doi.org/10.1214/21-BA1266) and subsequent developments ([Goplerud 2023](https://doi.org/10.1017/S0003055423000035), Goplerud, Papaspiliopoulos, and Zanella 2023. It also provides the option to improve an initial approximation using marginally augmented variational Bayes (MAVB) also described in the same paper. It can be installed using `devtools`
 ```
 library(devtools); devtools::install_github("mgoplerud/vglmer", dependencies = TRUE)
 ```

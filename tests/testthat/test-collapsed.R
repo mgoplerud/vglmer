@@ -1,9 +1,4 @@
 
-# Add a test for the preconditioning weights
-
-
-# Add a test for the 
-
 test_that("Test block diagonal functions", {
   
   N <- 100
@@ -28,10 +23,3 @@ test_that("Test block diagonal functions", {
   expect_equivalent(two_block, manual_block_A)
 
 })
-
-
-invert_rowwise(
-  X = as.matrix(t(lookup_marginal[[j]]) %*% diag_vi_pg_mean %*% vi_FS_MM[[j]]), 
-  vec_prior = matrix(0, nrow = 4),
-  dim_X = aug_dj[j]
-)

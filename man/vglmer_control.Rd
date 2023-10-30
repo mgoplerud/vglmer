@@ -6,8 +6,7 @@
 \usage{
 vglmer_control(
   iterations = 1000,
-  collapse_size = "FE",
-  block_collapse = FALSE,
+  collapse_set = "FE",
   drop.unused.levels = TRUE,
   prior_variance = "mean_exists",
   factorization_method = "weak",
@@ -52,9 +51,10 @@ present, all models use "mean_exists" for a well-defined proper prior.
 The model may fail to converge if an improper prior is used.}
 
 \item{factorization_method}{The factorization method to use. Described in
-detail in the dissertation. strong, partial, and weak correspond to Schemes
-I, II, and III respectively. "weak" should have best performance but is
-slowest.}
+detail in Goplerud (2022). "strong", "intermediate", and "weak" correspond to
+Schemes I, II, and III respectively. "weak" should have best performance
+but is slowest. "partially_factorized" corresponds to the partially collapsed scheme
+discussed in Goplerud, Papaspiliopoulos, and Zanella (2023).}
 
 \item{tolerance_elbo}{Change in ELBO to stop algorithm.}
 
@@ -95,6 +95,9 @@ costless and should always be used!}
 \item{quiet}{Don't print noisy intermediate output.}
 
 \item{init}{Initialization method can be EM, zero, or random at moment.}
+
+\item{collapsed_set}{If \code{factorization_method} = "partially_factorized", this defines
+the set of random}
 }
 \description{
 Provides a set of control arguments to vglmer

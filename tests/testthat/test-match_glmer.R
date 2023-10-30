@@ -14,7 +14,7 @@ test_that("Compare against lmer", {
   est_glmer <- suppressWarnings(lme4::lmer(y ~ x + (1 | g), REML = FALSE))
   fmt_glmer <- format_glmer(est_glmer)
   
-  for (v in c("weak", "partial", "strong", "collapsed")) {
+  for (v in c("weak", "intermediate", "strong", "partially_factorized")) {
     example_vglmer <- vglmer(
       formula = y ~ x + (1 | g), data = NULL,
       control = vglmer_control(factorization_method = v, prior_variance = 'uniform',
@@ -47,7 +47,7 @@ test_that("Compare against glmer", {
   est_glmer <- suppressWarnings(lme4::glmer(y ~ x + (1 | g), family = binomial))
   fmt_glmer <- format_glmer(est_glmer)
 
-  for (v in c("weak", "partial", "strong", "collapsed")) {
+  for (v in c("weak", "intermediate", "strong", "partially_factorized")) {
     example_vglmer <- vglmer(
       formula = y ~ x + (1 | g), data = NULL,
       control = vglmer_control(factorization_method = v, init = "random"),
@@ -80,7 +80,7 @@ test_that("Compare against glmer.nb", {
   est_glmer <- suppressWarnings(glmer.nb(y ~ x + (1 | g), data = data, family = binomial))
   fmt_glmer <- format_glmer(est_glmer)
 
-  for (v in c("weak", "partial", "strong")) {
+  for (v in c("weak", "intermediate", "strong")) {
     example_vglmer <- vglmer(
       formula = y ~ x + (1 | g), data = data,
       family = "negbin",

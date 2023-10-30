@@ -24,7 +24,7 @@ if (FALSE){
                        data = NULL, 
                        control = vglmer_control(
                          parameter_expansion = 'translation',
-                         factorization_method = 'partial'),
+                         factorization_method = "intermediate"),
                        family = 'binomial')
   
   
@@ -72,7 +72,7 @@ if (FALSE){
                        data = data, 
                        control = vglmer_control(
                          parameter_expansion = 'translation',
-                         factorization_method = 'partial'),
+                         factorization_method = "intermediate"),
                        family = 'binomial')
   
   #FOR SIMPLE
@@ -113,7 +113,7 @@ if (FALSE){
                        data = data, 
                        control = vglmer_control(
                          parameter_expansion = 'translation',
-                         factorization_method = 'partial'),
+                         factorization_method = "intermediate"),
                        family = 'binomial')
   
   
