@@ -229,8 +229,9 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     }
   }
   
-  data <- model.frame(parse_formula$fake.formula, data,
-                      drop.unused.levels = TRUE)
+  data <- model.frame(
+    parse_formula$fake.formula, data,
+    drop.unused.levels = control$drop.unused.levels)
   
   tt <- terms(data)
 
