@@ -1352,6 +1352,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     debug_PX_ELBO <- NULL
   }
   
+  time_CAVI_loop <- Sys.time()
   for (it in 1:iterations) {
 
     if (it %% print_prog == 0) {
@@ -3790,6 +3791,10 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
       
     }
   }
+  time_CAVI_loop <- Sys.time() - time_CAVI_loop
+  # Get time for CAVI in seconds
+  time_CAVI_loop <- as.numeric(time_CAVI_loop, unit='secs')
+  
   if (it == iterations) {
     message(paste0("Ended without Convergence after ", it, " iterations : ELBO change of ", round(change_elbo[1], abs(floor(log(tolerance_elbo) / log(10))))))
   }
@@ -4076,6 +4081,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
   }
 
   output$internal_parameters <- list(
+    CAVI_time = time_CAVI_loop,
     vi_collapsed_P = vi_collapsed_P,
     it_used = it, it_max = iterations,
     cyclical_pos = cyclical_pos,
