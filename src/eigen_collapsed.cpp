@@ -199,7 +199,7 @@ Eigen::VectorXd cpp_quad_legacy(
 }
 
 // [[Rcpp::export]]
-Eigen::VectorXd cpp_var_lp(
+Eigen::VectorXd cpp_var_lp_joint(
   const Eigen::SparseMatrix<double> design_C,
   const Eigen::SparseMatrix<double> vi_C_uncond,
   const Rcpp::List vi_M_var,
@@ -246,6 +246,47 @@ Eigen::VectorXd cpp_var_lp(
   return joint_quad;
 }
 
+// [[Rcpp::export]]
+Eigen::VectorXd cpp_var_lp_cyclical(
+    const Eigen::SparseMatrix<double> design_C,
+    const Eigen::SparseMatrix<double> vi_C_uncond,
+    const Rcpp::List vi_FS_MM,
+    const Rcpp::List vi_M_var_flat,
+    const Rcpp::List lookup_marginal,
+    const Rcpp::List vi_FS_MC,
+    const Rcpp::List vi_M_B
+){
+  
+  int N = design_C.rows();
+  int size_C = design_C.cols();
+  Eigen::VectorXd joint_quad(N);
+  int J = vi_FS_MM.length();
+  
+  // Calculate contribution from collapsed set
+  // Note that ( (X * V) * Z).sum(axis = 0) gives x_i^T V z_i
+  joint_quad = ( (design_C * vi_C_uncond).cwiseProduct(design_C) ) * Eigen::VectorXd::Ones(size_C);
+  // Loop over each random effect
+  for (int j = 0; j < J; j++){
+    
+    Eigen::SparseMatrix<double> xi = vi_FS_MM[j];
+    Eigen::MatrixXd zi = vi_M_var_flat[j];
+    Eigen::SparseMatrix<double> gi = lookup_marginal[j];
+    Eigen::SparseMatrix<double> data_j = vi_FS_MC[j];
+    Eigen::VectorXd B_j = vi_M_B[j];
+    
+    int ncol_xi = xi.cols();  
+    int ncol_dataj = data_j.cols();
+    
+    if (ncol_xi > 0){
+      joint_quad += ( (gi * zi).cwiseProduct(xi) ) * Eigen::VectorXd::Ones(ncol_xi);
+    }
+    if (ncol_dataj){
+      joint_quad -= 2.0 * (data_j * B_j);
+    }
+
+  }
+  return joint_quad;
+}
 
 // [[Rcpp::export]]
 Rcpp::List cpp_update_m_var(

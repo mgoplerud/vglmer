@@ -41,8 +41,12 @@ cpp_quad_legacy <- function(tZ, varA, tP, X, vi_beta_var) {
     .Call('_vglmer_cpp_quad_legacy', PACKAGE = 'vglmer', tZ, varA, tP, X, vi_beta_var)
 }
 
-cpp_var_lp <- function(design_C, vi_C_uncond, vi_M_var, vi_M_list, vi_P, sparse_input, skip_vector) {
-    .Call('_vglmer_cpp_var_lp', PACKAGE = 'vglmer', design_C, vi_C_uncond, vi_M_var, vi_M_list, vi_P, sparse_input, skip_vector)
+cpp_var_lp_joint <- function(design_C, vi_C_uncond, vi_M_var, vi_M_list, vi_P, sparse_input, skip_vector) {
+    .Call('_vglmer_cpp_var_lp_joint', PACKAGE = 'vglmer', design_C, vi_C_uncond, vi_M_var, vi_M_list, vi_P, sparse_input, skip_vector)
+}
+
+cpp_var_lp_cyclical <- function(design_C, vi_C_uncond, vi_FS_MM, vi_M_var_flat, lookup_marginal, vi_FS_MC, vi_M_B) {
+    .Call('_vglmer_cpp_var_lp_cyclical', PACKAGE = 'vglmer', design_C, vi_C_uncond, vi_FS_MM, vi_M_var_flat, lookup_marginal, vi_FS_MC, vi_M_B)
 }
 
 cpp_update_m_var <- function(diag_vi_pg_mean, design_C, Tinv_C, list_Tinv_M, vi_M_list, any_collapsed_C, lndet_C) {

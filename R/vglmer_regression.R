@@ -1175,7 +1175,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
       sparseMatrix(i = 1:length(i), j = i, x = 1, dims = c(length(i), nl))[,j, drop = F]
     })
 
-    lookup_marginal <- c(list('Fixed Effect' = matrix(data = 1, nrow = nrow(Z), ncol = 1)), lookup_marginal)
+    lookup_marginal <- c(list('Fixed Effect' = drop0(matrix(data = 1, nrow = nrow(Z), ncol = 1))), lookup_marginal)
 
     block_collapse <- control$block_collapse
     position_block_j <- rep(0:number_of_RE, lengths(C_j))
@@ -1304,7 +1304,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     rm(joint_V_init, joint_XZ)
     
 
-    lagged_C_var <- vi_C_var
+    lagged_C_var <- sparseMatrix(i = 1, j = 1, x = 0, dims = dim(vi_C_var))
     
     lagged_C_mean <- rep(-Inf, length(unlist(C_j)))
     lagged_M_mean <- rep(-Inf, length(unlist(M_j)))
@@ -1391,24 +1391,35 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
         # }
         if (linpred_method == 'cyclical'){
           
-          # Variance of Collapsed 
-          joint_quad <- rowSums( (design_C %*% vi_C_uncond) * design_C)
-          # Variance of Marginal
-          joint_quad <- joint_quad + rowSums(mapply(vi_FS_MM, vi_M_var_flat, lookup_marginal, names(lookup_marginal), FUN=function(xi,zi,gi, n){
-            if (ncol(xi) > 0){
-              rowSums( xi * (gi %*% zi))
-            }else{
-              return(rep(0, nrow(xi)))
-            }
-          }))
-          # Covariance
-          joint_quad <- joint_quad + -2 * rowSums(
-            mapply(vi_FS_MC, vi_M_B, FUN=function(data_j, B_j){
-              as.vector(data_j %*% B_j)})
+          joint_quad <- cpp_var_lp_cyclical(
+            design_C,
+            vi_C_uncond,
+            vi_FS_MM,
+            vi_M_var_flat,
+            lookup_marginal,
+            vi_FS_MC,
+            vi_M_B
           )
           
+          # # Variance of Collapsed 
+          # joint_quad <- rowSums( (design_C %*% vi_C_uncond) * design_C)
+          # # Variance of Marginal
+          # joint_quad <- joint_quad + rowSums(mapply(vi_FS_MM, vi_M_var_flat, lookup_marginal, names(lookup_marginal), FUN=function(xi,zi,gi, n){
+          #   if (ncol(xi) > 0){
+          #     rowSums( xi * (gi %*% zi))
+          #   }else{
+          #     return(rep(0, nrow(xi)))
+          #   }
+          # }))
+          # # Covariance
+          # joint_quad <- joint_quad + -2 * rowSums(
+          #   mapply(vi_FS_MC, vi_M_B, FUN=function(data_j, B_j){
+          #     as.vector(data_j %*% B_j)})
+          # )
+          
         }else{
-          joint_quad <- cpp_var_lp(design_C = design_C,
+          stop('Setup for joint...')
+          joint_quad <- cpp_var_lp_joint(design_C = design_C,
              vi_C_uncond = vi_C_uncond,
              vi_M_var = vi_M_var,
              vi_M_list = vi_M_list,
@@ -1560,7 +1571,9 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
           Tinv_C <- Tinv[unlist(C_j), unlist(C_j), drop = F]
           chol.update.C <- Cholesky(t(design_C) %*% diag_vi_pg_mean %*% design_C + Tinv_C)
           C_hat <- as.vector(solve(chol.update.C, t(design_C) %*% s))
-          vi_C_var <- with(expand(chol.update.C), crossprod(solve(L) %*% P))
+          vi_C_var_decomp <- with(expand(chol.update.C), solve(L) %*% P)
+          vi_C_var <- crossprod(vi_C_var_decomp)
+          
           vi_P <- lapply(vi_M_list, FUN=function(i){
             solve(chol.update.C, t(design_C) %*% diag_vi_pg_mean %*% i)
           })
@@ -3689,7 +3702,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
         change_alpha_var <- 0
       }
       if (any_collapsed_C){
-        change_beta_var <- max(abs(vi_C_var - lagged_C_var))
+        change_beta_var <- max(abs(vi_C_var_decomp - lagged_C_var))
       }else{change_beta_var <- 0}
       change_joint_var <- 0
     } else {
@@ -3756,7 +3769,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
 
       lagged_C_mean <- vi_C_mean
       lagged_M_mean <- do.call('c', vi_M_mean)
-      lagged_C_var <- vi_C_var
+      lagged_C_var <- vi_C_var_decomp
       if (linpred_method == 'joint'){
         lagged_M_var <- vi_M_var
       }else{
@@ -3773,12 +3786,9 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
   if (it == iterations) {
     message(paste0("Ended without Convergence after ", it, " iterations : ELBO change of ", round(change_elbo[1], abs(floor(log(tolerance_elbo) / log(10))))))
   }
-
   if (parameter_expansion %in% c("translation", "diagonal")) {
     final.ELBO$accepted_PX <- accepted_times / attempted_expansion
   }
-
-  if (factorization_method == 'partially_factorized'){}
 
   output <- list(
     beta = list(mean = vi_beta_mean),
@@ -3818,6 +3828,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
   } else {
     tic_summary <- NULL
   }
+
   if (debug_param) {
     
     store_beta <- store_beta[1:it,,drop=F]

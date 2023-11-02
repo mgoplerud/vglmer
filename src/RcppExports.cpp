@@ -125,9 +125,9 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
-// cpp_var_lp
-Eigen::VectorXd cpp_var_lp(const Eigen::SparseMatrix<double> design_C, const Eigen::SparseMatrix<double> vi_C_uncond, const Rcpp::List vi_M_var, const Rcpp::List vi_M_list, const Rcpp::List vi_P, const bool sparse_input, const Rcpp::LogicalVector skip_vector);
-RcppExport SEXP _vglmer_cpp_var_lp(SEXP design_CSEXP, SEXP vi_C_uncondSEXP, SEXP vi_M_varSEXP, SEXP vi_M_listSEXP, SEXP vi_PSEXP, SEXP sparse_inputSEXP, SEXP skip_vectorSEXP) {
+// cpp_var_lp_joint
+Eigen::VectorXd cpp_var_lp_joint(const Eigen::SparseMatrix<double> design_C, const Eigen::SparseMatrix<double> vi_C_uncond, const Rcpp::List vi_M_var, const Rcpp::List vi_M_list, const Rcpp::List vi_P, const bool sparse_input, const Rcpp::LogicalVector skip_vector);
+RcppExport SEXP _vglmer_cpp_var_lp_joint(SEXP design_CSEXP, SEXP vi_C_uncondSEXP, SEXP vi_M_varSEXP, SEXP vi_M_listSEXP, SEXP vi_PSEXP, SEXP sparse_inputSEXP, SEXP skip_vectorSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -138,7 +138,24 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< const Rcpp::List >::type vi_P(vi_PSEXP);
     Rcpp::traits::input_parameter< const bool >::type sparse_input(sparse_inputSEXP);
     Rcpp::traits::input_parameter< const Rcpp::LogicalVector >::type skip_vector(skip_vectorSEXP);
-    rcpp_result_gen = Rcpp::wrap(cpp_var_lp(design_C, vi_C_uncond, vi_M_var, vi_M_list, vi_P, sparse_input, skip_vector));
+    rcpp_result_gen = Rcpp::wrap(cpp_var_lp_joint(design_C, vi_C_uncond, vi_M_var, vi_M_list, vi_P, sparse_input, skip_vector));
+    return rcpp_result_gen;
+END_RCPP
+}
+// cpp_var_lp_cyclical
+Eigen::VectorXd cpp_var_lp_cyclical(const Eigen::SparseMatrix<double> design_C, const Eigen::SparseMatrix<double> vi_C_uncond, const Rcpp::List vi_FS_MM, const Rcpp::List vi_M_var_flat, const Rcpp::List lookup_marginal, const Rcpp::List vi_FS_MC, const Rcpp::List vi_M_B);
+RcppExport SEXP _vglmer_cpp_var_lp_cyclical(SEXP design_CSEXP, SEXP vi_C_uncondSEXP, SEXP vi_FS_MMSEXP, SEXP vi_M_var_flatSEXP, SEXP lookup_marginalSEXP, SEXP vi_FS_MCSEXP, SEXP vi_M_BSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const Eigen::SparseMatrix<double> >::type design_C(design_CSEXP);
+    Rcpp::traits::input_parameter< const Eigen::SparseMatrix<double> >::type vi_C_uncond(vi_C_uncondSEXP);
+    Rcpp::traits::input_parameter< const Rcpp::List >::type vi_FS_MM(vi_FS_MMSEXP);
+    Rcpp::traits::input_parameter< const Rcpp::List >::type vi_M_var_flat(vi_M_var_flatSEXP);
+    Rcpp::traits::input_parameter< const Rcpp::List >::type lookup_marginal(lookup_marginalSEXP);
+    Rcpp::traits::input_parameter< const Rcpp::List >::type vi_FS_MC(vi_FS_MCSEXP);
+    Rcpp::traits::input_parameter< const Rcpp::List >::type vi_M_B(vi_M_BSEXP);
+    rcpp_result_gen = Rcpp::wrap(cpp_var_lp_cyclical(design_C, vi_C_uncond, vi_FS_MM, vi_M_var_flat, lookup_marginal, vi_FS_MC, vi_M_B));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -325,7 +342,8 @@ static const R_CallMethodDef CallEntries[] = {
     {"_vglmer_cpp_inv_alpha_var", (DL_FUNC) &_vglmer_cpp_inv_alpha_var, 6},
     {"_vglmer_cpp_quad_collapsed", (DL_FUNC) &_vglmer_cpp_quad_collapsed, 7},
     {"_vglmer_cpp_quad_legacy", (DL_FUNC) &_vglmer_cpp_quad_legacy, 5},
-    {"_vglmer_cpp_var_lp", (DL_FUNC) &_vglmer_cpp_var_lp, 7},
+    {"_vglmer_cpp_var_lp_joint", (DL_FUNC) &_vglmer_cpp_var_lp_joint, 7},
+    {"_vglmer_cpp_var_lp_cyclical", (DL_FUNC) &_vglmer_cpp_var_lp_cyclical, 7},
     {"_vglmer_cpp_update_m_var", (DL_FUNC) &_vglmer_cpp_update_m_var, 7},
     {"_vglmer_test_f", (DL_FUNC) &_vglmer_test_f, 5},
     {"_vglmer_block_diag_product", (DL_FUNC) &_vglmer_block_diag_product, 4},

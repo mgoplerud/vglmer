@@ -260,20 +260,30 @@ calculate_ELBO <- function(family, ELBO_type, factorization_method,
     }
   } else if (factorization_method == "partially_factorized") {
     
-    var_XBZA <- rowSums( (design_C %*% vi_C_uncond) * design_C)
-    
-    var_XBZA <- var_XBZA + rowSums(mapply(vi_FS_MM, vi_M_var_flat, lookup_marginal, names(lookup_marginal), FUN=function(xi,zi,gi, n){
-      if (ncol(xi) > 0){
-        rowSums( xi * (gi %*% zi))
-      }else{
-        return(rep(0, nrow(xi)))
-      }
-    }))
-    # Covariance
-    var_XBZA <- var_XBZA + -2 * rowSums(
-      mapply(vi_FS_MC, vi_M_B, FUN=function(data_j, B_j){
-        as.vector(data_j %*% B_j)})
+    var_XBZA <- cpp_var_lp_cyclical(
+      design_C,
+      vi_C_uncond,
+      vi_FS_MM,
+      vi_M_var_flat,
+      lookup_marginal,
+      vi_FS_MC,
+      vi_M_B
     )
+    
+    # var_XBZA <- rowSums( (design_C %*% vi_C_uncond) * design_C)
+    # 
+    # var_XBZA <- var_XBZA + rowSums(mapply(vi_FS_MM, vi_M_var_flat, lookup_marginal, names(lookup_marginal), FUN=function(xi,zi,gi, n){
+    #   if (ncol(xi) > 0){
+    #     rowSums( xi * (gi %*% zi))
+    #   }else{
+    #     return(rep(0, nrow(xi)))
+    #   }
+    # }))
+    # # Covariance
+    # var_XBZA <- var_XBZA + -2 * rowSums(
+    #   mapply(vi_FS_MC, vi_M_B, FUN=function(data_j, B_j){
+    #     as.vector(data_j %*% B_j)})
+    # )
     
     # # # Variance of Marginal
     # var_XBZA <- var_XBZA + rowSums(mapply(vi_M_list, vi_M_var_flat, FUN=function(data_j, var_j){
