@@ -1303,8 +1303,11 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     
     rm(joint_V_init, joint_XZ)
     
-
-    lagged_C_var <- sparseMatrix(i = 1, j = 1, x = 0, dims = dim(vi_C_var))
+    if (any_collapsed_C){
+      lagged_C_var <- sparseMatrix(i = 1, j = 1, x = 0, dims = dim(vi_C_var))
+    }else{
+      lagged_C_var <- NULL
+    }
     
     lagged_C_mean <- rep(-Inf, length(unlist(C_j)))
     lagged_M_mean <- rep(-Inf, length(unlist(M_j)))
@@ -3769,7 +3772,11 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
 
       lagged_C_mean <- vi_C_mean
       lagged_M_mean <- do.call('c', vi_M_mean)
-      lagged_C_var <- vi_C_var_decomp
+      
+      if (any_collapsed_C){
+        lagged_C_var <- vi_C_var_decomp
+      }
+      
       if (linpred_method == 'joint'){
         lagged_M_var <- vi_M_var
       }else{
