@@ -1618,6 +1618,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
         if (block_collapse){stop('fix aug_dj')}
         aug_dj <- c(0, d_j)
         inner_meat_C <- t(design_C) %*% diag_vi_pg_mean %*% design_C
+        
         for (j in seq_len(length(M_j))) {
           
           index_Mj <- M_j[[j]]
@@ -1715,21 +1716,59 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
           if (any_collapsed_C){
             adj_C <- C_hat - (running_Cadjust - P_j %*% old_mean_j)
           }
+          
           # other_termRHS1 <- Reduce('+', mapply(vi_M_list[-j], vi_M_mean[-j], SIMPLIFY = FALSE, FUN=function(i,j){if (ncol(i) > 0){i %*% j}else{0}}))
           # other_termRHS1 <- other_termRHS1 - design_C %*% Reduce('+', mapply(vi_P[-j], vi_M_mean[-j], SIMPLIFY = FALSE, FUN=function(i,j){if (ncol(i) > 0){i %*% j}else{0}}))
           # 
           # adj_salt <- s - diag_vi_pg_mean %*% design_C %*% C_hat - diag_vi_pg_mean %*% other_termRHS1
           # adj_Calt <- C_hat - Reduce('+', mapply(vi_P[-j], vi_M_mean[-j], FUN=function(i,j){if (ncol(i) > 0){i %*% j}else{0}}))
-          # 
-          # adj_s <- adj_salt
-          # adj_C <- adj_Calt
-          
+
           RHS_1 <- t(data_M_j) %*% adj_s - t(P_j) %*% (t(design_C) %*% adj_s)
           
           if (any_collapsed_C){
+            
             RHS_2 <- t(P_j) %*% Tinv_C %*% adj_C
             RHS <- RHS_1 + RHS_2
             update_Mj <- old_j %*% RHS + scaled_ZX_j %*% (B_term_2 %*% RHS)
+            
+            # # Direct, non-optimized updates
+            # 
+            # nonzero_b <- which(vi_pg_b != 0)
+            # W_k <- Diagonal(x = sqrt(diag(diag_vi_pg_mean)[nonzero_b])) %*% data_M_j[nonzero_b,]
+            # W_C <- Diagonal(x = sqrt(diag(diag_vi_pg_mean)[nonzero_b])) %*% design_C[nonzero_b,] 
+            # nu <- Diagonal(x = 1/sqrt(diag(diag_vi_pg_mean)[nonzero_b])) %*% s[nonzero_b]
+            # lp_other <- Reduce('+', mapply(vi_M_list[-j], vi_M_mean[-j], 
+            #           SIMPLIFY = FALSE, FUN=function(i,j){if (ncol(i) > 0){i %*% j}else{0}}))
+            # lp_other <- as.vector(lp_other)[nonzero_b]  
+            # lp_other <- Diagonal(x=sqrt(diag(diag_vi_pg_mean)[nonzero_b])) %*% lp_other
+            # resid_proj <- (nu - lp_other) - W_C %*% solve(Cholesky(crossprod(W_C) + Tinv_C), t(W_C) %*% (nu - lp_other))
+            # RHS_direct <- t(W_k) %*% resid_proj
+            # 
+            # data_projM_j <- data_M_j - design_C %*% vi_P[[j]]
+            # LHS_direct <- solve(t(data_projM_j) %*% diag_vi_pg_mean %*% data_projM_j +
+            #     bdiag(Tinv)[index_Mj, index_Mj] + t(vi_P[[j]]) %*% Tinv_C %*% vi_P[[j]])
+            # update_direct <- LHS_direct %*% RHS_direct
+            # if (!isTRUE(all.equal(update_direct, update_Mj))){
+            #   browser()
+            # }
+            # LHS_woodbury <- old_j + old_j %*% t(W_k) %*% W_C %*% 
+            #   solve(t(W_C) %*% W_C + Tinv_C - t(W_C) %*% W_k %*% old_j %*% t(W_k) %*% W_C) %*%
+            #   t(W_C) %*% W_k %*% old_j
+            # if (!isTRUE(all.equal(as.matrix(LHS_woodbury), as.matrix(LHS_direct)))){
+            #   browser()
+            # }
+            # lndet_direct <- as.numeric(
+            #   determinant(old_j)$modulus +
+            #   determinant(t(W_C) %*% W_C + Tinv_C)$modulus +
+            #   -determinant(t(W_C) %*% W_C + Tinv_C - t(W_C) %*% W_k %*% old_j %*% t(W_k) %*% W_C)$modulus
+            # )
+            # if (!isTRUE(all.equal(as.numeric(determinant(LHS_woodbury)$modulus),running_log_det_M_var[j]))){
+            #   browser()
+            # }
+            # if (!isTRUE(all.equal(lndet_direct,running_log_det_M_var[j]))){
+            #   browser()
+            # }
+            
           }else{
             RHS <- RHS_1
             update_Mj <- old_j %*% RHS
@@ -4277,7 +4316,7 @@ vglmer_control <- function(iterations = 1000,
     stop('tolerance for ELBO and parameters must be non-negative.')
   }
   
-  if (factorization_method != "strong" & parameter_expansion != "mean"){
+  if (factorization_method != "strong" & !(parameter_expansion %in% c("mean", "none"))){
     message('Setting parameter_expansion to mean for non-strong factorization')
     parameter_expansion <- 'mean'
   }
