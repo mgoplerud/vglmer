@@ -221,7 +221,7 @@ extract_precision <- function(object){
       vi_precision <- vi_precision * adjust_prec
     }
     
-  }else if (object$control$factorization_method == 'partially_factorized'){
+  }else if (object$control$factorization_method %in% c('partially_factorized', 'pf_diag')){
     
     design_C <- object$data$C_design
     vi_M_list <- object$data$M_design
@@ -268,12 +268,19 @@ extract_precision <- function(object){
     
     vi_prec_M <- bdiag( 
       mapply(vi_M_list, vi_P, Tinv_M, SIMPLIFY = FALSE, FUN=function(M_j, P_j, Tinv_j){
-        
+
         int_term <- t(M_j) %*% diag_vi_pg_mean %*% design_C
         
         out <- t(M_j) %*% diag_vi_pg_mean %*% M_j + 
           - int_term %*% (adjust_prec * vi_C_var) %*% t(int_term) +
           Tinv_j
+        
+        if (factor_method == 'pf_diag'){
+          # Only the *diagonal* part is counted as the precision
+          out <- Diagonal(x = diag(out))
+        }else if (factor_method == 'partially_factorized'){
+          # Pass
+        }else{stop('...')}
         return(out)
       })
     )

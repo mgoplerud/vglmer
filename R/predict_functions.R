@@ -356,7 +356,7 @@ predict.vglmer <- function(object, newdata,
     } else {
       only.lp <- FALSE
     }
-    if (factorization_method == 'partially_factorized'){
+    if (factorization_method %in% c('partially_factorized', 'pf_diag')){
       vi_alpha_mean <- object$alpha$mean
       vi_beta_mean <- object$beta$mean
       

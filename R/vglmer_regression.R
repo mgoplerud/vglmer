@@ -4345,7 +4345,7 @@ vglmer_control <- function(iterations = 1000,
     message('Setting px_method to "OSL" if translation & non-HW prior.')
   }
   
-  if (factorization_method == 'partially_factorized'){
+  if (factorization_method %in% c('partially_factorized', 'pf_diag')){
     if (linpred_method != 'cyclical'){
       message('Setting linpred_method="cyclical" for "partially_factorized"')
       linpred_method <- 'cyclical'
