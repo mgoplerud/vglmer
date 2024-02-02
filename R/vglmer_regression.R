@@ -294,7 +294,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
   }
   
   if (!(factorization_method %in% c("weak", "strong", 
-    "intermediate", "partially_factorized"))) {
+    "intermediate", "partially_factorized", "pf_diag"))) {
       stop("factorization_method must be 'weak', 
            'strong', 'intermediate', or 'partially_factorized'.")
   }
@@ -721,7 +721,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
   debug_px <- control$debug_px
   
   
-  if (factorization_method == 'partially_factorized' | control$parameter_expansion %in% c('translation', 'diagonal')){
+  if (factorization_method %in% c('partially_factorized', 'pf_diag') | control$parameter_expansion %in% c('translation', 'diagonal')){
 
   
     px_method <- control$px_method
@@ -1021,7 +1021,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
 
   running_log_det_alpha_var <- rep(NA, number_of_RE)
 
-  if (factorization_method != "partially_factorized"){
+  if (!(factorization_method %in% c("partially_factorized", "pf_diag"))){
     lagged_alpha_mean <- rep(-Inf, p.Z)
     lagged_beta_mean <- rep(-Inf, p.X)
     lagged_sigma_alpha <- vi_sigma_alpha
@@ -1047,7 +1047,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
   stationary_rho <- do.call('c', lapply(d_j[!spline_REs], FUN=function(i){as.vector(diag(x = i))}))
   
   if ( 
-    (factorization_method == "partially_factorized") | 
+    (factorization_method %in% c("pf_diag", "partially_factorized")) | 
     (parameter_expansion %in%  c("translation", "diagonal") & 
       any_Mprime & any(!spline_REs))) {
 
@@ -1133,7 +1133,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
   adjust_ceoa <- FALSE
   vi_alpha_var <- vi_beta_var <- NULL
   
-  if (factorization_method == "partially_factorized"){
+  if (factorization_method %in% c("partially_factorized", "pf_diag")){
     
     if (do_SQUAREM){
       warning('Turning off SQUAREM for "partially_factorized"')
@@ -1318,7 +1318,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
   }
 
   if (debug_param) {
-    if (factorization_method == "partially_factorized"){
+    if (factorization_method %in% c("partially_factorized", "pf_diag")){
       store_beta <- array(NA, dim = c(iterations, size_Cj))
       store_alpha <- array(NA, dim = c(iterations, size_Mj))
       store_sigma <- array(NA, dim = c(iterations, sum(d_j^2)))
@@ -1383,7 +1383,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
           joint_quad <- joint_quad + vi_r_sigma
         }
         vi_pg_c <- sqrt(as.vector(X %*% vi_beta_mean + Z %*% vi_alpha_mean - vi_r_mu)^2 + joint_quad)
-      } else if (factorization_method == "partially_factorized"){
+      } else if (factorization_method %in% c("partially_factorized", "pf_diag")){
         
         # joint_quad <- rowSums( (design_C %*% vi_C_uncond) * design_C)
         # for (j in seq_len(length(M_j))){
@@ -1533,7 +1533,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
       })
     }
     
-    if (factorization_method == "partially_factorized"){
+    if (factorization_method %in% c("partially_factorized", "pf_diag")){
       Tinv <- bdiag(Diagonal(x = rep(0, p.X)), Tinv)
     }
     
@@ -1568,7 +1568,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
         vi_joint_L_nonpermute <- vi_joint_decomp
         vi_joint_LP <- Diagonal(n = ncol(vi_joint_decomp))
       }
-    } else if (factorization_method == "partially_factorized") {
+    } else if (factorization_method %in% c("partially_factorized", "pf_diag")) {
       
       if (linpred_method == 'cyclical'){
         if (any_collapsed_C){
@@ -1662,7 +1662,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
             }
             chol_Cmeat <- Cholesky(meat_C)
             PZ_j <- P_j %*% old_j
-            scaled_ZX_j <- old_j %*% (t(data_M_j) %*% diag_vi_pg_mean %*% design_C)
+            scaled_ZX_j <- old_j %*% bread_j
               
             B_term_1 <- P_j %*% scaled_ZX_j
             B_term_2 <- solve(chol_Cmeat, t(scaled_ZX_j))
@@ -1670,7 +1670,26 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
             # B <- P_j %*% var_Mj
             
             d_jm <- aug_dj[j]
-            if (j == 1){
+            if (factorization_method == 'pf_diag'){
+              if (j == 1){stop('PF-DIAG not set up for no-FE in collapsed set...')}
+              if (block_collapse){stop('...')}
+              
+              T2 <- solve(chol.update.C, t(bread_j))
+              T2 <- block_diag_product(A = as.matrix(bread_j),
+                                 B = as.matrix(t(T2)), block_size = d_jm, blocks = ncol(data_M_j)/d_jm)
+              T1 <- as.matrix(t(lookup_marginal[[j]]) %*% diag_vi_pg_mean %*% vi_FS_MM[[j]])
+              T1 <- sweep(T1, MARGIN = 2, FUN="+", STATS = as.vector(Tinv[index_Mj[1:aug_dj[j]], index_Mj[1:aug_dj[j]]]))
+              inv_T <- invert_rowwise(T1 - T2, vec_prior = matrix(rep(0, ncol(T1))), dim_X = d_jm)
+              running_log_det_M_var[j] <- 2 * sum(inv_T$det)
+              var_flat_j <- inv_T$inverse
+              rm(inv_T)
+              if (d_jm == 1){
+                B <- P_j %*% Diagonal(x=var_flat_j[,1])
+              }else{
+                B <- P_j %*% bdiag(apply(var_flat_j, MARGIN = 1, FUN=function(i){Matrix(as.vector(i), nrow = d_jm)}))
+              }
+              
+            }else if (j == 1){
               
               if (block_collapse){stop('...')}
               var_flat_j <- matrix(as.vector(ZtZinv_j$inverse + scaled_ZX_j %*% B_term_2) , nrow = 1)
@@ -1790,6 +1809,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
             running_Cadjust <- running_Cadjust + P_j %*% diff_M_j
             vi_M_B[[j]] <- as.vector(t(B))
             vi_B_raw[[j]] <- B
+
             vi_C_uncond <- vi_C_uncond + B %*% t(P_j)
           }
           
@@ -2255,7 +2275,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
       adjust_var <- 1/sqrt(vi_sigmasq_a/vi_sigmasq_b)
       ln_sigmasq <- log(vi_sigmasq_b) - log(vi_sigmasq_a)
       
-      if (factorization_method == "partially_factorized"){
+      if (factorization_method %in% c("partially_factorized", "pf_diag")){
         
         if (linpred_method == 'joint'){
           vi_M_var <- lapply(vi_M_var, FUN=function(i){adjust_var^2 * i})
@@ -2291,7 +2311,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
 
     if (debug_ELBO & it != 1) {
       
-      if (factorization_method == "partially_factorized"){
+      if (factorization_method %in% c("partially_factorized", "pf_diag")){
         
         ssq_out <- prepare_total_variance(vi_C_mean = vi_C_mean, 
           vi_M_mean = vi_M_mean,
@@ -2364,7 +2384,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     # Update \Sigma_j
     ##
 
-    if (factorization_method == "partially_factorized"){
+    if (factorization_method %in% c("partially_factorized", "pf_diag")){
       
       stopifnot(all(spline_REs == FALSE))
       if (linpred_method == 'joint'){stop()}
@@ -2462,7 +2482,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
       if (factorization_method == 'weak'){
         joint_quad <- cpp_zVz(Z = joint.XZ, V = as(vi_joint_decomp, "generalMatrix"))
         vi_lp <- (s - as.vector(X %*% vi_beta_mean + Z %*% vi_alpha_mean))^2 + joint_quad
-      } else if (factorization_method == "partially_factorized"){
+      } else if (factorization_method %in% c("partially_factorized", "pf_diag")){
         
         # Variance of Collapsed 
         joint_quad <- rowSums( (design_C %*% vi_C_uncond) * design_C)
@@ -2559,7 +2579,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
       
       # Remove the "excess mean" mu_j from each random effect \alpha_{j,g}
       # and add the summd mass back to the betas.
-      if (factorization_method == "partially_factorized"){
+      if (factorization_method %in% c("partially_factorized", "pf_diag")){
 
         stopifnot(all(spline_REs == FALSE))
         stopifnot(all(d_j == 1))
@@ -3177,7 +3197,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     
     if (do_SQUAREM){
       
-      if (factorization_method %in% c('weak', 'partially_factorized')){
+      if (factorization_method %in% c('weak', 'partially_factorized', 'pf_diag')){
         vi_alpha_L_nonpermute <- vi_beta_L_nonpermute <- NULL
         vi_alpha_LP <- vi_beta_LP <- NULL
       }else{
@@ -3222,7 +3242,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
            vi_a_nu_jp = vi_a_nu_jp, vi_a_APRIOR_jp = vi_a_APRIOR_jp
         )
         
-        if (factorization_method %in% c('weak', 'partially_factorized')){
+        if (factorization_method %in% c('weak', 'partially_factorized', 'pf_diag')){
           squarem_par <- c('vi_a_b_jp', 'vi_sigma_alpha', 'vi_pg_c',
                            'vi_alpha_mean', 'vi_beta_mean', 'vi_joint_L_nonpermute')
           squarem_type <- c('positive', 'matrix', 'positive',
@@ -3455,7 +3475,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
             squarem_par <- c(squarem_par, 'log_det_joint_var')
             squarem_par <- c(squarem_par, 'vi_joint_decomp')
             
-          }else if (factorization_method == 'partially_factorized'){
+          }else if (factorization_method %in% c('partially_factorized', 'pf_diag')){
             stop('Setup squarem for partially_factorized')
             if (squarem_type[squarem_par == 'vi_joint_L_nonpermute'] == 'lu'){
               prop_squarem$vi_joint_decomp <- prop_squarem$vi_joint_L_nonpermute$M              
@@ -3587,7 +3607,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
                 joint_quad <- joint_quad + prop_ELBOargs$vi_r_sigma
               }
               prop_ELBOargs$vi_pg_c <- sqrt(as.vector(X %*% prop_ELBOargs$vi_beta_mean + Z %*% prop_ELBOargs$vi_alpha_mean - prop_ELBOargs$vi_r_mu)^2 + joint_quad)
-            } else if (grepl(factorization_method, pattern='partially_factorized')) {
+            } else if (grepl(factorization_method, pattern='partially_factorized|pf_diag')) {
               stop('Setup Squarem for "partially_factorized"')
             } else {
               beta_quad <- rowSums((X %*% t(prop_ELBOargs$vi_beta_decomp))^2)
@@ -3703,7 +3723,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     
     change_elbo <- final.ELBO$ELBO - lagged_ELBO
 
-    if (factorization_method == "partially_factorized"){
+    if (factorization_method %in% c("partially_factorized", "pf_diag")){
       if (any_collapsed_M){
         change_alpha_mean <- max(abs(do.call('c', vi_M_mean) - lagged_M_mean))
       }else{
@@ -3733,7 +3753,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     if (factorization_method == "weak") {
       change_joint_var <- 0 # change_joint_var <- max(abs(vi_joint_decomp - lagged_joint_decomp))
       change_alpha_var <- change_beta_var <- 0
-    } else if (factorization_method == "partially_factorized") {
+    } else if (factorization_method %in% c("partially_factorized", "pf_diag")) {
       
       if (any_collapsed_M){
         if (linpred_method == 'joint'){
@@ -3760,7 +3780,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
       toc(quiet = quiet_time, log = T)
     }
     if (debug_param) {
-      if (factorization_method == "partially_factorized"){
+      if (factorization_method %in% c("partially_factorized", "pf_diag")){
         store_beta[it, ] <- as.vector(vi_C_mean)
         store_alpha[it, ] <- unlist(vi_M_mean)
         store_sigma[it,] <- do.call('c', lapply(vi_sigma_alpha, as.vector))
@@ -3795,7 +3815,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
       message(paste0("Other Parameter Changes: ", max(change_all)))
     }
 
-    if (factorization_method != "partially_factorized"){
+    if (!(factorization_method %in% c("partially_factorized", 'pf_diag'))){
       lagged_alpha_mean <- vi_alpha_mean
       lagged_beta_mean <- vi_beta_mean
       lagged_alpha_decomp <- vi_alpha_decomp
@@ -3895,7 +3915,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
   
   if (factorization_method == "weak") {
     output$joint <- list(decomp_var = vi_joint_decomp)
-  }else if (factorization_method == "partially_factorized") {
+  }else if (factorization_method %in% c("partially_factorized", "pf_diag")) {
   
     if (any_collapsed_C){
       vi_C_var <- solve(drop0(
@@ -4067,7 +4087,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
       diag_vi_pg_mean = diag_vi_pg_mean,
       Tinv = Tinv, cyclical_pos = cyclical_pos
     )
-    if (factorization_method == 'partially_factorized'){
+    if (factorization_method %in% c('partially_factorized', 'pf_diag')){
       output$data$C_design <- design_C
       output$data$M_design <- vi_M_list
       output$data$vi_B_raw <- vi_B_raw
@@ -4083,7 +4103,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
      fe_contrasts = fe_contrasts, fe_terms = fe_terms)
   
   
-  if (factorization_method != "partially_factorized"){
+  if (!(factorization_method %in% c("partially_factorized","pf_diag"))){
     output$alpha$dia.var <- unlist(lapply(variance_by_alpha_jg$variance_jg, FUN = function(i) {
       as.vector(sapply(i, diag))
     }))
@@ -4106,7 +4126,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     output$hw <- list(a = vi_a_a_jp, b = vi_a_b_jp)
   }
   
-  if (factorization_method == 'partially_factorized'){
+  if (factorization_method %in% c('partially_factorized', 'pf_diag')){
     final_lp <- as.vector(X %*% output$beta$mean + Z %*% output$alpha$mean - vi_r_mu)
     # Confirm this aligns
     confirm_lp <- design_C %*% vi_C_mean
@@ -4282,7 +4302,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
 #' @export
 vglmer_control <- function(iterations = 1000, 
    prior_variance = "hw",
-   factorization_method = c("strong", "intermediate", "weak", "partially_factorized"),
+   factorization_method = c("strong", "intermediate", "weak", "partially_factorized", "pf_diag"),
    collapse_set = "FE", 
    drop.unused.levels = TRUE,
    parameter_expansion = "translation",
