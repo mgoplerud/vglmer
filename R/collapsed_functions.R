@@ -267,7 +267,7 @@ extract_precision <- function(object){
     agg_P <- do.call('cbind', vi_P)
     
     vi_prec_M <- bdiag( 
-      mapply(vi_M_list, vi_P, Tinv_M, SIMPLIFY = FALSE, FUN=function(M_j, P_j, Tinv_j){
+      mapply(vi_M_list, vi_P, Tinv_M, aug_dj, SIMPLIFY = FALSE, FUN=function(M_j, P_j, Tinv_j, d_j){
 
         int_term <- t(M_j) %*% diag_vi_pg_mean %*% design_C
         
@@ -276,8 +276,14 @@ extract_precision <- function(object){
           Tinv_j
         
         if (factor_method == 'pf_diag'){
-          # Only the *diagonal* part is counted as the precision
-          out <- Diagonal(x = diag(out))
+          if (nrow(out) == 0){# do nothing
+          }else if (d_j == 1){
+            # Only the *diagonal* part is counted as the precision
+            out <- Diagonal(x = diag(out))
+          }else{
+            # Get the block-diagonal part that counts as the precision
+            out <- bdiag(lapply(1:(ncol(M_j)/d_j), FUN=function(i){matrix(1, nrow = d_j, ncol = d_j)})) * out
+          }
         }else if (factor_method == 'partially_factorized'){
           # Pass
         }else{stop('...')}
