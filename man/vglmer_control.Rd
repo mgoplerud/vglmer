@@ -7,7 +7,8 @@
 vglmer_control(
   iterations = 1000,
   prior_variance = "hw",
-  factorization_method = c("strong", "intermediate", "weak", "partially_factorized"),
+  factorization_method = c("strong", "intermediate", "weak", "partially_factorized",
+    "pf_diag"),
   collapse_set = "FE",
   drop.unused.levels = TRUE,
   parameter_expansion = "translation",

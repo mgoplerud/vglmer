@@ -275,7 +275,7 @@ extract_precision <- function(object){
           - int_term %*% (adjust_prec * vi_C_var) %*% t(int_term) +
           Tinv_j
         
-        if (factor_method == 'pf_diag'){
+        if (object$control$factorization_method == 'pf_diag'){
           if (nrow(out) == 0){# do nothing
           }else if (d_j == 1){
             # Only the *diagonal* part is counted as the precision
@@ -284,7 +284,7 @@ extract_precision <- function(object){
             # Get the block-diagonal part that counts as the precision
             out <- bdiag(lapply(1:(ncol(M_j)/d_j), FUN=function(i){matrix(1, nrow = d_j, ncol = d_j)})) * out
           }
-        }else if (factor_method == 'partially_factorized'){
+        }else if (object$control$factorization_method == 'partially_factorized'){
           # Pass
         }else{stop('...')}
         return(out)
