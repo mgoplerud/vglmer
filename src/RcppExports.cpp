@@ -6,6 +6,11 @@
 
 using namespace Rcpp;
 
+#ifdef RCPP_USE_GLOBAL_ROSTREAM
+Rcpp::Rostream<true>&  Rcpp::Rcout = Rcpp::Rcpp_cout_get();
+Rcpp::Rostream<false>& Rcpp::Rcerr = Rcpp::Rcpp_cerr_get();
+#endif
+
 // LinRegChol
 List LinRegChol(const Eigen::MappedSparseMatrix<double> X, const Eigen::MappedSparseMatrix<double> omega, const Eigen::MappedSparseMatrix<double> prior_precision, const Eigen::Map<Eigen::VectorXd> y, const bool save_chol);
 RcppExport SEXP _vglmer_LinRegChol(SEXP XSEXP, SEXP omegaSEXP, SEXP prior_precisionSEXP, SEXP ySEXP, SEXP save_cholSEXP) {
@@ -53,6 +58,20 @@ BEGIN_RCPP
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< Rcpp::IntegerMatrix& >::type Mmap(MmapSEXP);
     rcpp_result_gen = Rcpp::wrap(prepare_Z_for_px(Mmap));
+    return rcpp_result_gen;
+END_RCPP
+}
+// invert_rowwise
+Rcpp::List invert_rowwise(const Eigen::MatrixXd X, const Eigen::MatrixXd vec_prior, const Eigen::MatrixXd RHS, const int dim_X);
+RcppExport SEXP _vglmer_invert_rowwise(SEXP XSEXP, SEXP vec_priorSEXP, SEXP RHSSEXP, SEXP dim_XSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const Eigen::MatrixXd >::type X(XSEXP);
+    Rcpp::traits::input_parameter< const Eigen::MatrixXd >::type vec_prior(vec_priorSEXP);
+    Rcpp::traits::input_parameter< const Eigen::MatrixXd >::type RHS(RHSSEXP);
+    Rcpp::traits::input_parameter< const int >::type dim_X(dim_XSEXP);
+    rcpp_result_gen = Rcpp::wrap(invert_rowwise(X, vec_prior, RHS, dim_X));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -154,6 +173,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_vglmer_calculate_expected_outer_alpha", (DL_FUNC) &_vglmer_calculate_expected_outer_alpha, 3},
     {"_vglmer_unique_rows", (DL_FUNC) &_vglmer_unique_rows, 1},
     {"_vglmer_prepare_Z_for_px", (DL_FUNC) &_vglmer_prepare_Z_for_px, 1},
+    {"_vglmer_invert_rowwise", (DL_FUNC) &_vglmer_invert_rowwise, 4},
     {"_vglmer_chol_sparse", (DL_FUNC) &_vglmer_chol_sparse, 3},
     {"_vglmer_cpp_zVz", (DL_FUNC) &_vglmer_cpp_zVz, 2},
     {"_vglmer_vecR_ridge_general", (DL_FUNC) &_vglmer_vecR_ridge_general, 8},

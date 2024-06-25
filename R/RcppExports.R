@@ -29,6 +29,10 @@ prepare_Z_for_px <- function(Mmap) {
     .Call('_vglmer_prepare_Z_for_px', PACKAGE = 'vglmer', Mmap)
 }
 
+invert_rowwise <- function(X, vec_prior, RHS, dim_X) {
+    .Call('_vglmer_invert_rowwise', PACKAGE = 'vglmer', X, vec_prior, RHS, dim_X)
+}
+
 chol_sparse <- function(X, omega, precision) {
     .Call('_vglmer_chol_sparse', PACKAGE = 'vglmer', X, omega, precision)
 }

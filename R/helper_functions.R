@@ -215,9 +215,21 @@ calculate_ELBO <- function(family, ELBO_type, factorization_method,
      #linear parameters
      vi_sigmasq_a = NULL, vi_sigmasq_b = NULL,
      vi_sigmasq_prior_a = NULL, vi_sigmasq_prior_b = NULL,
-     # huang_wand parameters
+     # Huang Wand parameters
      do_huangwand = NULL, vi_a_a_jp = NULL, vi_a_b_jp = NULL,
-     vi_a_nu_jp = NULL, vi_a_APRIOR_jp = NULL
+     vi_a_nu_jp = NULL, vi_a_APRIOR_jp = NULL,
+     # Multiplicative Interaction
+     any_RE = NULL, 
+     any_mi = NULL, 
+     Z_MI = NULL, vi_mi_mean = NULL, vi_mi_var = NULL,
+     vi_mi_lndet = NULL,
+     vi_mi_diag = NULL, vi_mi_sigma_outer_alpha = NULL,
+     vi_mi_sigma_alpha = NULL, vi_mi_sigma_alpha_nu = NULL,
+     vi_mi_a_a_jp = NULL, vi_mi_a_b_jp = NULL, vi_mi_a_nu_jp = NULL,
+     vi_mi_a_APRIOR_jp = NULL, 
+     mi_iw_prior_constant = NULL, 
+     mi_prior_sigma_alpha_nu = NULL, mi_prior_sigma_alpha_phi = NULL, 
+     mi_d_j = NULL, mi_g_j = NULL
   ) {
   ####
   ## PREPARE INTERMEDIATE QUANTITES
@@ -229,6 +241,7 @@ calculate_ELBO <- function(family, ELBO_type, factorization_method,
   }else{
     ex_XBZA <- (X %*% vi_beta_mean + Z %*% vi_alpha_mean)
   }
+
   # quadratic var, i.e. Var(x_i^T beta + z_i^T alpha)
   if (factorization_method %in% c("weak", "collapsed")) {
     if (is.null(vi_joint_decomp)) {
@@ -248,25 +261,51 @@ calculate_ELBO <- function(family, ELBO_type, factorization_method,
       var_XBZA <- var_XBZA + vi_r_sigma 
     }
   }
-  # Prepare vi_sigma_alpha
-  moments_sigma_alpha <- mapply(vi_sigma_alpha, vi_sigma_alpha_nu, d_j, SIMPLIFY = FALSE, FUN = function(phi, nu, d) {
-    inv_phi <- solve(phi)
-
-    sigma.inv <- nu * inv_phi
-
-    # ln.det <- - (multi_digamma(a = nu/2, p = d) + d * log(2) + log(det(inv_phi)) )
-    ln.det <- log(det(phi)) - sum(digamma((nu - 1:d + 1) / 2)) - d * log(2)
-    return(list(sigma.inv = sigma.inv, ln.det = ln.det))
-  })
-
-  ln_det_sigma_alpha <- sapply(moments_sigma_alpha, FUN = function(i) {
-    i$ln.det
-  })
-  inv_sigma_alpha <- lapply(moments_sigma_alpha, FUN = function(i) {
-    i$sigma.inv
-  })
-  ## GET the terms for the expectation
-  ## of the log-complete data given the variational distribution.
+  
+  # Add the contribution of the bilinear predictor
+  if (any_mi){
+    ex_XBZA <- ex_XBZA + get_bilinear_mean(Z_MI, vi_mi_mean)
+    var_XBZA <- var_XBZA + get_bilinear_var(Z_MI, vi_mi_mean, vi_mi_var)
+  }
+  
+  if (any_RE){
+    # Prepare vi_sigma_alpha
+    moments_sigma_alpha <- mapply(vi_sigma_alpha, vi_sigma_alpha_nu, d_j, SIMPLIFY = FALSE, FUN = function(phi, nu, d) {
+      inv_phi <- solve(phi)
+      
+      sigma.inv <- nu * inv_phi
+      
+      # ln.det <- - (multi_digamma(a = nu/2, p = d) + d * log(2) + log(det(inv_phi)) )
+      ln.det <- log(det(phi)) - sum(digamma((nu - 1:d + 1) / 2)) - d * log(2)
+      return(list(sigma.inv = sigma.inv, ln.det = ln.det))
+    })
+    
+    ln_det_sigma_alpha <- sapply(moments_sigma_alpha, FUN = function(i) {
+      i$ln.det
+    })
+    inv_sigma_alpha <- lapply(moments_sigma_alpha, FUN = function(i) {
+      i$sigma.inv
+    })
+  }
+  if (any_mi){
+    
+    mi_moments_sigma_alpha <- mapply(
+      vi_mi_sigma_alpha, vi_mi_sigma_alpha_nu, mi_d_j,
+      SIMPLIFY = FALSE, FUN = function(phi, nu, d) {
+        inv_phi <- solve(phi)
+        sigma.inv <- nu * inv_phi
+        ln.det <- log(det(phi)) - sum(digamma((nu - 1:d + 1) / 2)) - d * log(2)
+        return(list(sigma.inv = sigma.inv, ln.det = ln.det))
+    })
+    mi_ln_det_sigma_alpha <- sapply(mi_moments_sigma_alpha, FUN = function(i) {
+      i$ln.det
+    })
+    mi_inv_sigma_alpha <- lapply(mi_moments_sigma_alpha, FUN = function(i) {
+      i$sigma.inv
+    })
+  }
+  ## Get the terms for the expectation of the log-complete data given the
+  ## variational distribution.
   if (ELBO_type == "augmented") {
     if (family == "linear") {
       
@@ -422,18 +461,93 @@ calculate_ELBO <- function(family, ELBO_type, factorization_method,
   }else{
     entropy_4 <- 0
   }
+  ########
+  # Contributions from Multiplicative Interactions
+  ########
+  if (any_mi){
+    
+    # Expectation of log prior for MI
+    logcomplete_mi_prior <- sum(-mi_d_j * mi_g_j / 2 * log(2 * pi) - mi_g_j / 2 * mi_ln_det_sigma_alpha) +
+      -1 / 2 * sum(mapply(mi_inv_sigma_alpha, vi_mi_sigma_outer_alpha, FUN = function(a, b) {
+        sum(diag(a %*% b))
+      }))
+    
+    # Entropy of VI distribution for MI
+    entropy_mi_prior <- sum(mi_d_j * mi_g_j) / 2 * log(2 * pi * exp(1)) + 
+      1/2 * sum(vi_mi_lndet)
+    
+    # Expectation of log prior for sigma^2 for MI
+    if (do_huangwand){
+      mi_E_ln_vi_a <- mapply(vi_mi_a_a_jp, vi_mi_a_b_jp, FUN=function(tilde.a, tilde.b){
+        sum(log(tilde.b) - digamma(tilde.a))
+      })
+      mi_E_inv_v_a <- mapply(vi_mi_a_a_jp, vi_mi_a_b_jp, vi_mi_a_nu_jp, SIMPLIFY = FALSE, FUN=function(tilde.a, tilde.b, nu){
+        2 * nu * Diagonal(x = tilde.a/tilde.b)
+      })
+      logcomplete_mi_sigma <- 
+        sum(
+          mi_iw_prior_constant +
+            - (vi_mi_a_nu_jp + mi_d_j - 1)/2 * (mi_d_j * log(2 * vi_mi_a_nu_jp) + mi_E_ln_vi_a) +
+            -(2 * mi_d_j + vi_mi_a_nu_jp) / 2 * mi_ln_det_sigma_alpha +
+            -1 / 2 * mapply(mi_E_inv_v_a, mi_inv_sigma_alpha, FUN = function(a, b) {
+              sum(diag(a %*% b))
+            })
+        )
+      mi_term_3a <- mapply(mi_d_j, 
+          vi_mi_a_a_jp, vi_mi_a_b_jp, mi_E_ln_vi_a, 
+          vi_mi_a_APRIOR_jp, 
+          FUN=function(d, tilde.a, tilde.b, E_ln_vi_a.j, APRIOR.j){
+            1/2 * sum(log(1/APRIOR.j^2)) - d * lgamma(1/2) - 3/2 * E_ln_vi_a.j +
+              sum(-1/APRIOR.j^2 * tilde.a/tilde.b)
+          })
+      logcomplete_mi_sigma <- logcomplete_mi_sigma + sum(mi_term_3a)
+      entropy_mi_hw <- sum(mapply(vi_mi_a_a_jp, vi_mi_a_b_jp, FUN=function(tilde.a, tilde.b){
+        sum(tilde.a + log(tilde.b) + lgamma(tilde.a) - (1 + tilde.a) * digamma(tilde.a))
+      }))
+    }else{
+      entropy_mi_hw <- 0
+      logcomplete_mi_sigma <- sum(
+          mi_iw_prior_constant +
+            -(mi_prior_sigma_alpha_nu + mi_d_j + 1) / 2 * mi_ln_det_sigma_alpha +
+            -1 / 2 * mapply(mi_prior_sigma_alpha_phi, mi_inv_sigma_alpha, FUN = function(a, b) {
+              sum(diag(a %*% b))
+            })
+        )
+    }
+    # Entropy of sigma^2 for MI
+    entropy_mi_sigma <- -mapply(vi_mi_sigma_alpha_nu, vi_mi_sigma_alpha, FUN = function(nu, Phi) {
+      make_log_invwishart_constant(nu = nu, Phi = Phi)
+    }) +
+      (vi_mi_sigma_alpha_nu + mi_d_j + 1) / 2 * mi_ln_det_sigma_alpha +
+      1 / 2 * mapply(vi_mi_sigma_alpha, mi_inv_sigma_alpha, FUN = function(a, b) {
+        sum(diag(a %*% b))
+      })
+    entropy_mi_sigma <- sum(entropy_mi_sigma)
+
+    if (family == 'linear'){stop('...')}
+
+    logcomplete_mi <- logcomplete_mi_prior + logcomplete_mi_sigma
+    entropy_mi <- entropy_mi_prior + entropy_mi_sigma + entropy_mi_hw
+
+  }else{
+    logcomplete_mi <- 0
+    entropy_mi <- 0
+  }
   
   ###Combine all of the terms together
   
-  logcomplete <- logcomplete_1 + logcomplete_2 + logcomplete_3 +
+  logcomplete <- logcomplete_1 + logcomplete_2 +
+    logcomplete_3 + logcomplete_mi +
     choose_term
   
-  entropy <- entropy_1 + entropy_2 + entropy_3 + entropy_4
+  entropy <- entropy_1 + entropy_2 + entropy_3 + entropy_4 + entropy_mi
+  
   ELBO <- entropy + logcomplete
 
   return(data.frame(
     ELBO, logcomplete, entropy, logcomplete_1,
-    logcomplete_2, logcomplete_3, entropy_1, entropy_2, entropy_3, entropy_4
+    logcomplete_2, logcomplete_3, logcomplete_mi,
+    entropy_1, entropy_2, entropy_3, entropy_4, entropy_mi
   ))
 }
 

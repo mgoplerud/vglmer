@@ -77,10 +77,30 @@ v_s <- function(..., type = 'tpf', knots = NULL, by = NA,
   label <- paste0("v_s(", term[1], ")")
   
   ret <- list(term = term, outer_okay = outer_okay, force_vector = force_vector,
-              by = by.var, type = type, knots = knots,
+              by = by.var, type = type, knots = knots, mi = FALSE,
               by_re = by_re)
   class(ret) <- 'vglmer_spline'
   
+  return(ret)
+}
+
+v_mi <- function(..., rank){
+
+  vars <- as.list(substitute(list(...)))[-1]
+  if (length(vars) != 2){stop('must provide two grouping factors')}
+  
+  term <- sapply(vars, FUN=function(i){deparse(i, backtick = TRUE, width.cutoff = 500)})
+  term <- sapply(term, FUN=function(i){attr(terms(reformulate(i)), "term.labels")})
+  
+  label <- paste0("v_mi(", paste(term, collapse=', '), ")")
+  
+  ret <- list(
+    mi = TRUE,
+    term = term,
+    rank = rank,
+    by = "NA"
+  )
+  class(ret) <- 'vglmer_multiplicative'
   return(ret)
 }
 
@@ -214,6 +234,31 @@ vglmer_build_spline <- function(x, knots = NULL, Boundary.knots = NULL,
   }
 }
 
+vglmer_build_mi <- function(x, rank){
+  if (ncol(x) != 2){stop('must have two factors...')}
+  
+  list_x <- as.list(x)
+  list_x <- lapply(list_x, factor)
+  levels_x <- lapply(list_x, levels)
+  
+  M_matrix <- lapply(list_x, FUN=function(i){t(fac2sparse(i, to = 'd'))})
+  M_id <- mapply(list_x, levels_x, FUN=function(i, l_i){match(i, l_i)})
+  
+  coef_storage <- lapply(levels_x, FUN=function(i){
+    matrix(data = NA, nrow = length(i), ncol = rank, dimnames = list(i, 1:rank))
+  })
+  M_matrix <- mapply(M_matrix, levels_x, SIMPLIFY = FALSE, FUN=function(i,j){
+    colnames(i) <- j
+    return(i)
+  })
+  special_attr <- list(storage = coef_storage, id = M_id, levels = levels_x)
+  out <- list(x = M_matrix, attr = special_attr)
+  class(out) <- c('mi_sparse')
+  
+  min_size <- min(sapply(levels_x, length))
+  return(list(out))
+}
+
 print.spline_sparse <- function(x){
   print(x$x)
 }
@@ -246,9 +291,12 @@ fallback_interpret.gam0 <- function(gf, textra = NULL, extra.special = NULL){
   tp <- attr(tf, "specials")$te
   tip <- attr(tf, "specials")$ti
   t2p <- attr(tf, "specials")$t2
-  zp <- if (is.null(extra.special)) 
-    NULL
-  else attr(tf, "specials")[[extra.special]]
+  if (is.null(extra.special)){
+    zp <- NULL  
+  }else{
+    # Get this to work with multiple extra.special types
+    zp <- unlist(attr(tf, "specials")[extra.special])
+  }
   off <- attr(tf, "offset")
   vtab <- attr(tf, "factors")
   if (length(sp) > 0) 
