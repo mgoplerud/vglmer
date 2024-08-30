@@ -219,7 +219,7 @@ calculate_ELBO <- function(family, ELBO_type, factorization_method,
      do_huangwand = NULL, vi_a_a_jp = NULL, vi_a_b_jp = NULL,
      vi_a_nu_jp = NULL, vi_a_APRIOR_jp = NULL,
      # Multiplicative Interaction
-     any_RE = NULL, 
+     any_RE = NULL, mi_centered = NULL,
      any_mi = NULL, 
      Z_MI = NULL, vi_mi_mean = NULL, vi_mi_var = NULL,
      vi_mi_lndet = NULL,
@@ -327,19 +327,28 @@ calculate_ELBO <- function(family, ELBO_type, factorization_method,
 
     if (family == 'linear'){
       e_ln_sigmasq <- log(vi_sigmasq_b) - digamma(vi_sigmasq_a)
-      
-      logcomplete_2 <- sum(-d_j * g_j / 2 * log(2 * pi) - g_j / 2 * ln_det_sigma_alpha) +
-        -e_inv_sigmasq * 1 / 2 * sum(mapply(inv_sigma_alpha, vi_sigma_outer_alpha, FUN = function(a, b) {
-          sum(diag(a %*% b))
-        }))
-      logcomplete_2 <-  logcomplete_2 +
-        -1/2 * sum(d_j * g_j) * (e_ln_sigmasq)
-    }else{
-      logcomplete_2 <- sum(-d_j * g_j / 2 * log(2 * pi) - g_j / 2 * ln_det_sigma_alpha) +
-        -1 / 2 * sum(mapply(inv_sigma_alpha, vi_sigma_outer_alpha, FUN = function(a, b) {
-          sum(diag(a %*% b))
-        }))
     }
+    
+    if (any_RE){
+
+      if (family == 'linear'){
+        logcomplete_2 <- sum(-d_j * g_j / 2 * log(2 * pi) - g_j / 2 * ln_det_sigma_alpha) +
+          -e_inv_sigmasq * 1 / 2 * sum(mapply(inv_sigma_alpha, vi_sigma_outer_alpha, FUN = function(a, b) {
+            sum(diag(a %*% b))
+          }))
+        logcomplete_2 <-  logcomplete_2 +
+          -1/2 * sum(d_j * g_j) * (e_ln_sigmasq)
+      }else{
+        logcomplete_2 <- sum(-d_j * g_j / 2 * log(2 * pi) - g_j / 2 * ln_det_sigma_alpha) +
+          -1 / 2 * sum(mapply(inv_sigma_alpha, vi_sigma_outer_alpha, FUN = function(a, b) {
+            sum(diag(a %*% b))
+          }))
+      }
+    
+    }else{
+      logcomplete_2 <- 0
+    }
+      
 
     ## GET THE ENTROPY
     # Entropy for p(beta,alpha)
@@ -358,15 +367,6 @@ calculate_ELBO <- function(family, ELBO_type, factorization_method,
       # Entropy for Polya-Gamma EXCLUDING intractable term that cancels
       entropy_2 <- sum(vi_pg_b * vi_pg_c / 4 * tanh(vi_pg_c / 2) - vi_pg_b * log(cosh(vi_pg_c / 2)))
     }
-    # Entropy Wisharts
-    entropy_3 <- -mapply(vi_sigma_alpha_nu, vi_sigma_alpha, FUN = function(nu, Phi) {
-      make_log_invwishart_constant(nu = nu, Phi = Phi)
-    }) +
-      (vi_sigma_alpha_nu + d_j + 1) / 2 * ln_det_sigma_alpha +
-      1 / 2 * mapply(vi_sigma_alpha, inv_sigma_alpha, FUN = function(a, b) {
-        sum(diag(a %*% b))
-      })
-    entropy_3 <- sum(entropy_3)
 
   } else if (ELBO_type == "profiled") {
     
@@ -409,56 +409,64 @@ calculate_ELBO <- function(family, ELBO_type, factorization_method,
   ###############
   # Log Complete and Entropy for p(Sigma_j) or similar
   ###############
-  if (do_huangwand){
-    E_ln_vi_a <- mapply(vi_a_a_jp, vi_a_b_jp, FUN=function(tilde.a, tilde.b){
-      sum(log(tilde.b) - digamma(tilde.a))
-    })
-    E_inv_v_a <- mapply(vi_a_a_jp, vi_a_b_jp, vi_a_nu_jp, SIMPLIFY = FALSE, FUN=function(tilde.a, tilde.b, nu){
-      2 * nu * Diagonal(x = tilde.a/tilde.b)
-    })
-    logcomplete_3 <- 0 + # flat prior on beta
-      sum(
-        iw_prior_constant +
-          - (vi_a_nu_jp + d_j - 1)/2 * (d_j * log(2 * vi_a_nu_jp) + E_ln_vi_a) +
-          -(2 * d_j + vi_a_nu_jp) / 2 * ln_det_sigma_alpha +
-          -1 / 2 * mapply(E_inv_v_a, inv_sigma_alpha, FUN = function(a, b) {
-            sum(diag(a %*% b))
-          })
-      )
-    logcomplete_3_a <- mapply(d_j, vi_a_a_jp, vi_a_b_jp, E_ln_vi_a, 
-        vi_a_APRIOR_jp, 
-        FUN=function(d, tilde.a, tilde.b, E_ln_vi_a.j, APRIOR.j){
-      1/2 * sum(log(1/APRIOR.j^2)) - d * lgamma(1/2) - 3/2 * E_ln_vi_a.j +
-        sum(-1/APRIOR.j^2 * tilde.a/tilde.b)
-    })
-    logcomplete_3 <- logcomplete_3 + sum(logcomplete_3_a)
+  if (any_RE){
+
+    if (do_huangwand){
+      E_ln_vi_a <- mapply(vi_a_a_jp, vi_a_b_jp, FUN=function(tilde.a, tilde.b){
+        sum(log(tilde.b) - digamma(tilde.a))
+      })
+      E_inv_v_a <- mapply(vi_a_a_jp, vi_a_b_jp, vi_a_nu_jp, SIMPLIFY = FALSE, FUN=function(tilde.a, tilde.b, nu){
+        2 * nu * Diagonal(x = tilde.a/tilde.b)
+      })
+      logcomplete_3 <- 0 + # flat prior on beta
+        sum(
+          iw_prior_constant +
+            - (vi_a_nu_jp + d_j - 1)/2 * (d_j * log(2 * vi_a_nu_jp) + E_ln_vi_a) +
+            -(2 * d_j + vi_a_nu_jp) / 2 * ln_det_sigma_alpha +
+            -1 / 2 * mapply(E_inv_v_a, inv_sigma_alpha, FUN = function(a, b) {
+              sum(diag(a %*% b))
+            })
+        )
+      logcomplete_3_a <- mapply(d_j, vi_a_a_jp, vi_a_b_jp, E_ln_vi_a, 
+                                vi_a_APRIOR_jp, 
+                                FUN=function(d, tilde.a, tilde.b, E_ln_vi_a.j, APRIOR.j){
+                                  1/2 * sum(log(1/APRIOR.j^2)) - d * lgamma(1/2) - 3/2 * E_ln_vi_a.j +
+                                    sum(-1/APRIOR.j^2 * tilde.a/tilde.b)
+                                })
+      logcomplete_3 <- logcomplete_3 + sum(logcomplete_3_a)
+    }else{
+      logcomplete_3 <- 0 + # flat prior on beta
+        sum(
+          iw_prior_constant +
+            -(prior_sigma_alpha_nu + d_j + 1) / 2 * ln_det_sigma_alpha +
+            -1 / 2 * mapply(prior_sigma_alpha_phi, inv_sigma_alpha, FUN = function(a, b) {
+              sum(diag(a %*% b))
+            })
+        )
+    }
+    
+    entropy_3 <- -mapply(vi_sigma_alpha_nu, vi_sigma_alpha, FUN = function(nu, Phi) {
+      make_log_invwishart_constant(nu = nu, Phi = Phi)
+    }) +
+      (vi_sigma_alpha_nu + d_j + 1) / 2 * ln_det_sigma_alpha +
+      1 / 2 * mapply(vi_sigma_alpha, inv_sigma_alpha, FUN = function(a, b) {
+        sum(diag(a %*% b))
+      })
+    entropy_3 <- sum(entropy_3)
+    #########
+    # Optional Entropy if using Huang and Wand (2013) prior
+    #########
+    if (do_huangwand){
+      entropy_4 <- sum(mapply(vi_a_a_jp, vi_a_b_jp, FUN=function(tilde.a, tilde.b){
+        sum(tilde.a + log(tilde.b) + lgamma(tilde.a) - (1 + tilde.a) * digamma(tilde.a))
+      }))
+    }else{
+      entropy_4 <- 0
+    }
+    
   }else{
-    logcomplete_3 <- 0 + # flat prior on beta
-      sum(
-        iw_prior_constant +
-          -(prior_sigma_alpha_nu + d_j + 1) / 2 * ln_det_sigma_alpha +
-          -1 / 2 * mapply(prior_sigma_alpha_phi, inv_sigma_alpha, FUN = function(a, b) {
-            sum(diag(a %*% b))
-          })
-      )
-  }
-  
-  entropy_3 <- -mapply(vi_sigma_alpha_nu, vi_sigma_alpha, FUN = function(nu, Phi) {
-    make_log_invwishart_constant(nu = nu, Phi = Phi)
-  }) +
-    (vi_sigma_alpha_nu + d_j + 1) / 2 * ln_det_sigma_alpha +
-    1 / 2 * mapply(vi_sigma_alpha, inv_sigma_alpha, FUN = function(a, b) {
-      sum(diag(a %*% b))
-    })
-  entropy_3 <- sum(entropy_3)
-  #########
-  # Optional Entropy if using Huang and Wand (2013) prior
-  #########
-  if (do_huangwand){
-    entropy_4 <- sum(mapply(vi_a_a_jp, vi_a_b_jp, FUN=function(tilde.a, tilde.b){
-      sum(tilde.a + log(tilde.b) + lgamma(tilde.a) - (1 + tilde.a) * digamma(tilde.a))
-    }))
-  }else{
+    logcomplete_3 <- 0
+    entropy_3 <- 0
     entropy_4 <- 0
   }
   ########
@@ -467,14 +475,40 @@ calculate_ELBO <- function(family, ELBO_type, factorization_method,
   if (any_mi){
     
     # Expectation of log prior for MI
-    logcomplete_mi_prior <- sum(-mi_d_j * mi_g_j / 2 * log(2 * pi) - mi_g_j / 2 * mi_ln_det_sigma_alpha) +
-      -1 / 2 * sum(mapply(mi_inv_sigma_alpha, vi_mi_sigma_outer_alpha, FUN = function(a, b) {
-        sum(diag(a %*% b))
-      }))
     
-    # Entropy of VI distribution for MI
-    entropy_mi_prior <- sum(mi_d_j * mi_g_j) / 2 * log(2 * pi * exp(1)) + 
-      1/2 * sum(vi_mi_lndet)
+    if (mi_centered){
+
+      logcomplete_mi_prior <- sum(-mi_d_j * mi_g_j / 2 * log(2 * pi) - mi_g_j / 2 * mi_ln_det_sigma_alpha) +
+        -1 / 2 * sum(mapply(mi_inv_sigma_alpha, vi_mi_sigma_outer_alpha, FUN = function(a, b) {
+          sum(diag(a %*% b))
+        }))
+      mi_g_centered <- sapply(vi_mi_mean, FUN=function(i){nrow(i[[1]])})
+      
+      logcomplete_mi_prior <- logcomplete_mi_prior + 
+        sum(-mi_d_j * mi_g_centered/ 2 * log(2 * pi)) - mi_g_centered/2 * 1 +
+        -1/2 * mapply(vi_mi_mean, vi_mi_var, FUN=function(m_mean, m_var){
+        out_mean <- Reduce("+", lapply(m_mean[1], crossprod))
+        out_var <- Reduce("+", lapply(m_var[1], colSums))
+        out_var <- matrix(out_var, nrow = sqrt(length(out_mean)))
+        return(sum(diag(out_mean + out_var)))
+      })
+      
+      # Entropy of VI distribution for MI
+      entropy_mi_prior <- sum(mi_d_j * (mi_g_centered + mi_g_j)) / 2 * log(2 * pi * exp(1)) + 
+        1/2 * sum(vi_mi_lndet)
+      
+    }else{
+      
+      logcomplete_mi_prior <- sum(-mi_d_j * mi_g_j / 2 * log(2 * pi) - mi_g_j / 2 * mi_ln_det_sigma_alpha) +
+        -1 / 2 * sum(mapply(mi_inv_sigma_alpha, vi_mi_sigma_outer_alpha, FUN = function(a, b) {
+          sum(diag(a %*% b))
+        }))
+      
+      # Entropy of VI distribution for MI
+      entropy_mi_prior <- sum(mi_d_j * mi_g_j) / 2 * log(2 * pi * exp(1)) + 
+        1/2 * sum(vi_mi_lndet)
+      
+    }
     
     # Expectation of log prior for sigma^2 for MI
     if (do_huangwand){
