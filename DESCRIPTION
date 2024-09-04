@@ -1,8 +1,8 @@
 Package: vglmer
 Type: Package
 Title: Variational Inference for Hierarchical Generalized Linear Models
-Version: 1.0.4
-Authors@R: person("Max", "Goplerud", email = "mgoplerud@pitt.edu", 
+Version: 1.0.5
+Authors@R: person("Max", "Goplerud", email = "mgoplerud@austin.utexas.edu", 
     role = c("aut", "cre"))
 Encoding: UTF-8
 License: GPL (>= 2)
@@ -31,8 +31,9 @@ Suggests:
 	SuperLearner,
 	MASS,
 	tictoc,
-  testthat
+  testthat,
+  gKRLS
 LinkingTo: Rcpp, RcppEigen (>= 0.3.3.4.0)
-RoxygenNote: 7.2.3
 URL: https://github.com/mgoplerud/vglmer
 BugReports: https://github.com/mgoplerud/vglmer/issues
+RoxygenNote: 7.3.2

@@ -18,7 +18,7 @@ LinRegChol(X, omega, prior_precision, y, save_chol = TRUE)
 \item{save_chol}{Save cholesky factor}
 }
 \description{
-Do linear regression of form (X^T O X + P)^{-1} X^T y where O is omega, P is
-precision.
+Do linear regression of form solve(X^T O X + P, X^T y) where O is omega, P
+is precision.
 }
 \keyword{internal}

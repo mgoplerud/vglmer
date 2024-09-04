@@ -391,7 +391,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
         fe_i <- i$term
       }
     })
-    fe_update <- paste0(fe_update, collapse = ' + ')
+    fe_update <- paste0(unique(unlist(fe_update)), collapse = ' + ')
     
     fe_fmla <- update.formula(fe_fmla$pf,
         paste0('. ~ . + 1 + ', fe_update)
@@ -623,27 +623,35 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
       
       special_i <- parse_formula$smooth.spec[[i]]
 
-      all_splines_i <- vglmer_build_spline(x = data[[special_i$term]], 
+      if (special_i$type == 'gKRLS'){
+        all_splines_i <- data[special_i$term]
+        special_i$fmt_term <- paste0('(', paste0(special_i$term, collapse=','), ')')
+      }else{
+        all_splines_i <- data[[special_i$term]]
+        special_i$fmt_term <- special_i$term
+      }
+      all_splines_i <- vglmer_build_spline(x = all_splines_i, 
           by = data[[special_i$by]],
           knots = special_i$knots, type = special_i$type, 
           force_vector = special_i$force_vector,
+          xt = special_i$xt,
           outer_okay = special_i$outer_okay, by_re = special_i$by_re)
       
       Z.spline.attr[[i]] <- c(all_splines_i[[1]]$attr, 
         list(type = special_i$type, by = special_i$by))
-      
       spline_counter <- 1
       for (spline_i in all_splines_i){
+
         special_counter <- special_counter + 1
         
         stopifnot(spline_counter %in% 1:2)
         
-        colnames(spline_i$x) <- paste0('spline @ ', special_i$term, ' @ ', colnames(spline_i$x))
+        colnames(spline_i$x) <- paste0('spline @ ', special_i$fmt_term, ' @ ', colnames(spline_i$x))
         
         if (spline_counter > 1){
-          spline_name <- paste0('spline-',special_i$term,'-', i, '-int')
+          spline_name <- paste0('spline-',special_i$fmt_term,'-', i, '-int')
         }else{
-          spline_name <- paste0('spline-', special_i$term, '-', i, '-base')
+          spline_name <- paste0('spline-', special_i$fmt_term, '-', i, '-base')
         }
         
         Z.spline[[special_counter]] <- spline_i$x

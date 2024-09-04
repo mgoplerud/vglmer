@@ -9,6 +9,7 @@ v_s(
   type = "tpf",
   knots = NULL,
   by = NA,
+  xt = NULL,
   by_re = TRUE,
   force_vector = FALSE,
   outer_okay = FALSE
@@ -27,6 +28,10 @@ specific number of knots; a vector can set custom locations for knots.}
 
 \item{by}{A categorical or factor covariate to interact the spline with; for
 example, \code{v_s(x, by = g)}.}
+
+\item{xt}{Arguments passed to \code{xt} from \code{mgcv}; at the moment, only
+used for \code{type="gKRLS"} to pass the function \code{gKRLS()}. Please
+see the documentation of \code{gKRLS} for more details.}
 
 \item{by_re}{Default (\code{TRUE}) regularizes the interactions between the
 categorical factor and the covariate. See "Details" in \link{vglmer} for
@@ -51,6 +56,9 @@ truncated (linear) splines or O'Sullivan splines. Please see \link{vglmer}
 for more discussion and examples.
 }
 \references{
+Chang, Qing, and Max Goplerud. 2024. "Generalized Kernel Regularized Least
+Squares." \emph{Political Analysis} 32(2):157-171.
+
 Wand, Matt P. and Ormerod, John T. 2008. "On Semiparametric Regression with
 O'Sullivan Penalized Splines". \emph{Australian & New Zealand Journal of
 Statistics}. 50(2): 179-198.

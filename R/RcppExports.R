@@ -3,8 +3,8 @@
 
 #' Linear Regression by Cholesky
 #' 
-#' Do linear regression of form (X^T O X + P)^{-1} X^T y where O is omega, P is
-#' precision. 
+#' Do linear regression of form solve(X^T O X + P, X^T y) where O is omega, P
+#' is precision.
 #' 
 #' @keywords internal
 #' 

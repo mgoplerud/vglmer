@@ -6,6 +6,11 @@
 
 using namespace Rcpp;
 
+#ifdef RCPP_USE_GLOBAL_ROSTREAM
+Rcpp::Rostream<true>&  Rcpp::Rcout = Rcpp::Rcpp_cout_get();
+Rcpp::Rostream<false>& Rcpp::Rcerr = Rcpp::Rcpp_cerr_get();
+#endif
+
 // LinRegChol
 List LinRegChol(const Eigen::MappedSparseMatrix<double> X, const Eigen::MappedSparseMatrix<double> omega, const Eigen::MappedSparseMatrix<double> prior_precision, const Eigen::Map<Eigen::VectorXd> y, const bool save_chol);
 RcppExport SEXP _vglmer_LinRegChol(SEXP XSEXP, SEXP omegaSEXP, SEXP prior_precisionSEXP, SEXP ySEXP, SEXP save_cholSEXP) {
