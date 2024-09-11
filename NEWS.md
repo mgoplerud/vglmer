@@ -1,3 +1,7 @@
+# vglmer 1.0.5
+
+** Add gKRLS as an option for smoothing multiple (continuous) covariates. Chang and Goplerud (2024; https://doi.org/10.1017/pan.2023.27) for more details.
+
 # vglmer 1.0.4
 
 * Adjust `predict.vglmer` to allow for faster predictions on large datasets by not copying and filling in a large sparse matrix. Thank you to Michael Auslen for pointing out this issue.

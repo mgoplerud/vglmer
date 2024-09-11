@@ -184,8 +184,17 @@ predict.vglmer <- function(object, newdata, type = 'link',
       
       special_i <- parse_formula$smooth.spec[[i]]
       
-      all_splines_i <- vglmer_build_spline(x = newdata[[special_i$term]], 
+      if (special_i$type %in% c('gKRLS', 'randwalk')){
+        all_splines_i <- newdata[special_i$term]
+        special_i$fmt_term <- paste0('(', paste0(special_i$term, collapse=','), ')')
+      }else{
+        all_splines_i <- newdata[[special_i$term]]
+        special_i$fmt_term <- special_i$term
+      }
+      
+      all_splines_i <- vglmer_build_spline(x = all_splines_i, 
          knots = Z.spline.attr[[i]]$knots, 
+         xt = Z.spline.attr[[i]]$xt,
          Boundary.knots =  Z.spline.attr[[i]]$Boundary.knots,
          by = newdata[[Z.spline.attr[[i]]$by]], outer_okay = TRUE,
          type = Z.spline.attr[[i]]$type, override_warn = TRUE,
@@ -197,12 +206,12 @@ predict.vglmer <- function(object, newdata, type = 'link',
         
         stopifnot(spline_counter %in% 1:2)
         
-        colnames(spline_i$x) <- paste0('spline @ ', special_i$term, ' @ ', colnames(spline_i$x))
+        colnames(spline_i$x) <- paste0('spline @ ', special_i$fmt_term, ' @ ', colnames(spline_i$x))
         
         if (spline_counter > 1){
-          spline_name <- paste0('spline-',special_i$term,'-', i, '-int')
+          spline_name <- paste0('spline-',special_i$fmt_term,'-', i, '-int')
         }else{
-          spline_name <- paste0('spline-', special_i$term, '-', i, '-base')
+          spline_name <- paste0('spline-', special_i$fmt_term, '-', i, '-base')
         }
         
         Z.spline[[special_counter]] <- spline_i$x

@@ -211,8 +211,9 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
   parse_formula <- tryCatch(
     interpret.gam(subbars(formula), extra.special = 'v_s'), error = function(e){NULL})
   if (is.null(parse_formula)){
-    # If this fails, usually when there is custom argument in environment, use this instead
-    parse_formula <- fallback_interpret.gam0(subbars(formula), extra.special = 'v_s')
+    # If this fails, either when (a) there is custom argument in environment or (b)
+    # an argument with "xt" and (1|g) is given to subbars
+    parse_formula <- fallback_interpret.gam0(fallback_subbars(formula), extra.special = 'v_s')
   }
   
   if (any(!sapply(parse_formula$smooth.spec, inherits, what = 'vglmer_spline'))){
@@ -385,18 +386,29 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     
     # Add the linear spline terms to the main effect.
     fe_update <- sapply(fe_fmla$smooth.spec, FUN=function(i){
-      if (i$by != "NA" & i$by_re == FALSE){
-        fe_i <- paste0(i$term, ' * ', i$by)
+      if (i$type %in% c('gKRLS', 'randwalk')){
+        #  Do *not* add linear terms if gKRLS or randwalk
+        fe_i <- NULL
+        return(fe_i)
       }else{
-        fe_i <- i$term
+        if (i$by != "NA" & i$by_re == FALSE){
+          fe_i <- paste0(i$term, ' * ', i$by)
+        }else{
+          fe_i <- i$term
+        }
+        return(fe_i)
       }
     })
-    fe_update <- paste0(fe_update, collapse = ' + ')
-    
-    fe_fmla <- update.formula(fe_fmla$pf,
-        paste0('. ~ . + 1 + ', fe_update)
-    )
-    
+    fe_update <- unique(unlist(fe_update))
+    if (!is.null(fe_update)){
+      fe_update <- paste0(fe_update, collapse = ' + ')
+      fe_fmla <- update.formula(fe_fmla$pf,
+                                paste0('. ~ . + 1 + ', fe_update)
+      )
+    }else{
+      fe_fmla <- fe_fmla$pf
+    }
+
   }else{
     fe_fmla <- fe_fmla$pf
   }
@@ -440,19 +452,29 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
       if (!(is.factor(data[[b_by]]) | is.character(data[[b_by]]))){
        stop('For now, all v_s spline "by" factors must be characters or factors.') 
       }
-      
-      # If "by" grouping already used, then add to the RE
-      if (b_by %in% character_re_group){
-        
-        position_b_by <- which(b_by == character_re_group)
-        existing_re_b_by <- character_re[[position_b_by]][1]
-        new_re_b_by <- paste0(unique(c('1', strsplit(existing_re_b_by, split=' \\+ ')[[1]], b_term)), collapse = ' + ')
-        character_re[[position_b_by]][1] <- new_re_b_by
+
+      if (!(b$type %in% c('gKRLS', 'randwalk'))){
+        # If "by" grouping already used, then add to the RE
+        if (b_by %in% character_re_group){
+          position_b_by <- which(b_by == character_re_group)
+          existing_re_b_by <- character_re[[position_b_by]][1]
+          new_re_b_by <- paste0(unique(c('1', strsplit(existing_re_b_by, split=' \\+ ')[[1]], b_term)), collapse = ' + ')
+          character_re[[position_b_by]][1] <- new_re_b_by
+        }else{
+          # If not, then add a new RE group with a 
+          # random intercept and random slope.
+          character_re <- c(character_re, list(c(paste0('1 + ', b_term), b_by)))
+          character_re_group <- sapply(character_re, FUN=function(i){i[2]})
+        }
       }else{
-        # If not, then add a new RE group with a 
-        # random intercept and random slope.
-        character_re <- c(character_re, list(c(paste0('1 + ', b_term), b_by)))
-        character_re_group <- sapply(character_re, FUN=function(i){i[2]})
+        if (b_by %in% character_re_group){
+          # Do Nothing
+        }else{
+          # If not, then add a new RE group with a 
+          # random intercept and random slope.
+          character_re <- c(character_re, list(c('1', b_by)))
+          character_re_group <- sapply(character_re, FUN=function(i){i[2]})
+        }
       }
     }
     
@@ -623,27 +645,35 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
       
       special_i <- parse_formula$smooth.spec[[i]]
 
-      all_splines_i <- vglmer_build_spline(x = data[[special_i$term]], 
+      if (special_i$type %in% c('gKRLS', 'randwalk')){
+        all_splines_i <- data[special_i$term]
+        special_i$fmt_term <- paste0('(', paste0(special_i$term, collapse=','), ')')
+      }else{
+        all_splines_i <- data[[special_i$term]]
+        special_i$fmt_term <- special_i$term
+      }
+      all_splines_i <- vglmer_build_spline(x = all_splines_i, 
           by = data[[special_i$by]],
           knots = special_i$knots, type = special_i$type, 
           force_vector = special_i$force_vector,
+          xt = special_i$xt,
           outer_okay = special_i$outer_okay, by_re = special_i$by_re)
       
       Z.spline.attr[[i]] <- c(all_splines_i[[1]]$attr, 
         list(type = special_i$type, by = special_i$by))
-      
       spline_counter <- 1
       for (spline_i in all_splines_i){
+
         special_counter <- special_counter + 1
         
         stopifnot(spline_counter %in% 1:2)
         
-        colnames(spline_i$x) <- paste0('spline @ ', special_i$term, ' @ ', colnames(spline_i$x))
+        colnames(spline_i$x) <- paste0('spline @ ', special_i$fmt_term, ' @ ', colnames(spline_i$x))
         
         if (spline_counter > 1){
-          spline_name <- paste0('spline-',special_i$term,'-', i, '-int')
+          spline_name <- paste0('spline-',special_i$fmt_term,'-', i, '-int')
         }else{
-          spline_name <- paste0('spline-', special_i$term, '-', i, '-base')
+          spline_name <- paste0('spline-', special_i$fmt_term, '-', i, '-base')
         }
         
         Z.spline[[special_counter]] <- spline_i$x
@@ -2917,7 +2947,10 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     output$joint <- list(decomp_var = vi_joint_decomp)
   }
   if (control$return_data) {
-    output$data <- list(X = X, Z = Z, y = y, trials = trials)
+    output$data <- list(X = X, Z = Z, y = y)
+    if (family == 'binomial'){
+      output$data$trials <- trials
+    }
   }
   
   output$formula <- list(formula = formula, 

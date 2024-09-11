@@ -21,18 +21,28 @@ formOmega <- function(a,b,intKnots){
 #' 
 #' This function estimates splines in \code{vglmer}, similar to \code{s(...)} in
 #' \code{mgcv} albeit with many fewer options than \code{mgcv}. It allows for
-#' truncated (linear) splines or O'Sullivan splines. Please see \link{vglmer}
-#' for more discussion and examples.
+#' truncated (linear) splines (\code{type="tpf"}), O'Sullivan splines
+#' (\code{type="o"}), or kernel ridge  regression (\code{type="gKRLS"}). Please
+#' see \link{vglmer} for more discussion and examples. For information on kernel
+#' ridge regression, please consult \link[gKRLS]{gKRLS}.
 #' 
 #' @param ... Variable name, e.g. \code{v_s(x)}
 #' @param type Default (\code{"tpf"}) uses truncated linear splines for the
-#'   basis. The other option (\code{"o"}) uses O'Sullivan splines (Wand and
-#'   Ormerod 2008).
+#'   basis. \code{"o"} uses O'Sullivan splines (Wand and Ormerod 2008).
+#'   Smoothing across multiple covariates, e.g. \code{v_s(x,x2,type="gKRLS")},
+#'   can be done using kernel ridge regression. Chang and Goplerud (2024)
+#'   provide a detailed discussion. Note that \code{"gKRLS"} by default uses
+#'   random sketching to create the relevant bases and thus a seed would need to
+#'   be set to ensure exact replicability.
 #' @param knots Default (\code{NULL}) uses \eqn{K=min(N/4,35)} knots evenly
 #'   spaced at quantiles of the covariate \code{x}. A single number specifies a
 #'   specific number of knots; a vector can set custom locations for knots.
 #' @param by A categorical or factor covariate to interact the spline with; for
 #'   example, \code{v_s(x, by = g)}.
+#' @param xt Arguments passed to \code{xt} from \code{mgcv}; at the moment, this
+#'   is only used for \code{type="gKRLS"} to pass the function \code{gKRLS()}.
+#'   Please see the documentation of \code{\link[gKRLS]{gKRLS}} for more
+#'   details.
 #' @param by_re Default (\code{TRUE}) regularizes the interactions between the
 #'   categorical factor and the covariate. See "Details" in \link{vglmer} for
 #'   more discussion.
@@ -48,6 +58,10 @@ formOmega <- function(a,b,intKnots){
 #'   \code{...} is parsed into an argument called \code{term}.
 #'   
 #' @references 
+#' 
+#' Chang, Qing, and Max Goplerud. 2024. "Generalized Kernel Regularized Least
+#' Squares." \emph{Political Analysis} 32(2):157-171.
+#' 
 #' Wand, Matt P. and Ormerod, John T. 2008. "On Semiparametric Regression with
 #' O'Sullivan Penalized Splines". \emph{Australian & New Zealand Journal of
 #' Statistics}. 50(2): 179-198.
@@ -56,13 +70,21 @@ formOmega <- function(a,b,intKnots){
 #' R}. Chapman and Hall/CRC.
 #' @export
 v_s <- function(..., type = 'tpf', knots = NULL, by = NA,
+                xt = NULL,
                 by_re = TRUE, force_vector = FALSE,
                 outer_okay = FALSE){
-  if (!(type %in% c('tpf', 'o'))){stop('non tpf not set up yet...')}
+  if (!(type %in% c('tpf', 'o', 'gKRLS', 'randwalk'))){stop('non tpf not set up yet...')}
   # Using mgcv's syntax for "s" to make it work with "interpret.gam"
   vars <- as.list(substitute(list(...)))[-1]
   d <- length(vars)
-  if (d > 1){stop('Unlike mgcv, only provide a single variable')}
+  if (type %in% c('tpf', 'o', 'randwalk')){
+    if (d > 1){stop('"tpf" and "o" accept only a single variable; use "gKRLS" for multivariate smoothing')}
+  }
+  if (type == 'gKRLS'){
+    if (!requireNamespace("gKRLS", quietly = TRUE)) {
+      stop('Using type="gKRLS" required "gKRLS" to be installed.')
+    }  
+  }
   by.var <- deparse(substitute(by), backtick = TRUE, width.cutoff = 500)
   if (by.var == "."){
     stop("by=. not allowed")
@@ -71,13 +93,29 @@ v_s <- function(..., type = 'tpf', knots = NULL, by = NA,
   if (term[1] == "."){
     stop("s(.) not supported.")
   }
-  
-  term[1] <- attr(terms(reformulate(term[1])), "term.labels")
+  if (d > 1){
+    for (i in 2:d){
+      term[i] <- deparse(vars[[i]], backtick = TRUE, width.cutoff = 500)
+      if (term[i] == "."){
+        stop("s(.) not supported.")
+      }
+    }
+  }
+  for (i in 1:d){
+    term[i] <- attr(terms(reformulate(term[i])), "term.labels")
+  } 
 
-  label <- paste0("v_s(", term[1], ")")
+  full.call <- paste("s(", term[1], sep = "")
+  if (d > 1){
+    for (i in 2:d){
+      full.call <- paste(full.call, ",", term[i], sep = "")
+    } 
+  } 
+  label <- paste(full.call, ")", sep = "")
   
   ret <- list(term = term, outer_okay = outer_okay, force_vector = force_vector,
               by = by.var, type = type, knots = knots,
+              xt = xt,
               by_re = by_re)
   class(ret) <- 'vglmer_spline'
   
@@ -85,132 +123,224 @@ v_s <- function(..., type = 'tpf', knots = NULL, by = NA,
 }
 
 #' @importFrom splines spline.des
+#' @importFrom mgcv smooth.construct Predict.matrix
 vglmer_build_spline <- function(x, knots = NULL, Boundary.knots = NULL, 
-  by, type, override_warn = FALSE, 
+  by, type, override_warn = FALSE,  xt = NULL,
   outer_okay = FALSE, by_re = NULL, force_vector = FALSE){
 
-  if (is.null(knots)){
-    ux <- length(unique(x))
-    if (ux < 4){stop('Cannot fit spline with fewer than 4 unique values.')}
-    # Use the knot heuristic in Ruppert by default.
-    # Keeps the size of the problem feasible.
-    numIntKnots <- floor(c(min(ux/4, 35)))
-
-    intKnots <- quantile(unique(x),
-      seq(0,1,length=(numIntKnots+2)
-    )[-c(1,(numIntKnots+2))])
-    names(intKnots) <- NULL
-  }else if (length(knots) == 1 & !force_vector){
-
-    if (knots < 1){
-      stop('If an integer, at least one knot must be provided. force_vector=TRUE may be useful here.')
-    }
-    if (as.integer(knots) != knots){
-      warning('knots appears to be not be an integer. Using "as.integer"')
-      knots <- as.integer(knots)
-      message(paste0('knots argument turned into ', knots, ' by coercion.'))
-    }
-
-    numIntKnots <- knots
+  if (type %in% c('gKRLS', 'randwalk')){
     
-    intKnots <- quantile(unique(x),seq(0,1,length=
-        (numIntKnots+2))[-c(1,(numIntKnots+2))])
-    names(intKnots) <- NULL
-  }else{
-    # Sort user provided knots
-    knots <- sort(knots)
-    
-    # Is any knot big above the maximum in the data?
-    cond_1 <- any(knots >= max(x, na.rm=T))
-    # Is any knot below the minimum in the data?
-    cond_2 <- any(knots <= min(x, na.rm=T))
-    # If so, issue warning
-    if (!cond_1 | !cond_2){
-      if (!override_warn){
-        warning('observed data is outside of the self-provided knots')
+    if (type == 'gKRLS'){
+
+      if (!is.null(knots)){
+        object_mgcv <- knots
+      }else{
+        object_mgcv <- list(
+          term = colnames(x),
+          xt = xt,
+          p.order = NA,
+          bs.dim = -1,
+          fixed = FALSE,
+          by = 'NA'
+        )
+        class(object_mgcv) <- 'gKRLS.smooth.spec'
+        object_mgcv <- smooth.construct(object_mgcv, data = x)
+      }
+      
+    }else{
+
+      if (!is.null(knots)){
+        object_mgcv <- knots
+      }else{
+        object_mgcv <- list(
+          term = colnames(x),
+          xt = xt,
+          p.order = NA,
+          bs.dim = -1,
+          fixed = FALSE,
+          by = 'NA'
+        )
+        class(object_mgcv) <- 'randwalk.smooth.spec'
+        object_mgcv <- smooth.construct(object_mgcv, data = x, knots = NULL)
       }
     }
-    intKnots <- knots
-  }
-  
-  if (is.null(Boundary.knots)){
-    Boundary.knots <- range(x, na.rm=T) 
-  }else{
-    stopifnot(length(Boundary.knots) == 2)
-  }
-  
-  if (type == 'tpf'){
-    aug_knots <- c(Boundary.knots[1], intKnots, Boundary.knots[2])
-    
-    x <- outer(x, aug_knots[-c(1,length(aug_knots))], '-')
-    x <- drop0(x * (x > 0))
-    spline_attr <- list(D = Diagonal(n = ncol(x)), Boundary.knots = Boundary.knots,
-                        knots = intKnots)
-  
-  }else if (type == 'o'){
-    
-    # Form Omega from Wand and Ormerod (2008)
-    D <- formOmega(a = Boundary.knots[1], b = Boundary.knots[2], intKnots = intKnots)
-    # eigen decompose
-    eD <- eigen(D)
-    # transform spline design
-    if (override_warn){
-      wrapper_bs <- function(x){suppressWarnings(x)}
-    }else{
-      wrapper_bs <- function(x){x}
-    }
-    x <- wrapper_bs(splines::bs(x = x, knots = intKnots, 
-                     degree = 3, intercept = TRUE,
-                     Boundary.knots = Boundary.knots))
-    
-    x <- x %*% eD$vectors[,seq_len(ncol(D)-2)] %*% 
-      Diagonal(x = 1/sqrt(eD$values[seq_len(ncol(D) - 2)]))
-    
-    spline_attr <- list(D = Diagonal(n = ncol(x)), 
-      Boundary.knots = Boundary.knots,
-      knots = intKnots, eigen_D = eD)
 
-  }else{stop('splines only set up for tpf and o')}
-  
-  spline_attr$by_re <- by_re
-  
-  if (!is.null(by)){
+    x <- Predict.matrix(object_mgcv, data = x)
+    # if (outer_okay){
+    #   object_mgcv$internal_override <- TRUE
+    #   x <- Predict.matrix(object_mgcv, data = x)
+    # }else{
+    #   object_mgcv$internal_override <- FALSE
+    #   x <- Predict.matrix(object_mgcv, data = x)
+    # }
+    # object_mgcv$internal_override <- NULL
+    colnames(x) <- paste0('base @ ', 1:ncol(x))
+    spline_attr <- list(knots=object_mgcv)
     
-    base_x <- x
-    u_by <- sort(unique(by))
-    
-    if (!outer_okay){
-      x_by <- sparseMatrix(i = 1:length(by), j = match(by, u_by), x = 1)
-    }else{
-      match_j <- match(by, u_by)
-      match_i <- 1:length(by)
+    if (!is.null(by)){
+      base_x <- x
+      u_by <- sort(unique(by))
       
-      match_i <- match_i[!is.na(match_j)]
-      match_j <- match_j[!is.na(match_j)]
-      x_by <- sparseMatrix(i = match_i, j= match_j, x = 1, dims = c(length(by), length(u_by)))
+      if (!outer_okay){
+        x_by <- sparseMatrix(i = 1:length(by), j = match(by, u_by), x = 1)
+      }else{
+        match_j <- match(by, u_by)
+        match_i <- 1:length(by)
+        
+        match_i <- match_i[!is.na(match_j)]
+        match_j <- match_j[!is.na(match_j)]
+        x_by <- sparseMatrix(i = match_i, j= match_j, x = 1, dims = c(length(by), length(u_by)))
+      }
+      
+      
+      names_x <- as.vector(outer(1:ncol(x), u_by, FUN=function(x,y){paste(y,x, sep = ' @ ')}))
+      x <- t(KhatriRao(t(x_by), t(x)))
+      colnames(x) <- names_x  
+      
+      colnames(base_x) <- paste0('base @ ', 1:ncol(base_x))
+      
+      out <- list(x = x, attr = spline_attr)
+      class(out) <- c('spline_sparse')
+      
+      base_out <- list(x = base_x, attr = spline_attr)
+      class(base_out) <- c('spline_sparse')
+      
+      return(
+        list(base_out, out)
+      )
+    }else{
+      out <- list(x = x, attr = spline_attr)
+      class(out) <- c('spline_sparse')
+      return(list(out))
+    }
+  }else{
+
+    if (is.null(knots)){
+      ux <- length(unique(x))
+      if (ux < 4){stop('Cannot fit spline with fewer than 4 unique values.')}
+      # Use the knot heuristic in Ruppert by default.
+      # Keeps the size of the problem feasible.
+      numIntKnots <- floor(c(min(ux/4, 35)))
+      
+      intKnots <- quantile(unique(x),
+                           seq(0,1,length=(numIntKnots+2)
+                           )[-c(1,(numIntKnots+2))])
+      names(intKnots) <- NULL
+    }else if (length(knots) == 1 & !force_vector){
+      
+      if (knots < 1){
+        stop('If an integer, at least one knot must be provided. force_vector=TRUE may be useful here.')
+      }
+      if (as.integer(knots) != knots){
+        warning('knots appears to be not be an integer. Using "as.integer"')
+        knots <- as.integer(knots)
+        message(paste0('knots argument turned into ', knots, ' by coercion.'))
+      }
+      
+      numIntKnots <- knots
+      
+      intKnots <- quantile(unique(x),seq(0,1,length=
+                                           (numIntKnots+2))[-c(1,(numIntKnots+2))])
+      names(intKnots) <- NULL
+    }else{
+      # Sort user provided knots
+      knots <- sort(knots)
+      
+      # Is any knot big above the maximum in the data?
+      cond_1 <- any(knots >= max(x, na.rm=T))
+      # Is any knot below the minimum in the data?
+      cond_2 <- any(knots <= min(x, na.rm=T))
+      # If so, issue warning
+      if (!cond_1 | !cond_2){
+        if (!override_warn){
+          warning('observed data is outside of the self-provided knots')
+        }
+      }
+      intKnots <- knots
     }
     
+    if (is.null(Boundary.knots)){
+      Boundary.knots <- range(x, na.rm=T) 
+    }else{
+      stopifnot(length(Boundary.knots) == 2)
+    }
     
-    names_x <- as.vector(outer(1:ncol(x), u_by, FUN=function(x,y){paste(y,x, sep = ' @ ')}))
-    x <- t(KhatriRao(t(x_by), t(x)))
-    colnames(x) <- names_x  
+    if (type == 'tpf'){
+      aug_knots <- c(Boundary.knots[1], intKnots, Boundary.knots[2])
+      
+      x <- outer(x, aug_knots[-c(1,length(aug_knots))], '-')
+      x <- drop0(x * (x > 0))
+      spline_attr <- list(D = Diagonal(n = ncol(x)), Boundary.knots = Boundary.knots,
+                          knots = intKnots)
+      
+    }else if (type == 'o'){
+      
+      # Form Omega from Wand and Ormerod (2008)
+      D <- formOmega(a = Boundary.knots[1], b = Boundary.knots[2], intKnots = intKnots)
+      # eigen decompose
+      eD <- eigen(D)
+      # transform spline design
+      if (override_warn){
+        wrapper_bs <- function(x){suppressWarnings(x)}
+      }else{
+        wrapper_bs <- function(x){x}
+      }
+      x <- wrapper_bs(splines::bs(x = x, knots = intKnots, 
+                                  degree = 3, intercept = TRUE,
+                                  Boundary.knots = Boundary.knots))
+      
+      x <- x %*% eD$vectors[,seq_len(ncol(D)-2)] %*% 
+        Diagonal(x = 1/sqrt(eD$values[seq_len(ncol(D) - 2)]))
+      
+      spline_attr <- list(D = Diagonal(n = ncol(x)), 
+                          Boundary.knots = Boundary.knots,
+                          knots = intKnots, eigen_D = eD)
+      
+    }else{
+      stop('splines only set up for tpf and o')
+    }
     
-    colnames(base_x) <- paste0('base @ ', 1:ncol(base_x))
+    spline_attr$by_re <- by_re
     
-    out <- list(x = x, attr = spline_attr)
-    class(out) <- c('spline_sparse')
+    if (!is.null(by)){
+      
+      base_x <- x
+      u_by <- sort(unique(by))
+      
+      if (!outer_okay){
+        x_by <- sparseMatrix(i = 1:length(by), j = match(by, u_by), x = 1)
+      }else{
+        match_j <- match(by, u_by)
+        match_i <- 1:length(by)
+        
+        match_i <- match_i[!is.na(match_j)]
+        match_j <- match_j[!is.na(match_j)]
+        x_by <- sparseMatrix(i = match_i, j= match_j, x = 1, dims = c(length(by), length(u_by)))
+      }
+      
+      
+      names_x <- as.vector(outer(1:ncol(x), u_by, FUN=function(x,y){paste(y,x, sep = ' @ ')}))
+      x <- t(KhatriRao(t(x_by), t(x)))
+      colnames(x) <- names_x  
+      
+      colnames(base_x) <- paste0('base @ ', 1:ncol(base_x))
+      
+      out <- list(x = x, attr = spline_attr)
+      class(out) <- c('spline_sparse')
+      
+      base_out <- list(x = base_x, attr = spline_attr)
+      class(base_out) <- c('spline_sparse')
+      
+      return(
+        list(base_out, out)
+      )
+    }else{
+      colnames(x) <- paste0('base @ ', 1:ncol(x))
+      out <- list(x = x, attr = spline_attr)
+      class(out) <- c('spline_sparse')
+      return(list(out))
+    }
     
-    base_out <- list(x = base_x, attr = spline_attr)
-    class(base_out) <- c('spline_sparse')
-    
-    return(
-      list(base_out, out)
-    )
-  }else{
-    colnames(x) <- paste0('base @ ', 1:ncol(x))
-    out <- list(x = x, attr = spline_attr)
-    class(out) <- c('spline_sparse')
-    return(list(out))
   }
 }
 
@@ -377,3 +507,35 @@ fallback_interpret.gam0 <- function(gf, textra = NULL, extra.special = NULL){
   class(ret) <- "split.gam.formula"
   ret
 }
+
+
+#' To be used if subbars fails, usually when there is an argument to 
+#' v_s ; adapted from lme4
+#' @param term a formula with lme4-style syntax; see \link[lme4]{subbars}
+fallback_subbars <- function (term) {
+  if (is.name(term) || !is.language(term)) {
+    return(term)
+  }
+  if (length(term) == 2) {
+    term[[2]] <- fallback_subbars(term[[2]])
+    return(term)
+  }
+  stopifnot(length(term) >= 3)
+  if (is.call(term) && term[[1]] == as.name("|")) {
+    term[[1]] <- as.name("+")
+  }
+  if (is.call(term) && term[[1]] == as.name("||")) {
+    term[[1]] <- as.name("+")
+  }
+  if (!any(grepl(as.character(term), pattern='\\|'))){
+    return(term)
+  }
+  for (j in 2:length(term)) {
+    tryCatch(term[[j]], error = function(e){browser()})
+    term[[j]] <- fallback_subbars(term[[j]])
+  } 
+  return(term)
+}
+
+
+
