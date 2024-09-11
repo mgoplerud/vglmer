@@ -15,8 +15,6 @@ if (isTRUE(as.logical(Sys.getenv("CI")))){
   env_test <- 'local'
 }
 
-env_test <- 'local'
-NITER <- 2000
 print(paste0(NITER, ' for tests because ', env_test))
 
 test_that("fit with non-default options", {

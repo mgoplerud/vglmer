@@ -512,6 +512,7 @@ fallback_interpret.gam0 <- function(gf, textra = NULL, extra.special = NULL){
 #' To be used if subbars fails, usually when there is an argument to 
 #' v_s ; adapted from lme4
 #' @param term a formula with lme4-style syntax; see \link[lme4]{subbars}
+#' @keywords internal
 fallback_subbars <- function (term) {
   if (is.name(term) || !is.language(term)) {
     return(term)

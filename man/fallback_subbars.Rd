@@ -14,3 +14,4 @@ fallback_subbars(term)
 To be used if subbars fails, usually when there is an argument to 
 v_s ; adapted from lme4
 }
+\keyword{internal}

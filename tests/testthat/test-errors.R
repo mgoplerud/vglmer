@@ -117,6 +117,14 @@ test_that("vglmer can run with 'debug' settings", {
   
   y <- rbinom(n = N, size = 1, prob = plogis(-1 + x + alpha[match(g, G_names)]))
   
+  # Avoid perfect separation
+  if (all(y == 0)){
+    y[1] <- 1
+  }
+  if (all(y == 1)){
+    y[1] <- 0
+  }
+  
   # Debug to collect parameters
   est_vglmer <- vglmer(y ~ x + (1 | g), data = data.frame(y = y, x = x, g = g),
          family = 'binomial',
