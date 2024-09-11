@@ -72,6 +72,13 @@ test_that('vglmer runs with timing and "quiet=F"', {
   g <- sample(G_names, N, replace = T)
   alpha <- rnorm(G)
 
+  if (all(y == 0)){
+    y[1] <- 1
+  }
+  if (all(y == 1)){
+    y[1] <- 0
+  }
+  
   y <- rbinom(n = N, size = 1, prob = plogis(-1 + x + alpha[match(g, G_names)]))
 
   est_simple <- suppressMessages(vglmer(y ~ x + (1 | g),
