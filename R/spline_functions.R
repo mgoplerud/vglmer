@@ -21,21 +21,28 @@ formOmega <- function(a,b,intKnots){
 #' 
 #' This function estimates splines in \code{vglmer}, similar to \code{s(...)} in
 #' \code{mgcv} albeit with many fewer options than \code{mgcv}. It allows for
-#' truncated (linear) splines or O'Sullivan splines. Please see \link{vglmer}
-#' for more discussion and examples.
+#' truncated (linear) splines (\code{type="tpf"}), O'Sullivan splines
+#' (\code{type="o"}), or kernel ridge  regression (\code{type="gKRLS"}). Please
+#' see \link{vglmer} for more discussion and examples. For information on kernel
+#' ridge regression, please consult \link[gKRLS]{gKRLS}.
 #' 
 #' @param ... Variable name, e.g. \code{v_s(x)}
 #' @param type Default (\code{"tpf"}) uses truncated linear splines for the
-#'   basis. The other option (\code{"o"}) uses O'Sullivan splines (Wand and
-#'   Ormerod 2008).
+#'   basis. \code{"o"} uses O'Sullivan splines (Wand and Ormerod 2008).
+#'   Smoothing across multiple covariates, e.g. \code{v_s(x,x2,type="gKRLS")},
+#'   can be done using kernel ridge regression. Chang and Goplerud (2024)
+#'   provide a detailed discussion. Note that \code{"gKRLS"} by default uses
+#'   random sketching to create the relevant bases and thus a seed would need to
+#'   be set to ensure exact replicability.
 #' @param knots Default (\code{NULL}) uses \eqn{K=min(N/4,35)} knots evenly
 #'   spaced at quantiles of the covariate \code{x}. A single number specifies a
 #'   specific number of knots; a vector can set custom locations for knots.
 #' @param by A categorical or factor covariate to interact the spline with; for
 #'   example, \code{v_s(x, by = g)}.
-#' @param xt Arguments passed to \code{xt} from \code{mgcv}; at the moment, only
-#'   used for \code{type="gKRLS"} to pass the function \code{gKRLS()}. Please
-#'   see the documentation of \code{gKRLS} for more details.
+#' @param xt Arguments passed to \code{xt} from \code{mgcv}; at the moment, this
+#'   is only used for \code{type="gKRLS"} to pass the function \code{gKRLS()}.
+#'   Please see the documentation of \code{\link[gKRLS]{gKRLS}} for more
+#'   details.
 #' @param by_re Default (\code{TRUE}) regularizes the interactions between the
 #'   categorical factor and the covariate. See "Details" in \link{vglmer} for
 #'   more discussion.
@@ -66,12 +73,17 @@ v_s <- function(..., type = 'tpf', knots = NULL, by = NA,
                 xt = NULL,
                 by_re = TRUE, force_vector = FALSE,
                 outer_okay = FALSE){
-  if (!(type %in% c('tpf', 'o', 'gKRLS'))){stop('non tpf not set up yet...')}
+  if (!(type %in% c('tpf', 'o', 'gKRLS', 'randwalk'))){stop('non tpf not set up yet...')}
   # Using mgcv's syntax for "s" to make it work with "interpret.gam"
   vars <- as.list(substitute(list(...)))[-1]
   d <- length(vars)
-  if (type %in% c('tpf', 'o')){
+  if (type %in% c('tpf', 'o', 'randwalk')){
     if (d > 1){stop('"tpf" and "o" accept only a single variable; use "gKRLS" for multivariate smoothing')}
+  }
+  if (type == 'gKRLS'){
+    if (!requireNamespace("gKRLS", quietly = TRUE)) {
+      stop('Using type="gKRLS" required "gKRLS" to be installed.')
+    }  
   }
   by.var <- deparse(substitute(by), backtick = TRUE, width.cutoff = 500)
   if (by.var == "."){
@@ -116,26 +128,54 @@ vglmer_build_spline <- function(x, knots = NULL, Boundary.knots = NULL,
   by, type, override_warn = FALSE,  xt = NULL,
   outer_okay = FALSE, by_re = NULL, force_vector = FALSE){
 
-  if (type == 'gKRLS'){
+  if (type %in% c('gKRLS', 'randwalk')){
     
-    if (!is.null(knots)){
-      object_gKRLS <- knots
+    if (type == 'gKRLS'){
+
+      if (!is.null(knots)){
+        object_mgcv <- knots
+      }else{
+        object_mgcv <- list(
+          term = colnames(x),
+          xt = xt,
+          p.order = NA,
+          bs.dim = -1,
+          fixed = FALSE,
+          by = 'NA'
+        )
+        class(object_mgcv) <- 'gKRLS.smooth.spec'
+        object_mgcv <- smooth.construct(object_mgcv, data = x)
+      }
+      
     }else{
-      object_gKRLS <- list(
-        term = colnames(x),
-        xt = xt,
-        p.order = NA,
-        bs.dim = -1,
-        fixed = FALSE,
-        by = 'NA'
-      )
-      class(object_gKRLS) <- 'gKRLS.smooth.spec'
-      object_gKRLS <- smooth.construct(object_gKRLS, data = x)
+
+      if (!is.null(knots)){
+        object_mgcv <- knots
+      }else{
+        object_mgcv <- list(
+          term = colnames(x),
+          xt = xt,
+          p.order = NA,
+          bs.dim = -1,
+          fixed = FALSE,
+          by = 'NA'
+        )
+        class(object_mgcv) <- 'randwalk.smooth.spec'
+        object_mgcv <- smooth.construct(object_mgcv, data = x, knots = NULL)
+      }
     }
-    
-    x <- Predict.matrix(object_gKRLS, data = x)
+
+    x <- Predict.matrix(object_mgcv, data = x)
+    # if (outer_okay){
+    #   object_mgcv$internal_override <- TRUE
+    #   x <- Predict.matrix(object_mgcv, data = x)
+    # }else{
+    #   object_mgcv$internal_override <- FALSE
+    #   x <- Predict.matrix(object_mgcv, data = x)
+    # }
+    # object_mgcv$internal_override <- NULL
     colnames(x) <- paste0('base @ ', 1:ncol(x))
-    spline_attr <- list(knots=object_gKRLS)
+    spline_attr <- list(knots=object_mgcv)
     
     if (!is.null(by)){
       base_x <- x
@@ -467,3 +507,35 @@ fallback_interpret.gam0 <- function(gf, textra = NULL, extra.special = NULL){
   class(ret) <- "split.gam.formula"
   ret
 }
+
+
+#' To be used if subbars fails, usually when there is an argument to 
+#' v_s ; adapted from lme4
+#' @param term a formula with lme4-style syntax; see \link[lme4]{subbars}
+fallback_subbars <- function (term) {
+  if (is.name(term) || !is.language(term)) {
+    return(term)
+  }
+  if (length(term) == 2) {
+    term[[2]] <- fallback_subbars(term[[2]])
+    return(term)
+  }
+  stopifnot(length(term) >= 3)
+  if (is.call(term) && term[[1]] == as.name("|")) {
+    term[[1]] <- as.name("+")
+  }
+  if (is.call(term) && term[[1]] == as.name("||")) {
+    term[[1]] <- as.name("+")
+  }
+  if (!any(grepl(as.character(term), pattern='\\|'))){
+    return(term)
+  }
+  for (j in 2:length(term)) {
+    tryCatch(term[[j]], error = function(e){browser()})
+    term[[j]] <- fallback_subbars(term[[j]])
+  } 
+  return(term)
+}
+
+
+

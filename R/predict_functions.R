@@ -184,7 +184,7 @@ predict.vglmer <- function(object, newdata, type = 'link',
       
       special_i <- parse_formula$smooth.spec[[i]]
       
-      if (special_i$type == 'gKRLS'){
+      if (special_i$type %in% c('gKRLS', 'randwalk')){
         all_splines_i <- newdata[special_i$term]
         special_i$fmt_term <- paste0('(', paste0(special_i$term, collapse=','), ')')
       }else{

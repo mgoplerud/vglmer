@@ -19,8 +19,12 @@ v_s(
 \item{...}{Variable name, e.g. \code{v_s(x)}}
 
 \item{type}{Default (\code{"tpf"}) uses truncated linear splines for the
-basis. The other option (\code{"o"}) uses O'Sullivan splines (Wand and
-Ormerod 2008).}
+basis. \code{"o"} uses O'Sullivan splines (Wand and Ormerod 2008).
+Smoothing across multiple covariates, e.g. \code{v_s(x,x2,type="gKRLS")},
+can be done using kernel ridge regression. Chang and Goplerud (2024)
+provide a detailed discussion. Note that \code{"gKRLS"} by default uses
+random sketching to create the relevant bases and thus a seed would need to
+be set to ensure exact replicability.}
 
 \item{knots}{Default (\code{NULL}) uses \eqn{K=min(N/4,35)} knots evenly
 spaced at quantiles of the covariate \code{x}. A single number specifies a
@@ -29,9 +33,10 @@ specific number of knots; a vector can set custom locations for knots.}
 \item{by}{A categorical or factor covariate to interact the spline with; for
 example, \code{v_s(x, by = g)}.}
 
-\item{xt}{Arguments passed to \code{xt} from \code{mgcv}; at the moment, only
-used for \code{type="gKRLS"} to pass the function \code{gKRLS()}. Please
-see the documentation of \code{gKRLS} for more details.}
+\item{xt}{Arguments passed to \code{xt} from \code{mgcv}; at the moment, this
+is only used for \code{type="gKRLS"} to pass the function \code{gKRLS()}.
+Please see the documentation of \code{\link[gKRLS]{gKRLS}} for more
+details.}
 
 \item{by_re}{Default (\code{TRUE}) regularizes the interactions between the
 categorical factor and the covariate. See "Details" in \link{vglmer} for
@@ -52,8 +57,10 @@ This function returns a list of class of \code{vglmer_spline} that is
 \description{
 This function estimates splines in \code{vglmer}, similar to \code{s(...)} in
 \code{mgcv} albeit with many fewer options than \code{mgcv}. It allows for
-truncated (linear) splines or O'Sullivan splines. Please see \link{vglmer}
-for more discussion and examples.
+truncated (linear) splines (\code{type="tpf"}), O'Sullivan splines
+(\code{type="o"}), or kernel ridge  regression (\code{type="gKRLS"}). Please
+see \link{vglmer} for more discussion and examples. For information on kernel
+ridge regression, please consult \link[gKRLS]{gKRLS}.
 }
 \references{
 Chang, Qing, and Max Goplerud. 2024. "Generalized Kernel Regularized Least
