@@ -6,7 +6,7 @@ Authors@R: person("Max", "Goplerud", email = "mgoplerud@austin.utexas.edu",
     role = c("aut", "cre"))
 Encoding: UTF-8
 License: GPL (>= 2)
-Description: Estimates hierarchical models using mean-field variational Bayes. 
+Description: Estimates hierarchical models using variational inference. 
     At present, it can estimate logistic, linear, and negative binomial models. 
     It can accommodate models with an arbitrary number of random effects and 
     requires no integration to estimate. It also provides the ability to improve 

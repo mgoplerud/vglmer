@@ -72,6 +72,8 @@ test_that('vglmer runs with timing and "quiet=F"', {
   g <- sample(G_names, N, replace = T)
   alpha <- rnorm(G)
 
+  y <- rbinom(n = N, size = 1, prob = plogis(-1 + x + alpha[match(g, G_names)]))
+  
   if (all(y == 0)){
     y[1] <- 1
   }
@@ -79,8 +81,6 @@ test_that('vglmer runs with timing and "quiet=F"', {
     y[1] <- 0
   }
   
-  y <- rbinom(n = N, size = 1, prob = plogis(-1 + x + alpha[match(g, G_names)]))
-
   est_simple <- suppressMessages(vglmer(y ~ x + (1 | g),
     data = NULL,
     control = vglmer_control(do_timing = T, quiet = F, iteration = 5),
