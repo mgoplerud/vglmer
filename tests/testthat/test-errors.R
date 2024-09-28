@@ -175,7 +175,13 @@ test_that("Run without FE for corresponding random slope", {
   alpha <- rnorm(G)
   
   y <- rbinom(n = N, size = 1, prob = plogis(-1 + x + alpha[match(g, G_names)]))
-  
+  # Avoid perfect separation
+  if (all(y == 0)){
+    y[1] <- 1
+  }
+  if (all(y == 1)){
+    y[1] <- 0
+  }
   fit_noFE_for_RE <- vglmer(
     formula = y ~ 1 + (1 + x | g),
     family = 'linear', control = vglmer_control(iterations = 4),
