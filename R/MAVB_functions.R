@@ -20,9 +20,11 @@
 #' @importFrom mvtnorm rmvnorm
 #' 
 #' @references 
-#' Goplerud, Max. 2022a. "Fast and Accurate Estimation of Non-Nested Binomial
+#' 
+#' Goplerud, Max. 2022. "Fast and Accurate Estimation of Non-Nested Binomial
 #' Hierarchical Models Using Variational Inference." \emph{Bayesian Analysis}. 17(2):
 #' 623-650.
+#' 
 #' @export
 MAVB <- function(object, samples, verbose = FALSE, var_px = Inf) {
   

@@ -11,7 +11,7 @@ library(devtools)
 devtools::install_github("mgoplerud/vglmer", dependencies = TRUE)
 ```
 
-If you are interested in using partially factorized variational inference (Goplerud, Papaspiliopoulos, and Zanella 2023), please switch to the `collapsed` branch and install that version of the package. There are some important differences with this main branch, especially in terms of some `vglmer_control` naming conventions. This branch will be eventually integrated into the main package.
+If you are interested in using partially factorized variational inference [(Goplerud, Papaspiliopoulos, and Zanella 2023)](https://arxiv.org/abs/2312.13148), please switch to the `collapsed` branch and install that version of the package. There are some important differences with this main branch, especially in terms of some `vglmer_control` naming conventions. This branch will be eventually integrated into the main package.
 
 At present, `vglmer` can fit logistic, linear, and negative binomial outcomes with an arbitrary number of random effects. Details on negative binomial inference can be found [here](https://github.com/mgoplerud/vglmer/blob/master/.github/model_addendum.pdf) and are more experimental at the moment.
 

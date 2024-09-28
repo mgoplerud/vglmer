@@ -31,7 +31,7 @@ This function returns the improved estimates of the
   \link{predict_MAVB}. At present, MAVB is only enabled for binomial models.
 }
 \references{
-Goplerud, Max. 2022a. "Fast and Accurate Estimation of Non-Nested Binomial
+Goplerud, Max. 2022. "Fast and Accurate Estimation of Non-Nested Binomial
 Hierarchical Models Using Variational Inference." \emph{Bayesian Analysis}. 17(2):
 623-650.
 }

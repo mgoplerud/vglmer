@@ -25,13 +25,14 @@ test_that('Translation Data Test', {
   x2 <- rnorm(N)
   g <- sample(1:G, N, replace = T)
   g2 <- sample(1:G, N, replace = T)
+  g3 <- sample(1:8, N, replace = T)
   alpha <- rnorm(G)
   
-  y <- rbinom(n = N, size = 1, prob = plogis(-1 + x + alpha[g]))
-  
+  y <- rbinom(n = N, size = 1, prob = plogis(-1 + x + alpha[g] + rnorm(8)[g3]))
+
   for (v in c('dynamic', 'numerical', 'OSL', 'profiled')){
     
-    est_vglmer <- vglmer(y ~ x + x2 + (1 + x | g) + (1 + x2 | g2), data = NULL,
+    est_vglmer <- vglmer(y ~ x + x2 + (1 + x | g) + (1 + x2 | g2) + (1 | g3), data = NULL,
                          family = 'binomial',
                          control = vglmer_control(iterations = NITER, px_method = v, debug_px = TRUE))
     
@@ -66,3 +67,38 @@ test_that("Check that B_j has correct shape", {
 })
 
 
+
+test_that('Translation Data Test', {
+  
+  N <- 100
+  G <- 5
+  x <- rnorm(N)
+  x2 <- rnorm(N)
+  g <- sample(1:G, N, replace = T)
+  g2 <- sample(1:G, N, replace = T)
+  g3 <- sample(1:8, N, replace = T)
+  alpha <- rnorm(G)
+  
+  y <- rbinom(n = N, size = 1, prob = plogis(-1 + x + alpha[g] + rnorm(8)[g3]))
+  
+  for (v in c('dynamic', 'numerical', 'OSL', 'profiled')){
+    
+    est_vglmer <- vglmer(y ~ x + x2 + (1 + x | g) + (1 + x2 | g2) + (1 | g3), data = NULL,
+                         family = 'binomial',
+                         control = vglmer_control(iterations = NITER, px_method = v, debug_px = TRUE))
+    
+    expect_gt(min(diff(ELBO(est_vglmer, 'traj'))), -sqrt(.Machine$double.eps))
+    
+  }
+  
+  # Check that parameter_expansion = "mean" for non-strong factorization
+  est_vglmer <- expect_message(
+    vglmer(y ~ x + x2 + (1 + x | g) + (1 + x2 | g2) + (1 | g3), data = NULL,
+     family = 'binomial',
+     control = vglmer_control(iterations = NITER, factorization_method = 'weak', 
+                              px_method = v, debug_px = TRUE)),
+    regexp = 'to mean for non-strong'
+  )
+  expect_true(est_vglmer$control$parameter_expansion == 'mean')
+  
+})

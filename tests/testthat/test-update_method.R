@@ -23,19 +23,22 @@ test_that("Joint vs Cyclical Update", {
   G <- 20
   x <- rnorm(N)
   g <- sample(1:G, N, replace = T)
+  g2 <- sample(1:10, N, replace = T)
   alpha <- rnorm(G)
-
-  y <- rbinom(n = N, size = 1, prob = plogis(-1 + x + alpha[g]))
+  alpha2 <- rnorm(10)
+  
+  y <- rbinom(n = N, size = 1, prob = plogis(-1 + x + alpha[g] + alpha2[g2]))
 
 
   for (v in c("weak", "partial", "strong")) {
+    
     ex_vglmer_cyclic <- vglmer(
-      formula = y ~ x + (1 | g), family = "binomial",
+      formula = y ~ x + (1 | g) + (1 | g2), family = "binomial",
       data = NULL, control = vglmer_control(factorization_method = v, linpred_method = "cyclical", init = "zero")
     )
 
     ex_vglmer_joint <- vglmer(
-      formula = y ~ x + (1 | g), family = "binomial",
+      formula = y ~ x + (1 | g) + (1 | g2), family = "binomial",
       data = NULL, control = vglmer_control(factorization_method = v, linpred_method = "joint", init = "zero")
     )
 
@@ -45,8 +48,9 @@ test_that("Joint vs Cyclical Update", {
     expect_equivalent(fmt_vglmer_cyclic, fmt_vglmer_joint, tolerance = 1e-4, scale = 1)
 
     if (v == "strong") {
+
       ex_vglmer_normal <- vglmer(
-        formula = y ~ x + (1 | g), family = "binomial",
+        formula = y ~ x + (1 | g) + (1 | g2), family = "binomial",
         data = NULL, 
         control = vglmer_control(factorization_method = v, 
            do_SQUAREM = FALSE,
@@ -59,6 +63,75 @@ test_that("Joint vs Cyclical Update", {
   }
 })
 
+
+test_that("Joint vs Cyclical Update (Nested)", {
+  
+  skip_on_cran()
+
+  N <- 1000
+  G <- 20
+  x <- rnorm(N)
+  g <- sample(1:G, N, replace = T)
+  g2 <- floor(g/3) + 1
+  alpha <- rnorm(G)
+  alpha2 <- rnorm(max(g2))
+  
+  y <- rbinom(n = N, size = 1, prob = plogis(-1 + x + alpha[g] + alpha2[g2]))
+  
+  
+  fmla <- y ~ x + (1 | g2) + (1 | g)
+  fmla_perm <- y ~ x + (1 | g) + (1 | g2)
+  
+  warning('This should work with *default* initialization...')
+  
+  ex_vglmer_cyclic_perm <- suppressMessages(vglmer(
+    formula = fmla_perm, family = "binomial",
+    data = NULL, control = vglmer_control(
+      iterations = 100, print_prog = 500,
+      init = 'EM', linpred_method = "cyclical")
+  ))
+  
+  ex_vglmer_joint_perm <- vglmer(
+    formula = fmla_perm, family = "binomial",
+    control = vglmer_control(iterations = 100, print_prog = 500),
+    data = NULL
+  )
+  
+  ex_vglmer_cyclic <- suppressMessages(vglmer(
+    formula = fmla, family = "binomial",
+    data = NULL, control = vglmer_control(
+      iterations = 100, print_prog = 500,
+      init = 'EM', linpred_method = "cyclical")
+  ))
+  
+  expect_equal(names(ranef(ex_vglmer_cyclic)), c('g2', 'g'))  
+  expect_equal(names(ranef(ex_vglmer_cyclic_perm)), c('g', 'g2'))  
+  
+  ex_vglmer_joint <- vglmer(
+    formula = fmla, family = "binomial",
+    control = vglmer_control(iterations = 100,
+                             print_prog = 500),
+    data = NULL 
+  )
+  
+  fmt_vglmer_cyclic_perm <- format_vglmer(ex_vglmer_cyclic_perm)
+  fmt_vglmer_cyclic <- format_vglmer(ex_vglmer_cyclic)
+  fmt_vglmer_joint <- format_vglmer(ex_vglmer_joint)
+  
+  expect_equivalent(fmt_vglmer_cyclic, fmt_vglmer_joint, tolerance = 1e-3, scale = 1)
+  expect_equivalent(fmt_vglmer_cyclic, 
+                    fmt_vglmer_cyclic_perm[
+                      match(fmt_vglmer_cyclic$name, fmt_vglmer_cyclic_perm$name),
+                    ], tolerance = 1e-2, scale = 1)
+  
+  expect_equivalent(ex_vglmer_joint$ELBO, ex_vglmer_joint_perm$ELBO,
+                    tolerance = 1e-5, scale = 1)
+  ex_vglmer_cyclic$ELBO$it <- NULL
+  ex_vglmer_cyclic_perm$ELBO$it <- NULL
+  expect_equivalent(ex_vglmer_cyclic$ELBO[,1], ex_vglmer_cyclic_perm$ELBO[,1],
+                    tolerance = 1e-2, scale = 1)
+  
+})
 
 test_that("Compare PX vs Non-PX", {
   

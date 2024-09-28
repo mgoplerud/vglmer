@@ -1,7 +1,9 @@
 ## Resubmission
 
-This is an update on vglmer 1.0.3 that addresses a bottleneck in the prediction
-function, adds additional functionalities and fixes some bugs.
+This is an update on vglmer 1.0.5 that adds some additional, minor,
+functionalities. It considerably improves the speed of
+`parameter_expansion="translation"` for `factorization_method="strong"` in large
+models by speeding up the model preparation.
 
 ## R CMD check results
 

@@ -1,6 +1,12 @@
+# vglmer 1.0.6
+
+* Removes unnecessary model preparation steps for `parameter_expansion="translation"` and `factorization_method="strong"`. Improves speed on default settings for models with many random effects.
+
+* Updated references in documentation.
+
 # vglmer 1.0.5
 
-** Add gKRLS as an option for smoothing multiple (continuous) covariates. Chang and Goplerud (2024; https://doi.org/10.1017/pan.2023.27) for more details.
+** Add gKRLS as an option for smoothing multiple (continuous) covariates. Chang and Goplerud (2024; https://doi.org/10.1017/pan.2023.27) provides more details.
 
 # vglmer 1.0.4
 

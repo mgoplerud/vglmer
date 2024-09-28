@@ -69,7 +69,7 @@ This function returns an estimate of the linear predictor. The
   summary of the prediction for each observation, i.e. the estimated mean and
   variance. If \code{summary = FALSE}, the sampled values of the linear
   predictor are returned as a matrix. \code{predict_MAVB} performs MAVB as
-  described in Goplerud (2022a) before returning the linear predictor.
+  described in Goplerud (2022) before returning the linear predictor.
   
   If \code{allow_missing_levels = TRUE}, then observations with a new
   (unseen) level for the random effect are given a value of zero for that
@@ -79,7 +79,7 @@ This function returns an estimate of the linear predictor. The
 These functions calculate the estimated linear predictor using
   the variational distributions. \code{predict.vglmer} draws predictions
   using the estimated variational distributions; \code{predict_MAVB} does so
-  using the MAVB procedure described in Goplerud (2022a).
+  using the MAVB procedure described in Goplerud (2022).
 }
 \examples{
 

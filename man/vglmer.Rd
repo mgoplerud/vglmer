@@ -49,7 +49,7 @@ effect covariance \eqn{\Sigma_j}; all distributions are Inverse-Wishart.
 \code{cov} contains a list of the estimated scale matrices. \code{df}
 contains a list of the degrees of freedom.}
 \item{hw}{If a Huang-Wand prior is used (see Huang and Wand 2013 or Goplerud
-2022b for more details), then the estimated distribution. Otherwise, it is
+2024 for more details), then the estimated distribution. Otherwise, it is
 \code{NULL}. All distributions are Inverse-Gamma. \code{a} contains a list of
 the scale parameters. \code{b} contains a list of the shape parameters.}
 \item{sigmasq}{If \code{family="linear"}, this contains a list of the
@@ -74,7 +74,7 @@ post-estimation functions. See \code{formula.vglmer} for more details.}
 \description{
 This function estimates hierarchical models using mean-field variational
 inference. \code{vglmer} accepts standard syntax used for \code{lme4}, e.g.,
-\code{y ~ x + (x | g)}. Options are described below. Goplerud (2022a; 2022b)
+\code{y ~ x + (x | g)}. Options are described below. Goplerud (2022; 2024)
 provides details on the variational algorithms.
 }
 \details{
@@ -111,7 +111,7 @@ distribution).
 "strong" (i.e. fully factorized) variational assumption. Setting
 \code{vglmer_control(factorization_method = "weak")} will improve the quality
 of the variance approximation but may take considerably more time to
-estimate. See Goplerud (2022a) for discussion. 
+estimate. See Goplerud (2022) for discussion. 
 
 By default, the prior on each random effect variance (\eqn{\Sigma_j}) uses a Huang-Wand prior (Huang
 and Wand 2013) with hyper-parameters \eqn{\nu_j = 2} and \eqn{A_{j,k} = 5}.
@@ -122,7 +122,7 @@ By default, estimation is accelerated using SQUAREM (Varadhan and Roland
 2008) and (one-step-late) parameter expansion for variational Bayes. Under
 the default \code{"strong"} factorization, a "translation" expansion is used;
 under other factorizations a "mean" expansion is used. These can be adjusted
-using \link{vglmer_control}. See Goplerud (2022b) for more discussion of
+using \link{vglmer_control}. See Goplerud (2024) for more discussion of
 these methods.
 }
 \examples{
@@ -167,12 +167,13 @@ vglmer(y ~ v_s(x),
 
 }
 \references{
-Goplerud, Max. 2022a. "Fast and Accurate Estimation of Non-Nested Binomial
+Goplerud, Max. 2022. "Fast and Accurate Estimation of Non-Nested Binomial
 Hierarchical Models Using Variational Inference." \emph{Bayesian Analysis}. 17(2):
 623-650.
 
-Goplerud, Max. 2022b. "Re-Evaluating Machine Learning for MRP Given the
-Comparable Performance of (Deep) Hierarchical Models." Working paper.
+Goplerud, Max. 2024. "Re-Evaluating Machine Learning for MRP Given the
+Comparable Performance of (Deep) Hierarchical Models." \emph{American
+Political Science Review}. 118(1): 529-536.
 
 Huang, Alan, and Matthew P. Wand. 2013. "Simple Marginally Noninformative
 Prior Distributions for Covariance Matrices." \emph{Bayesian Analysis}.
