@@ -138,7 +138,10 @@ multi_digamma <- function(a, p) {
 #' @name simple_EM
 #' @keywords internal
 #' @importFrom stats runif
-EM_prelim_logit <- function(X, Z, s, pg_b, iter, ridge = 2) {
+EM_prelim_logit <- function(X, Z, s, pg_b, iter, Z_list, Tinv, cyclical_pos, ridge = 2) {
+  
+  is_cyclical <- !missing(cyclical_pos)
+  
   jointXZ <- cbind(X, Z)
   N <- nrow(X)
 
@@ -152,19 +155,74 @@ EM_prelim_logit <- function(X, Z, s, pg_b, iter, ridge = 2) {
   }
   EM_variance <- sparseMatrix(i = 1:ncol(jointXZ), j = 1:ncol(jointXZ), x = 1 / ridge)
 
+  if (is_cyclical){
+    
+    number_of_RE <- length(cyclical_pos)
+    
+    if (missing(Tinv)){
+      Tinv <- lapply(cyclical_pos, FUN=function(i){
+        l <- length(i)
+        return(sparseMatrix(i=1:l,j=1:l, x = 1/ridge))
+      })
+    }
+    zero_prec <- sparseMatrix(i=1:ncol(X),j=1:ncol(X), x = 0)
+    
+  }
   for (it in 1:iter) {
-    EM_pg_c <- jointXZ %*% EM_beta
+    
+    EM_pg_c <- as.vector(jointXZ %*% EM_beta)
     EM_pg_mean <- pg_b / (2 * EM_pg_c) * tanh(EM_pg_c / 2)
     if (any(abs(EM_pg_c) < 1e-10)) {
       tiny_c <- which(abs(EM_pg_c) < 1e-10)
       EM_pg_mean[tiny_c] <- pg_b[tiny_c] / 4
     }
-    EM_pg_diag_sqrt <- sparseMatrix(i = 1:N, j = 1:N, x = sqrt(EM_pg_mean))
+    size_FE <- ncol(X)
 
-    EM_beta <- solve(Matrix::Cholesky( crossprod(EM_pg_diag_sqrt %*% jointXZ) + EM_variance),
-                               t(jointXZ) %*% (s) )
-    
-    # EM_beta <- LinRegChol(X = jointXZ, omega = EM_pg_diag, y = s, prior_precision = EM_variance)$mean
+    if (is_cyclical){
+      
+      EM_pg_diag <- sparseMatrix(i = 1:N, j = 1:N, x = EM_pg_mean)
+      zero_vector <- double()
+      
+      # Compute the outcome for *all* Z
+      running_y <- as.vector(
+        s - EM_pg_mean * (jointXZ %*% EM_beta)
+      )
+
+      for (j in 0:number_of_RE) {
+        
+        if (j == 0){
+          index_j <- 1:ncol(X) - size_FE
+          Z_j <- X
+          Tinv_j <- zero_prec
+        }else{
+          index_j <- cyclical_pos[[j]]
+          Z_j <- Z_list[[j]]
+          Tinv_j <- Tinv[[j]]
+        }
+        old_term <- EM_pg_mean * as.vector(Z_j %*% EM_beta[size_FE + index_j])
+        running_y <- running_y + old_term
+        
+        chol.j <- LinRegChol(
+          X = Z_j, 
+          omega = EM_pg_diag, 
+          prior_precision = Tinv_j,
+          y = running_y,
+          adj_y = zero_vector
+        )
+        
+        EM_beta[size_FE + index_j] <- chol.j$mean
+        # Update the running_y to add back in the *new* mean
+        running_y <- running_y - as.vector(
+          EM_pg_mean * (Z_j %*% chol.j$mean)
+        )
+      }
+      
+    }else{
+      EM_pg_diag_sqrt <- sparseMatrix(i = 1:N, j = 1:N, x = sqrt(EM_pg_mean))
+      EM_beta <- solve(Matrix::Cholesky( crossprod(EM_pg_diag_sqrt %*% jointXZ) + EM_variance),
+                       t(jointXZ) %*% (s) )
+      # EM_beta <- LinRegChol(X = jointXZ, omega = EM_pg_diag, y = s, prior_precision = EM_variance)$mean
+    }
   }
   output <- list(beta = EM_beta[1:ncol(X)], alpha = EM_beta[-1:-ncol(X)])
   return(output)
@@ -258,6 +316,7 @@ calculate_ELBO <- function(family, ELBO_type, factorization_method,
   }else{
     ex_XBZA <- (X %*% vi_beta_mean + Z %*% vi_alpha_mean)
   }
+  
   if (any_FE){
     adjust_fe <- calculate_FE(X = FE_data, Z = FE_lookup, 
         FS_XX = FE_rowtensor, mean = vi_FE_mean, var = vi_FE_var)
@@ -688,3 +747,4 @@ expect_alpha_prior_kernel <- function(vi_sigma_alpha, vi_sigma_alpha_nu, vi_sigm
   
   return(out)
 }	
+

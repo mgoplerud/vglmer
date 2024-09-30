@@ -435,14 +435,17 @@ cyclical_update_poisson <- function(X, Z,
     log_weight <- offset_weight_j + diff_weight_j
     vi_pg_mean <- exp(log_weight)
 
-    direct_update <- as.vector(X %*% vi_beta_mean + Z %*% vi_alpha_mean + 1/2 * rowSums( (X %*% t(vi_beta_decomp))^2 ) +
-                           1/2 * rowSums( (Z %*% t(vi_alpha_decomp))^2))
-    direct_update <- exp(direct_update + adj_fe)
-    vi_pg_mean_d <- as.vector(direct_update)
-    
-    if (!isTRUE(all.equal(as.vector(vi_pg_mean_d), as.vector(vi_pg_mean)))){
-      browser('Misalignment')
-    }
+    # Check that the cyclical updating works as expected
+    # direct_update <- as.vector(
+    #   X %*% vi_beta_mean + Z %*% vi_alpha_mean + 
+    #     1/2 * rowSums( (X %*% t(vi_beta_decomp))^2 ) +
+    #     1/2 * rowSums( (Z %*% t(vi_alpha_decomp))^2)
+    # )
+    # direct_update <- exp(direct_update + adj_fe)
+    # vi_pg_mean_d <- as.vector(direct_update)
+    # if (!isTRUE(all.equal(as.vector(vi_pg_mean_d), as.vector(vi_pg_mean)))){
+    #   browser('Misalignment')
+    # }
     
     diag_vi_pg_mean <- sparseMatrix(i = seq_N, j = seq_N, x = vi_pg_mean)
     if (est_poisson$type != 'NVMP'){
