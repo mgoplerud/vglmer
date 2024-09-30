@@ -1089,7 +1089,12 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     id_range <- 1:nrow(Mmap)
     for (j in 1:(number_of_RE - sum(spline_REs))){
       store_re_id_j <- store_id_j <- list()
-      for (jprime in 1:j){
+      if (factorization_method %in% c('strong', 'partially_factorized', 'pf_diag')){
+        loop_j <- j
+      }else{
+        loop_j <- 1:j
+      }
+      for (jprime in loop_j){
         # print(c(j, jprime))
         umap <- unique(Mmap[, c(j, jprime)])
         store_re_id_j[[jprime]] <- unlist(apply(umap, MARGIN = 1, list), recursive = F)
@@ -1159,10 +1164,10 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
       ci_weight <- vi_pg_b
     }
     
-    names_of_collapsed <- NULL # Defined by list2env()...
-    index_marginal <- NULL     # Defined by list2env()...
-    index_collapse <- NULL    # Defined by list2env()...
-    
+    names_of_collapsed <- NULL # Overwritten by list2env()...
+    index_marginal <- NULL     # Overwritten by list2env()...
+    index_collapse <- NULL     # Overwritten by list2env()...
+
     list2env(build_collapse_index(X = X, Z = Z, weight = ci_weight,
               cyclical_pos = cyclical_pos, 
               outer_alpha_RE_positions = outer_alpha_RE_positions,
@@ -1241,7 +1246,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     
     vi_M_list <- lapply(M_j, FUN=function(i){joint_XZ[,i, drop = F]})
     vi_FS_MC  <- lapply(vi_M_list, FUN=function(i){
-      FS(design_C, i)
+      return(FS(design_C, i))
     })
     vi_P <- lapply(vi_M_list, FUN=function(i){
       vi_C_var %*% 
@@ -1285,8 +1290,6 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
       }
       lagged_flat_M_var <- vi_M_var_flat
       
-      store_assignment_Z
-      
     }else{
       vi_M_var <- lapply(M_j, FUN=function(i){as(joint_V_init[i,i,drop=F], 'dgCMatrix')})
       vi_C_uncond <- vi_C_var
@@ -1302,7 +1305,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
       
     }
     
-    rm(joint_V_init, joint_XZ)
+    rm(joint_V_init, joint_XZ); gc()
     
     if (any_collapsed_C){
       lagged_C_var <- sparseMatrix(i = 1, j = 1, x = 0, dims = dim(vi_C_var))
@@ -1356,6 +1359,10 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
   time_CAVI_loop <- Sys.time()
   for (it in 1:iterations) {
 
+    if (do_timing & !quiet_time){
+      print(it)
+    }
+    
     if (it %% print_prog == 0) {
       cat(".")
     }
