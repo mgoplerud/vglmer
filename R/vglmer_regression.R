@@ -470,6 +470,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
   }
   
   if (!is.null(re_fmla)){
+    
     mk_Z <- mkReTrms(re_fmla, data, 
         drop.unused.levels = control$drop.unused.levels,
         reorder.terms = FALSE, reorder.vars = FALSE)

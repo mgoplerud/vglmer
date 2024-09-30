@@ -36,6 +36,6 @@ Suggests:
 	tictoc,
   testthat
 LinkingTo: Rcpp, RcppEigen (>= 0.3.3.4.0)
-RoxygenNote: 7.2.3
+RoxygenNote: 7.3.2
 URL: https://github.com/mgoplerud/vglmer
 BugReports: https://github.com/mgoplerud/vglmer/issues

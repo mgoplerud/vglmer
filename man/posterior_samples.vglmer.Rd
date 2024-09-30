@@ -4,7 +4,7 @@
 \alias{posterior_samples.vglmer}
 \title{Draw samples from the variational distribution}
 \usage{
-\method{posterior_samples}{vglmer}(object, samples, verbose = FALSE)
+posterior_samples.vglmer(object, samples, verbose = FALSE)
 }
 \arguments{
 \item{object}{Model fit using \code{vglmer}.}
