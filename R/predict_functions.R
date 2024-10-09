@@ -266,63 +266,71 @@ predict.vglmer <- function(object, newdata,
     message('SKIPPING FIXED EFFECTS')
   }
   
-  #####
-  ### Confirm Alignment of the Z
-  #####
-  orig_Z_names <- rownames(object$alpha$mean)
-  
-  not_in_original_Z <- setdiff(fmt_names_Z, orig_Z_names)
-  not_in_new_Z <- setdiff(orig_Z_names, fmt_names_Z)
-  
-  if (length(not_in_original_Z) > 0) {
-    if (!allow_missing_levels) {
-      stop("New levels not allowed unless allow_missing_levels = TRUE")
+  if (number_of_RE > 0){
+
+    #####
+    ### Confirm Alignment of the Z
+    #####
+    orig_Z_names <- rownames(object$alpha$mean)
+    
+    not_in_original_Z <- setdiff(fmt_names_Z, orig_Z_names)
+    not_in_new_Z <- setdiff(orig_Z_names, fmt_names_Z)
+    
+    if (length(not_in_original_Z) > 0) {
+      if (!allow_missing_levels) {
+        stop("New levels not allowed unless allow_missing_levels = TRUE")
+      }
     }
-  }
-  
-  # Select overlapping columns
-  in_both <- intersect(fmt_names_Z, orig_Z_names)
-  # Find the ones that are missing
-  missing_cols <- setdiff(orig_Z_names, in_both)
-  
-  recons_Z <- Z[, match(in_both, fmt_names_Z), drop = F]
-  if (length(missing_cols) > 0){
-    # Create a matrix of zeros to pad the missing columns
-    pad_zero <- sparseMatrix(i = 1, j = 1, x = 0, 
-                             dims = c(nrow(Z), length(missing_cols)))
-    colnames(pad_zero) <- missing_cols
-    # Combine and then reorder to be lined-up correctly
-    recons_Z <- cbind(recons_Z, pad_zero)
-  }
-  recons_Z <- recons_Z[, match(orig_Z_names, colnames(recons_Z)), drop = F]
-  
-  # Old method for prediction
-  # in_both <- intersect(fmt_names_Z, orig_Z_names)
-  # recons_Z <- drop0(sparseMatrix(i = 1, j = 1, x = 0, dims = c(nrow(Z), length(orig_Z_names))))
-  # colnames(recons_Z) <- orig_Z_names
-  # rownames(recons_Z) <- rownames_Z
-  # recons_Z[, match(in_both, orig_Z_names)] <- Z[, match(in_both, fmt_names_Z)]
-  
-  # Check that the entirely missing columns match those not in the original
-  checksum_align <- setdiff(
-    not_in_new_Z, sort(names(which(colSums(recons_Z != 0) == 0))))
-  if (length(checksum_align) > 0) {
-    stop("Alignment Error")
-  }
-  
-  Z <- recons_Z
-  rm(recons_Z); gc()
-  
-  ####
-  
-  total_obs <- rownames(newdata)
-  obs_in_both <- intersect(rownames(X), rownames(Z))
+    
+    # Select overlapping columns
+    in_both <- intersect(fmt_names_Z, orig_Z_names)
+    # Find the ones that are missing
+    missing_cols <- setdiff(orig_Z_names, in_both)
+    
+    recons_Z <- Z[, match(in_both, fmt_names_Z), drop = F]
+    if (length(missing_cols) > 0){
+      # Create a matrix of zeros to pad the missing columns
+      pad_zero <- sparseMatrix(i = 1, j = 1, x = 0, 
+                               dims = c(nrow(Z), length(missing_cols)))
+      colnames(pad_zero) <- missing_cols
+      # Combine and then reorder to be lined-up correctly
+      recons_Z <- cbind(recons_Z, pad_zero)
+    }
+    recons_Z <- recons_Z[, match(orig_Z_names, colnames(recons_Z)), drop = F]
+    
+    # Old method for prediction
+    # in_both <- intersect(fmt_names_Z, orig_Z_names)
+    # recons_Z <- drop0(sparseMatrix(i = 1, j = 1, x = 0, dims = c(nrow(Z), length(orig_Z_names))))
+    # colnames(recons_Z) <- orig_Z_names
+    # rownames(recons_Z) <- rownames_Z
+    # recons_Z[, match(in_both, orig_Z_names)] <- Z[, match(in_both, fmt_names_Z)]
+    
+    # Check that the entirely missing columns match those not in the original
+    checksum_align <- setdiff(
+      not_in_new_Z, sort(names(which(colSums(recons_Z != 0) == 0))))
+    if (length(checksum_align) > 0) {
+      stop("Alignment Error")
+    }
+    
+    Z <- recons_Z
+    rm(recons_Z); gc()
 
-  XZ <- cbind(
-    X[match(obs_in_both, rownames(X)), , drop = F],
-    Z[match(obs_in_both, rownames(Z)), , drop = F]
-  )
+    total_obs <- rownames(newdata)
+    obs_in_both <- intersect(rownames(X), rownames(Z))
 
+    XZ <- cbind(
+      X[match(obs_in_both, rownames(X)), , drop = F],
+      Z[match(obs_in_both, rownames(Z)), , drop = F]
+    )
+    
+  }else{
+    total_obs <- rownames(newdata)
+    obs_in_both <- rownames(X)    
+    
+    XZ <- X
+    
+  }
+  
   factorization_method <- object$control$factorization_method
   if (is.matrix(samples)) {
     if (ncol(samples) != ncol(XZ)) {

@@ -405,10 +405,16 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     character_re_group <- sapply(character_re, FUN=function(i){i[2]})
     
     if (any(duplicated(character_re_group))){
-      stop('Some grouping factors for random effects are duplicated. Reformulate initial formula.')
+      
+      split_re <- split(1:length(character_re_group), character_re_group)
+      character_re <- unlist(mapply(split_re, names(split_re), SIMPLIFY = FALSE, FUN=function(i, g){
+        lapply(character_re[i], FUN=function(j){c(j[1], g)})
+      }), recursive = FALSE)
+      warning('Some grouping factors for random effects are duplicated. Attempting to salvage. Check REs carefully.')
+      
     }
     
-
+    
     for (v in sapply(character_re, FUN=function(i){i[2]})){
       
       if (!(v %in% names(data))){
@@ -434,11 +440,18 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
       
       # If "by" grouping already used, then add to the RE
       if (b_by %in% character_re_group){
-        
         position_b_by <- which(b_by == character_re_group)
-        existing_re_b_by <- character_re[[position_b_by]][1]
-        new_re_b_by <- paste0(unique(c('1', strsplit(existing_re_b_by, split=' \\+ ')[[1]], b_term)), collapse = ' + ')
-        character_re[[position_b_by]][1] <- new_re_b_by
+        
+        if (length(position_b_by) > 1){
+          warning('Duplicated random effects grouping: Random slope for "by" added as separate RE. Inspect formula to ensure it looks as desired.')
+          character_re <- c(character_re, list(c(paste0('0 + ', b_term), b_by)))
+          character_re_group <- sapply(character_re, FUN=function(i){i[2]})
+          
+        }else{
+          existing_re_b_by <- character_re[[position_b_by]][1]
+          new_re_b_by <- paste0(unique(c('1', strsplit(existing_re_b_by, split=' \\+ ')[[1]], b_term)), collapse = ' + ')
+          character_re[[position_b_by]][1] <- new_re_b_by
+        }
       }else{
         # If not, then add a new RE group with a 
         # random intercept and random slope.
@@ -451,7 +464,8 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     
     old_re <- re_fmla
     re_fmla <- lapply(character_re, FUN=function(i){str2lang(paste0(i[1], ' | ', i[2]))})
-    
+    re_fmla <- unique(re_fmla)
+
   }
   
   if (!is.null(re_fmla) & (length(re_fmla) > 0)){
@@ -518,6 +532,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
   }else{
     
     Z <- drop0(Matrix(nrow = nrow(X), ncol = 0))
+    Z_list <- NULL
     p.X <- ncol(X)
     p.Z <- 0
     names_of_RE <- c()

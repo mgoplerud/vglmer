@@ -6,7 +6,7 @@
 \alias{EM_prelim_nb}
 \title{Simple EM algorithm for starting values.}
 \usage{
-EM_prelim_logit(X, Z, s, pg_b, iter, ridge = 2)
+EM_prelim_logit(X, Z, s, pg_b, iter, Z_list, Tinv, cyclical_pos, ridge = 2)
 
 EM_prelim_nb(X, Z, y, est_r, iter, ridge = 2)
 }
