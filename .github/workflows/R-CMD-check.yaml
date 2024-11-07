@@ -71,11 +71,12 @@ jobs:
         run: |
           sudo apt-get install libcurl4-openssl-dev
 
-      - name: Install old version of "evaluate" for "mlr3"
+      - name: Install old version of "evaluate" for "mlr3" and "waldo" for "testthat"
         if: ${{ env.OLD_PKGS }}
         run: |
           Sys.getenv("OLD_PKGS")
           if (Sys.getenv("OLD_PKGS")) {
+            remotes::install_version(package = "waldo", version = "0.5.3")
             remotes::install_version(package = "evaluate", version = "0.23")
             remotes::install_version(package = "gam", version = "1.20")
           }
