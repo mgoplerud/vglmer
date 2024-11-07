@@ -33,11 +33,28 @@ multiclass_formula <- function(formula, choice_names, exempt = NULL){
   formula <- update(formula, paste0('. ~ ', paste0(add_terms, collapse = ' + ')))
   return(formula)
 }
+
+vglmer_control_clogit <- function(
+  expand_formula = FALSE,
+  choice_names, id_names
+){
   
+  out <- list(
+    expand_formula = expand_formula,
+    choice_names = choice_names,
+    id_names = id_names
+  )
+  
+  class(out) <- 'vglmer_control_clogit'
+  
+  return(out)
+  
+} 
+
 vglmer_multiclass <- function(
     formula, data,
     control = vglmer_control(),
-    pooled = TRUE,
+    pooled = TRUE, clogit = NULL,
     family){
   
   interpret.gam <- mgcv:::interpret.gam
@@ -62,9 +79,46 @@ vglmer_multiclass <- function(
   mf <- model.frame(parse_formula$fake.formula, data,
                       drop.unused.levels = TRUE)
   mf_response <- model.response(mf)
-  choices <- unique(mf_response)
+  for (v in colnames(mf_response)){
+    if (class(data[[v]]) != 'factor'){
+      stop('All outcomes in cbind(x,y) ~ ... or x ~ ... must be factors.')
+    }
+    mf_response[,v] <- levels(data[[v]])[as.integer(mf_response[,v])]
+  }
+  
+  if ('choice' %in% colnames(mf) | 'choice' %in% colnames(mf_response)){
+    stop('"choice" cannot be a variable in the formula; it is used to denote the cartesian product of all options')
+  }
+  
+  if (is.matrix(mf_response)){
+    
+    choices <- unique(na.omit(mf_response))
+    rownames(choices) <- NULL
+    L_bar <- prod(apply(mf_response, MARGIN = 2, FUN=function(i){length(unique(i))}))
+    if (L_bar != nrow(choices)){
+      warning('Number of observed combinations does not equal the maximal possible number')
+    }
+  }else{
+    if (is.factor(mf_response)){
+      choices <- levels(mf_response)
+    }else{
+      choices <- sort(unique(mf_response))
+    }
+    mf_response <- matrix(mf_response)
+    choices <- matrix(choices)
+    colnames(choices) <- 'choice'
+  }
+  
+  if (any(grepl(as.vector(choices), pattern='&'))){
+    stop('responses must not contain character "&"; this is used to identify unique combinations')
+  }
+  choice_names <- colnames(choices)
+  vec_choices <- apply(choices, MARGIN = 1, FUN = paste, collapse = ' & ')
+  u_choices <- sort(unique(vec_choices))
+  vec_response <- apply(mf_response, MARGIN = 1, FUN = paste, collapse = ' & ')
+  
   message(paste0('Beginning Multiclass Estimation with ',
-                 length(choices), ' Categories'))
+                 nrow(choices), ' Categories'))
   
   family <- match.arg(family, c('binomial', 'poisson', 'multinomial'))
   
@@ -88,16 +142,30 @@ vglmer_multiclass <- function(
     if ('id__' %in% colnames(mf)){
       stop("'id__' cannot be in formula; this is reserved for observation identifier.")
     }
-    mf[['id__']] <- 1:nrow(mf)
-    aug_data <- do.call('rbind', lapply(choices, FUN=function(i){
-      copy_mf <- mf
-      copy_mf$response <- mf_response
-      copy_mf$choice <- i
-      return(copy_mf)
-    }))
+    
+    if (!clogit){
+      mf[['id__']] <- 1:nrow(mf)
+      aug_data <- do.call('rbind', lapply(u_choices, FUN=function(i){
+        copy_mf <- mf
+        copy_mf$response <- vec_response
+        copy_mf$choice <- i
+        if (length(choice_names) > 1){
+          for (j in choice_names){
+            copy_mf[[j]] <- mf_response[,j]
+          }
+        }
+        return(copy_mf)
+      }))
+    }else{
+      browser()
+    }
+    
     aug_data$pseudo_outcome <- as.numeric(aug_data$response == aug_data$choice)
     
-    formula <- multiclass_formula(formula = formula, exempt = exempt_terms, choice_names = 'choice')
+    if (expand_formula){
+      formula <- multiclass_formula(formula = formula, exempt = exempt_terms, choice_names = unique(c(choice_names, 'choice')))
+    }
+    
     message('Augmenting formula for pooled model; formula given to vglmer shown below')
     fmla <- update(formula, 'pseudo_outcome ~ .')
     message(deparse(fmla))
@@ -108,18 +176,31 @@ vglmer_multiclass <- function(
     out <- list(fit = fit_pooled)
   }else{
     message('Using Separate Models')
-    fit_separate <- lapply(choices, FUN=function(ell){
-      message(paste0('Fitting ', ell))
-      data$pseudo_outcome <- as.numeric(mf_response == ell)
-      fmla <- update(formula, 'pseudo_outcome ~ .')
-      fit_ell <- vglmer(formula = fmla, data = data, family = fit_family,
-             control = control)
-      return(fit_ell)
-    })
+
+    if (clogit){
+      fit_separate <- lapply(u_choices, FUN=function(ell){
+        message(paste0('Fitting ', ell))
+        data_ell <- data[which(vec_choices == ell),,drop=FALSE]        
+        fit_ell <- vglmer(formula = fmla, data = data_ell, family = fit_family,
+                          control = control)
+        return(fit_ell)
+      })
+    }else{
+      fit_separate <- lapply(u_choices, FUN=function(ell){
+        message(paste0('Fitting ', ell))
+        data$pseudo_outcome <- as.numeric(vec_response == ell)
+        fmla <- update(formula, 'pseudo_outcome ~ .')
+        fit_ell <- vglmer(formula = fmla, data = data, family = fit_family,
+                          control = control)
+        return(fit_ell)
+      })
+    }
     out <- list(fit = fit_separate)
   }
   
   out$choices <- choices
+  out$choice_names <- choice_names
+  out$unique_choices <- u_choices
   out$family <- family
   out$pooled <- pooled
   class(out) <- c('vglmer_multiclass', 'vglmer')
@@ -138,9 +219,14 @@ predict.vglmer_multiclass <- function(
   if (object$pooled){
     
     newdata[['id__']] <- 1:nrow(newdata)
-    aug_newdata <- do.call('rbind', lapply(object$choices, FUN=function(i){
+    aug_newdata <- do.call('rbind', lapply(object$unique_choices, FUN=function(i){
       copy_mf <- newdata
       copy_mf$choice <- i
+      if (length(object$choice_names) > 1){
+        for (j in object$choice_names){
+          copy_mf[[j]] <- object$choices[which(object$unique_choices == i),j]
+        }
+      }
       return(copy_mf)
     }))
     pred_matrix <- predict(object$fit,
@@ -156,6 +242,7 @@ predict.vglmer_multiclass <- function(
   
   if (object$family %in% c('poisson', 'multinomial')){
     pred_out <- FactorHet:::softmax_matrix(pred_matrix)
+    colnames(pred_out) <- object$unique_choices
   }else if (object$family == 'binomial'){
     
     pred_out <- lapply(ova_method, FUN=function(m){
@@ -164,6 +251,7 @@ predict.vglmer_multiclass <- function(
       }else if (m == 'calibrated_softmax'){
         out <- FactorHet:::softmax_matrix(log(-plogis(-pred_matrix, log = TRUE)))
       }else{stop('...')}
+      colnames(out) <- object$unique_choices
       return(out)
     })
     names(pred_out) <- ova_method
