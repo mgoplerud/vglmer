@@ -5,6 +5,8 @@ functionalities. It considerably improves the speed of
 `parameter_expansion="translation"` for `factorization_method="strong"` in large
 models by speeding up the model preparation.
 
+It also addresses a failure in the tests from updates to `testthat` and `waldo`.
+
 ## R CMD check results
 
 There were no ERRORs, WARNINGs or NOTES. 

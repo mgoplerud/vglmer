@@ -15,6 +15,13 @@ if (isTRUE(as.logical(Sys.getenv("CI")))){
   env_test <- 'local'
 }
 
+custom_expect_vector <- function(x, p){
+  expect_true(is.vector(x) && is.atomic(x))
+  if (!missing(p)){
+    expect_true(length(x) == p)
+  }
+}
+
 print(paste0(NITER, ' for tests because ', env_test))
 
 test_that("fit with non-default options", {
@@ -82,7 +89,7 @@ test_that("fit splines works with one knot", {
          control = vglmer_control(iterations = 2),
          data = dat, family = 'linear'), regexp = 'observed data')
   expect_equivalent(est_vglmer$internal_parameters$spline$attr[[1]]$knots, 1.2)
-  expect_vector(predict(est_vglmer, newdata = data.frame(x = seq(-3,3,length.out=5))), 5)
+  custom_expect_vector(predict(est_vglmer, newdata = data.frame(x = seq(-3,3,length.out=5))), 5)
   expect_warning(vglmer(y ~ v_s(x, knots = 1.2),
          control = vglmer_control(iterations = 2),
          data = dat, family = 'linear'), regexp = 'as.integer')
@@ -249,14 +256,14 @@ test_that("CRAN basic spline tests", {
     dat_custom <- data.frame(x = mean(dat$x), x2 = mean(dat$x2), 
        g = c('CA', 'AL'), f = c('e', 'a'),
        stringsAsFactors = v)
-    expect_vector(predict(m1, newdata = dat_custom))
-    expect_vector(predict(m2, newdata = dat_custom))
-    expect_vector(predict(m3, newdata = dat_custom))
-    expect_vector(predict(m4, newdata = dat_custom))
-    expect_vector(predict(m5, newdata = dat_custom))
-    expect_vector(predict(m6, newdata = dat_custom))
-    expect_vector(predict(m7, newdata = dat_custom))
-    expect_vector(predict(m8, newdata = dat_custom))
+    custom_expect_vector(predict(m1, newdata = dat_custom))
+    custom_expect_vector(predict(m2, newdata = dat_custom))
+    custom_expect_vector(predict(m3, newdata = dat_custom))
+    custom_expect_vector(predict(m4, newdata = dat_custom))
+    custom_expect_vector(predict(m5, newdata = dat_custom))
+    custom_expect_vector(predict(m6, newdata = dat_custom))
+    custom_expect_vector(predict(m7, newdata = dat_custom))
+    custom_expect_vector(predict(m8, newdata = dat_custom))
   }
 })
 

@@ -4,6 +4,8 @@
 
 * Updated references in documentation.
 
+* Small adjustment to tests to prevent failure from update to `testthat` and `waldo` package
+
 # vglmer 1.0.5
 
 ** Add gKRLS as an option for smoothing multiple (continuous) covariates. Chang and Goplerud (2024; https://doi.org/10.1017/pan.2023.27) provides more details.
