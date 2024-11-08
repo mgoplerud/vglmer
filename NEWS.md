@@ -4,7 +4,7 @@
 
 * Updated references in documentation.
 
-* Small adjustment to tests to prevent failure from update to `testthat` and `waldo` package
+* Small adjustment to tests to prevent failure from update to `waldo` package
 
 # vglmer 1.0.5
 
