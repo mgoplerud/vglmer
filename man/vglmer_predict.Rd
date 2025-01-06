@@ -21,6 +21,7 @@ predict_MAVB(
   newdata,
   samples = 0,
   samples_only = FALSE,
+  skip_fe = FALSE,
   summary = TRUE,
   allow_missing_levels = FALSE,
   ...

@@ -869,11 +869,19 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
   # t(vi_beta_decomp) %*% vi_beta_decomp = VARIANCE
 
   
-  vi_beta_L_nonpermute <- vi_beta_decomp <- Diagonal(x = rep(0, ncol(X)))
-  vi_alpha_L_nonpermute <- vi_alpha_decomp <- Diagonal(x = rep(0, ncol(Z)))
+  if (ncol(X) > 0){
+    vi_beta_L_nonpermute <- vi_beta_decomp <- sparseMatrix(i = 1:ncol(X), j =1:ncol(X), x = 0)
+  }else{
+    vi_beta_L_nonpermute <- vi_beta_decomp <- as(matrix(nrow=0,ncol=0), 'dgCMatrix')
+  }
+  if (ncol(Z) > 0){
+    vi_alpha_L_nonpermute <- vi_alpha_decomp <- sparseMatrix(i = 1:ncol(Z), j =1:ncol(Z), x = 0)
+  }else{
+    vi_alpha_L_nonpermute <- vi_alpha_decomp <- as(matrix(nrow=0,ncol=0), 'dgCMatrix')
+  }
   
-  vi_beta_decomp <- as(vi_beta_decomp, 'dgCMatrix')
-  vi_alpha_decomp <- as(vi_alpha_decomp, 'dgCMatrix')
+  # vi_beta_decomp <- as(vi_beta_decomp, 'dgCMatrix')
+  # vi_alpha_decomp <- as(vi_alpha_decomp, 'dgCMatrix')
   
   vi_beta_LP <- Diagonal(n = ncol(X))
   vi_alpha_LP <- Diagonal(n = ncol(Z))

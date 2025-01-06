@@ -4,7 +4,12 @@
 \alias{predict.vglmer_multiclass}
 \title{Multiclass Prediction}
 \usage{
-\method{predict}{vglmer_multiclass}(object, newdata, allow_missing_levels = FALSE)
+\method{predict}{vglmer_multiclass}(
+  object,
+  newdata,
+  ova_method = c("softmax", "calibrated_softmax"),
+  allow_missing_levels = FALSE
+)
 }
 \description{
 Multiclass Prediction

@@ -58,22 +58,40 @@
 #' @importFrom stats delete.response terms
 #' @export
 predict.vglmer <- function(object, newdata,
-                           samples = 0, samples_only = FALSE,
+                           samples = 0, samples_only = FALSE, skip_fe = FALSE,
                            summary = TRUE, allow_missing_levels = FALSE, ...) {
   if (length(list(...)) > 0) {
     stop("... not used for predict.vglmer")
   }
   newdata <- as.data.frame(newdata)
   rownames(newdata) <- as.character(1:nrow(newdata))
-
+  if (nrow(newdata) == 0){stop('newdata must not have zero rows.')}
   parse_formula <- object$formula$interpret_gam
+  
+  if (!is.null(object$formula$interpret_gam$smooth.spec)){
+    fe_names <- sapply(object$formula$interpret_gam$smooth.spec, FUN=function(i){
+      if (i$type == 'fe'){
+        return(i$term)
+      }
+    })
+  }
+  
+  
   if (!all(parse_formula$pred.names %in% colnames(newdata))){
     missing_columns <- setdiff(parse_formula$pred.names, colnames(newdata))
-    stop(
-      paste0('The following columns are missing from "newdata": ', 
-        paste(missing_columns, collapse =', '))
-    )
+    
+    if (skip_fe){
+      missing_columns <- setdiff(missing_columns, fe_names)
+    }
+    
+    if (length(missing_columns) > 0){
+      stop(
+        paste0('The following columns are missing from "newdata": ', 
+               paste(missing_columns, collapse =', '))
+      )
+    }
   }
+
   fmla <- formula(object, form = 'original')
   # Extract X (FE design matrix)
   X <- model.matrix(delete.response(terms(nobars(formula(object, form = 'fe')))), data = newdata)
@@ -84,8 +102,14 @@ predict.vglmer <- function(object, newdata,
     stop("Misaligned Fixed Effects")
   }
 
-  mk_Z <- model.frame(delete.response(terms(object$formula$interpret_gam$fake.formula)), 
-                      data = newdata, drop.unused.levels = TRUE)
+  terms_RE <- terms(object$formula$interpret_gam$fake.formula)
+  if (skip_fe & length(fe_names) > 0){
+    terms_RE <- drop.terms(terms_RE, match(fe_names, attr(terms_RE, 'term.labels')))
+  }
+  
+  mk_Z <- model.frame(
+    delete.response(terms_RE), 
+    data = newdata, drop.unused.levels = TRUE)
   rownames_Z <- rownames(mk_Z)
   
   if (!is.null(object$formula$re)){
@@ -263,7 +287,11 @@ predict.vglmer <- function(object, newdata,
     }
     
   }else{
-    message('SKIPPING FIXED EFFECTS')
+    if (skip_fe){
+      
+    }else{
+      stop('Using FE in prediction, i.e. skip_fe=FALSE, not yet enabled.')
+    }
   }
   
   if (number_of_RE > 0){
