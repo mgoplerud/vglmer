@@ -25,6 +25,8 @@ vglmer_control(
   debug_px = FALSE,
   quiet = TRUE,
   quiet_rho = TRUE,
+  freeze_mi_var = FALSE,
+  mi_prior_type = c("centered", "separate", "shared"),
   px_method = "dynamic",
   px_numerical_it = 10,
   hw_inner = 10,

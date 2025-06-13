@@ -219,9 +219,17 @@ calculate_ELBO <- function(family, ELBO_type, factorization_method,
      do_huangwand = NULL, vi_a_a_jp = NULL, vi_a_b_jp = NULL,
      vi_a_nu_jp = NULL, vi_a_APRIOR_jp = NULL,
      # Multiplicative Interaction
-     any_RE = NULL, mi_centered = NULL,
+     do_huangwand_mi = NULL, 
+     any_RE = NULL, mi_prior_type = NULL,
      any_mi = NULL, 
-     Z_MI = NULL, vi_mi_mean = NULL, vi_mi_var = NULL,
+     # Extra Argus for UF_MI
+     UF_MI = NULL,
+     Z_MI_first = NULL, Z_MI_first_mapping = NULL,
+     vi_mi_decomp = NULL,
+     dim_MI_positions = NULL, 
+     # Core Args
+     Z_MI = NULL, Z_MI_grouping = NULL,
+     vi_mi_mean = NULL, vi_mi_var = NULL,
      vi_mi_lndet = NULL,
      vi_mi_diag = NULL, vi_mi_sigma_outer_alpha = NULL,
      vi_mi_sigma_alpha = NULL, vi_mi_sigma_alpha_nu = NULL,
@@ -264,8 +272,14 @@ calculate_ELBO <- function(family, ELBO_type, factorization_method,
   
   # Add the contribution of the bilinear predictor
   if (any_mi){
-    ex_XBZA <- ex_XBZA + get_bilinear_mean(Z_MI, vi_mi_mean)
-    var_XBZA <- var_XBZA + get_bilinear_var(Z_MI, vi_mi_mean, vi_mi_var)
+    ex_XBZA <- ex_XBZA + get_bilinear_mean(Z_MI, vi_mi_mean, Z_MI_grouping)
+    if (UF_MI){
+      var_XBZA <- var_XBZA + get_bilinear_var_UF(
+        Z_MI, Z_MI_first, Z_MI_first_mapping, 
+        vi_mi_mean, vi_mi_decomp, Z_MI_grouping, dim_MI_positions, mi_d_j)
+    }else{
+      var_XBZA <- var_XBZA + get_bilinear_var(Z_MI, vi_mi_mean, vi_mi_var, Z_MI_grouping)
+    }
   }
   
   if (any_RE){
@@ -288,22 +302,40 @@ calculate_ELBO <- function(family, ELBO_type, factorization_method,
     })
   }
   if (any_mi){
-    
+
     mi_moments_sigma_alpha <- mapply(
       vi_mi_sigma_alpha, vi_mi_sigma_alpha_nu, mi_d_j,
       SIMPLIFY = FALSE, FUN = function(phi, nu, d) {
-        inv_phi <- solve(phi)
-        sigma.inv <- nu * inv_phi
-        ln.det <- log(det(phi)) - sum(digamma((nu - 1:d + 1) / 2)) - d * log(2)
-        return(list(sigma.inv = sigma.inv, ln.det = ln.det))
+        if (mi_prior_type %in% c('centered', 'shared')){
+          inv_phi <- solve(phi)
+          sigma.inv <- nu * inv_phi
+          ln.det <- log(det(phi)) - sum(digamma((nu - 1:d + 1) / 2)) - d * log(2)
+          return(list(sigma.inv = sigma.inv, ln.det = ln.det))
+        }else{
+          mapply(phi, nu, d, SIMPLIFY = FALSE, FUN=function(phi_l, nu_l, d_l){
+            inv_phi_l <- solve(phi_l)
+            sigma.inv_l <- nu_l * inv_phi_l
+            ln.det_l <- log(det(phi_l)) - sum(digamma((nu_l - 1:d_l + 1) / 2)) - d_l * log(2)
+            return(list(sigma.inv = sigma.inv_l, ln.det = ln.det_l))
+          })
+        }
     })
-    mi_ln_det_sigma_alpha <- sapply(mi_moments_sigma_alpha, FUN = function(i) {
-      i$ln.det
+    mi_ln_det_sigma_alpha <- lapply(mi_moments_sigma_alpha, FUN = function(i) {
+      if (mi_prior_type %in% c('centered', 'shared')){
+        i$ln.det
+      }else{
+        sapply(i, `[[`, 'ln.det')
+      }
     })
     mi_inv_sigma_alpha <- lapply(mi_moments_sigma_alpha, FUN = function(i) {
-      i$sigma.inv
+      if (mi_prior_type %in% c('centered', 'shared')){
+        i$sigma.inv
+      }else{
+        lapply(i, `[[`, 'sigma.inv')
+      }
     })
   }
+  
   ## Get the terms for the expectation of the log-complete data given the
   ## variational distribution.
   if (ELBO_type == "augmented") {
@@ -475,87 +507,172 @@ calculate_ELBO <- function(family, ELBO_type, factorization_method,
   if (any_mi){
     
     # Expectation of log prior for MI
-    
-    if (mi_centered){
 
-      logcomplete_mi_prior <- sum(-mi_d_j * mi_g_j / 2 * log(2 * pi) - mi_g_j / 2 * mi_ln_det_sigma_alpha) +
+    if (mi_prior_type %in% c('centered')){
+
+      logcomplete_mi_prior <- sum(-mi_d_j * mi_g_j / 2 * log(2 * pi) - mi_g_j / 2 * unlist(mi_ln_det_sigma_alpha)) +
         -1 / 2 * sum(mapply(mi_inv_sigma_alpha, vi_mi_sigma_outer_alpha, FUN = function(a, b) {
           sum(diag(a %*% b))
         }))
       mi_g_centered <- sapply(vi_mi_mean, FUN=function(i){nrow(i[[1]])})
-      
       logcomplete_mi_prior <- logcomplete_mi_prior + 
-        sum(-mi_d_j * mi_g_centered/ 2 * log(2 * pi)) - mi_g_centered/2 * 1 +
+        sum(-mi_d_j * mi_g_centered/ 2 * log(2 * pi) - mi_g_centered/2 * 1 +
         -1/2 * mapply(vi_mi_mean, vi_mi_var, FUN=function(m_mean, m_var){
         out_mean <- Reduce("+", lapply(m_mean[1], crossprod))
         out_var <- Reduce("+", lapply(m_var[1], colSums))
         out_var <- matrix(out_var, nrow = sqrt(length(out_mean)))
         return(sum(diag(out_mean + out_var)))
-      })
+      }))
       
       # Entropy of VI distribution for MI
-      entropy_mi_prior <- sum(mi_d_j * (mi_g_centered + mi_g_j)) / 2 * log(2 * pi * exp(1)) + 
-        1/2 * sum(vi_mi_lndet)
+      entropy_mi_prior <- sum(mi_d_j * (mi_g_centered + mi_g_j) / 2 * log(2 * pi * exp(1))) + 
+        1/2 * sum(sapply(vi_mi_lndet, sum))
       
-    }else{
+    }else if (mi_prior_type %in% c('shared')){
       
-      logcomplete_mi_prior <- sum(-mi_d_j * mi_g_j / 2 * log(2 * pi) - mi_g_j / 2 * mi_ln_det_sigma_alpha) +
+      logcomplete_mi_prior <- sum(-mi_d_j * mi_g_j / 2 * log(2 * pi) - mi_g_j / 2 * unlist(mi_ln_det_sigma_alpha)) +
         -1 / 2 * sum(mapply(mi_inv_sigma_alpha, vi_mi_sigma_outer_alpha, FUN = function(a, b) {
           sum(diag(a %*% b))
         }))
       
       # Entropy of VI distribution for MI
       entropy_mi_prior <- sum(mi_d_j * mi_g_j) / 2 * log(2 * pi * exp(1)) + 
-        1/2 * sum(vi_mi_lndet)
+        1/2 * sum(sapply(vi_mi_lndet, sum))
       
+    }else if (mi_prior_type %in% c('separate')){
+      
+      logcomplete_mi_prior <- mapply(
+        mi_d_j, mi_g_j, mi_ln_det_sigma_alpha, 
+        mi_inv_sigma_alpha, vi_mi_sigma_outer_alpha,
+          FUN=function(d_l, g_l, det_l, invsig_l, oa_l){
+            sum(-d_l * g_l / 2 * log(2 * pi) - g_l / 2 * det_l) +
+            -1 / 2 * sum(mapply(invsig_l, oa_l, FUN = function(a, b) {
+              sum(diag(a %*% b))
+          }))
+      })
+
+      # Entropy of VI distribution for MI
+      entropy_mi_prior <- sum(mapply(mi_d_j, mi_g_j, FUN=function(d_l, g_l){
+        sum(d_l * g_l) / 2 * log(2 * pi * exp(1))
+      })) + 1/2 * sum(sapply(vi_mi_lndet, sum))
+
+    }else{
+      stop('invalid mi_prior_type')
     }
     
     # Expectation of log prior for sigma^2 for MI
-    if (do_huangwand){
-      mi_E_ln_vi_a <- mapply(vi_mi_a_a_jp, vi_mi_a_b_jp, FUN=function(tilde.a, tilde.b){
-        sum(log(tilde.b) - digamma(tilde.a))
-      })
-      mi_E_inv_v_a <- mapply(vi_mi_a_a_jp, vi_mi_a_b_jp, vi_mi_a_nu_jp, SIMPLIFY = FALSE, FUN=function(tilde.a, tilde.b, nu){
-        2 * nu * Diagonal(x = tilde.a/tilde.b)
-      })
-      logcomplete_mi_sigma <- 
-        sum(
-          mi_iw_prior_constant +
-            - (vi_mi_a_nu_jp + mi_d_j - 1)/2 * (mi_d_j * log(2 * vi_mi_a_nu_jp) + mi_E_ln_vi_a) +
-            -(2 * mi_d_j + vi_mi_a_nu_jp) / 2 * mi_ln_det_sigma_alpha +
-            -1 / 2 * mapply(mi_E_inv_v_a, mi_inv_sigma_alpha, FUN = function(a, b) {
-              sum(diag(a %*% b))
+    if (do_huangwand_mi){
+      
+      mi_E_ln_vi_a <- mapply(vi_mi_a_a_jp, vi_mi_a_b_jp, SIMPLIFY = FALSE, 
+        FUN=function(tilde.a, tilde.b){
+          if (mi_prior_type %in% c('centered', 'shared')){
+            sum(log(tilde.b) - digamma(tilde.a))
+          }else if (mi_prior_type %in% c('separate')){
+            mapply(tilde.a, tilde.b, FUN=function(a_l, b_l){
+              sum(log(b_l) - digamma(a_l))
             })
-        )
+          }else{stop('...')}
+      })
+      
+      mi_E_inv_v_a <- mapply(vi_mi_a_a_jp, vi_mi_a_b_jp, vi_mi_a_nu_jp, SIMPLIFY = FALSE, FUN=function(tilde.a, tilde.b, nu){
+        if (mi_prior_type %in% c('centered', 'shared')){
+          2 * nu * Diagonal(x = tilde.a/tilde.b)
+        }else{
+          mapply(tilde.a, tilde.b, FUN=function(a_l, b_l){
+            2 * nu * Diagonal(x = a_l / b_l)
+          })
+        }
+      })
+      
+      logcomplete_mi_sigma <- mapply(mi_iw_prior_constant, vi_mi_a_nu_jp, mi_d_j, 
+             mi_E_ln_vi_a, mi_ln_det_sigma_alpha,
+             mi_E_inv_v_a, mi_inv_sigma_alpha, 
+             FUN=function(cons_l, a_nu_l, d_l, Eln_l, det_l, inv_l, inv_sigma_l){
+               t1 <- sum(cons_l +
+                 - (a_nu_l + d_l - 1)/2 * (d_l * log(2 * a_nu_l) + Eln_l) +
+                 -(2 * d_l + a_nu_l) / 2 * det_l)
+               if (mi_prior_type %in% c('centered', 'shared')){
+                 t2 <- -1/2 * sum(diag(inv_l %*% inv_sigma_l))
+               }else if (mi_prior_type %in% c('separate')){
+                 t2 <- 
+                   -1 / 2 * sum(mapply(inv_l, inv_sigma_l, FUN = function(a, b) {
+                     sum(diag(a %*% b))
+                   }))
+               }else{stop('Invalid mi_prior_type')}
+               return(t1 + t2)
+             })
+      logcomplete_mi_sigma <- sum(logcomplete_mi_sigma)
       mi_term_3a <- mapply(mi_d_j, 
           vi_mi_a_a_jp, vi_mi_a_b_jp, mi_E_ln_vi_a, 
           vi_mi_a_APRIOR_jp, 
           FUN=function(d, tilde.a, tilde.b, E_ln_vi_a.j, APRIOR.j){
-            1/2 * sum(log(1/APRIOR.j^2)) - d * lgamma(1/2) - 3/2 * E_ln_vi_a.j +
-              sum(-1/APRIOR.j^2 * tilde.a/tilde.b)
+            if (mi_prior_type %in% c('centered', 'shared')){
+              1/2 * sum(log(1/APRIOR.j^2)) - d * lgamma(1/2) - 3/2 * E_ln_vi_a.j +
+                sum(-1/APRIOR.j^2 * tilde.a/tilde.b)
+            }else if (mi_prior_type %in% c('separate')){
+              sum(mapply(d, tilde.a, tilde.b, E_ln_vi_a.j, APRIOR.j,
+                         FUN=function(d_l, a_l, b_l, Eln_l, APRIOR_l){
+                           1/2 * sum(log(1/APRIOR_l^2)) - d_l * lgamma(1/2) - 3/2 * Eln_l +
+                             sum(-1/APRIOR_l^2 * a_l/b_l)
+                         }))
+            }
           })
+      
       logcomplete_mi_sigma <- logcomplete_mi_sigma + sum(mi_term_3a)
       entropy_mi_hw <- sum(mapply(vi_mi_a_a_jp, vi_mi_a_b_jp, FUN=function(tilde.a, tilde.b){
-        sum(tilde.a + log(tilde.b) + lgamma(tilde.a) - (1 + tilde.a) * digamma(tilde.a))
+        if (mi_prior_type %in% c('centered', 'shared')) {
+          sum(tilde.a + log(tilde.b) + lgamma(tilde.a) - (1 + tilde.a) * digamma(tilde.a))
+        }else if (mi_prior_type %in% c('separate')){
+          sum(mapply(tilde.a, tilde.b, FUN=function(a_l, b_l){
+            sum(a_l + log(b_l) + lgamma(a_l) - (1 + a_l) * digamma(a_l))
+          }))
+        }
       }))
     }else{
+
+      logcomplete_mi_sigma <- sum(mapply(mi_iw_prior_constant, 
+        mi_prior_sigma_alpha_nu, mi_d_j, mi_ln_det_sigma_alpha,
+             mi_prior_sigma_alpha_phi, mi_inv_sigma_alpha, 
+        FUN=function(cons_l, alpha_nu_l, d_l, lndet_l, prior_phi_l, inv_sigma_l){
+         t1 <- sum(cons_l +
+           -(alpha_nu_l + d_l + 1) / 2 * lndet_l)
+         if (mi_prior_type %in% c('shared', 'centered')){
+           t2 <- -1/2 * sum(diag(prior_phi_l %*% inv_sigma_l))
+         }else if (mi_prior_type %in% c('separate')){
+           t2 <- sum(-1/2 * mapply(prior_phi_l, inv_sigma_l, FUN=function(a,b){
+             sum(diag(a %*% b))
+           }))
+         }else{stop('...')}
+         return(t1 + t2)
+        }))
       entropy_mi_hw <- 0
-      logcomplete_mi_sigma <- sum(
-          mi_iw_prior_constant +
-            -(mi_prior_sigma_alpha_nu + mi_d_j + 1) / 2 * mi_ln_det_sigma_alpha +
-            -1 / 2 * mapply(mi_prior_sigma_alpha_phi, mi_inv_sigma_alpha, FUN = function(a, b) {
-              sum(diag(a %*% b))
-            })
-        )
+    
     }
+    
     # Entropy of sigma^2 for MI
-    entropy_mi_sigma <- -mapply(vi_mi_sigma_alpha_nu, vi_mi_sigma_alpha, FUN = function(nu, Phi) {
-      make_log_invwishart_constant(nu = nu, Phi = Phi)
-    }) +
-      (vi_mi_sigma_alpha_nu + mi_d_j + 1) / 2 * mi_ln_det_sigma_alpha +
-      1 / 2 * mapply(vi_mi_sigma_alpha, mi_inv_sigma_alpha, FUN = function(a, b) {
-        sum(diag(a %*% b))
-      })
+    entropy_mi_sigma <- 
+      -mapply(vi_mi_sigma_alpha_nu, vi_mi_sigma_alpha, FUN = function(nu, Phi) {
+        if (mi_prior_type %in% c('centered', 'shared')){
+          make_log_invwishart_constant(nu, Phi)
+        }else{
+          sum(mapply(nu, Phi, FUN=function(nu_l, Phi_l){
+            make_log_invwishart_constant(nu = nu_l, Phi = Phi_l)
+          }))
+        }
+      }) +
+      sapply(mapply(vi_mi_sigma_alpha_nu, mi_d_j, 
+        mi_ln_det_sigma_alpha, vi_mi_sigma_alpha, mi_inv_sigma_alpha, SIMPLIFY = FALSE,
+        FUN=function(a_nu_l, d_l, det_l, sigma_l, invsig_l){
+          term_1 <- sum( (a_nu_l + d_l + 1) / 2 * det_l )
+          if (mi_prior_type %in% c('centered', 'shared')){
+            term_2 <- 1/2 * sum(diag(sigma_l %*% invsig_l))
+          }else{
+            term_2 <- sum( 1 / 2 * mapply(sigma_l, invsig_l, FUN = function(a, b) {
+              sum(diag(a %*% b)) 
+            }) )
+          }
+          return(term_1 + term_2)
+        }), sum)
     entropy_mi_sigma <- sum(entropy_mi_sigma)
 
     if (family == 'linear'){stop('...')}
@@ -578,6 +695,8 @@ calculate_ELBO <- function(family, ELBO_type, factorization_method,
   
   ELBO <- entropy + logcomplete
 
+  
+  # return(mget(ls()))
   return(data.frame(
     ELBO, logcomplete, entropy, logcomplete_1,
     logcomplete_2, logcomplete_3, logcomplete_mi,

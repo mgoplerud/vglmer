@@ -150,12 +150,15 @@ get_RE_groups <- function(formula, data) {
   
   fr <- data
   blist <- lapply(bars, simple_blist, fr, drop.unused.levels = F, reorder.vars = FALSE)
-  blist <- lapply(blist, FUN=function(i){i[c('ff', 'mm')]})
+  blist <- lapply(blist, FUN=function(i){i[c('ff', 'mm', 'nl')]})
 
   ff <- lapply(blist, FUN=function(i){i$ff})
   ff <- lapply(ff, FUN=function(i){match(i, levels(i))})
   mm <- lapply(blist, FUN=function(i){i$mm})
-  return(list(factor = ff, design = mm))
+  
+  nl <- lapply(blist, `[[`, 'nl')
+  
+  return(list(factor = ff, design = mm, nl = nl))
 }
 
 #' @import lme4 

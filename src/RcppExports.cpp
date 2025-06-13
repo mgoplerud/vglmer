@@ -61,9 +61,22 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// invert_L
+Eigen::MatrixXd invert_L(const Eigen::MatrixXd L, const int size_L, const bool direct);
+RcppExport SEXP _vglmer_invert_L(SEXP LSEXP, SEXP size_LSEXP, SEXP directSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const Eigen::MatrixXd >::type L(LSEXP);
+    Rcpp::traits::input_parameter< const int >::type size_L(size_LSEXP);
+    Rcpp::traits::input_parameter< const bool >::type direct(directSEXP);
+    rcpp_result_gen = Rcpp::wrap(invert_L(L, size_L, direct));
+    return rcpp_result_gen;
+END_RCPP
+}
 // invert_rowwise
-Rcpp::List invert_rowwise(const Eigen::MatrixXd X, const Eigen::MatrixXd vec_prior, const Eigen::MatrixXd RHS, const int dim_X);
-RcppExport SEXP _vglmer_invert_rowwise(SEXP XSEXP, SEXP vec_priorSEXP, SEXP RHSSEXP, SEXP dim_XSEXP) {
+Rcpp::List invert_rowwise(const Eigen::MatrixXd X, const Eigen::MatrixXd vec_prior, const Eigen::MatrixXd RHS, const int dim_X, const bool return_chol);
+RcppExport SEXP _vglmer_invert_rowwise(SEXP XSEXP, SEXP vec_priorSEXP, SEXP RHSSEXP, SEXP dim_XSEXP, SEXP return_cholSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -71,7 +84,21 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< const Eigen::MatrixXd >::type vec_prior(vec_priorSEXP);
     Rcpp::traits::input_parameter< const Eigen::MatrixXd >::type RHS(RHSSEXP);
     Rcpp::traits::input_parameter< const int >::type dim_X(dim_XSEXP);
-    rcpp_result_gen = Rcpp::wrap(invert_rowwise(X, vec_prior, RHS, dim_X));
+    Rcpp::traits::input_parameter< const bool >::type return_chol(return_cholSEXP);
+    rcpp_result_gen = Rcpp::wrap(invert_rowwise(X, vec_prior, RHS, dim_X, return_chol));
+    return rcpp_result_gen;
+END_RCPP
+}
+// decomp_to_var_rowwise
+Rcpp::List decomp_to_var_rowwise(const Eigen::MatrixXd X, const int dim_X, const bool get_lndet);
+RcppExport SEXP _vglmer_decomp_to_var_rowwise(SEXP XSEXP, SEXP dim_XSEXP, SEXP get_lndetSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const Eigen::MatrixXd >::type X(XSEXP);
+    Rcpp::traits::input_parameter< const int >::type dim_X(dim_XSEXP);
+    Rcpp::traits::input_parameter< const bool >::type get_lndet(get_lndetSEXP);
+    rcpp_result_gen = Rcpp::wrap(decomp_to_var_rowwise(X, dim_X, get_lndet));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -173,7 +200,9 @@ static const R_CallMethodDef CallEntries[] = {
     {"_vglmer_calculate_expected_outer_alpha", (DL_FUNC) &_vglmer_calculate_expected_outer_alpha, 3},
     {"_vglmer_unique_rows", (DL_FUNC) &_vglmer_unique_rows, 1},
     {"_vglmer_prepare_Z_for_px", (DL_FUNC) &_vglmer_prepare_Z_for_px, 1},
-    {"_vglmer_invert_rowwise", (DL_FUNC) &_vglmer_invert_rowwise, 4},
+    {"_vglmer_invert_L", (DL_FUNC) &_vglmer_invert_L, 3},
+    {"_vglmer_invert_rowwise", (DL_FUNC) &_vglmer_invert_rowwise, 5},
+    {"_vglmer_decomp_to_var_rowwise", (DL_FUNC) &_vglmer_decomp_to_var_rowwise, 3},
     {"_vglmer_chol_sparse", (DL_FUNC) &_vglmer_chol_sparse, 3},
     {"_vglmer_cpp_zVz", (DL_FUNC) &_vglmer_cpp_zVz, 2},
     {"_vglmer_vecR_ridge_general", (DL_FUNC) &_vglmer_vecR_ridge_general, 8},

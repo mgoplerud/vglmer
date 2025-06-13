@@ -93,10 +93,51 @@ v_mi <- function(..., rank){
   term <- sapply(term, FUN=function(i){attr(terms(reformulate(i)), "term.labels")})
   
   label <- paste0("v_mi(", paste(term, collapse=', '), ")")
-  
+
   ret <- list(
     mi = TRUE,
+    hier = FALSE,
     term = term,
+    rank = rank,
+    by = "NA"
+  )
+  class(ret) <- 'vglmer_multiplicative'
+  return(ret)
+}
+
+v_hier_mi <- function(..., rank){
+  
+  vars <- as.list(substitute(list(...)))[-1]
+  if (length(vars) != 2){stop('must provide two grouping factors')}
+  
+  term <- lapply(vars, FUN=function(i){deparse(i, backtick = TRUE, width.cutoff = 500)})
+  is_formula <- sapply(term, FUN=function(i){
+    i <- tryCatch(as.formula(i), error = function(e){NULL})
+    if (inherits(i, 'formula')){
+      return(TRUE)
+    }else{
+      return(FALSE)
+    }
+  })
+  
+  term <- mapply(term, is_formula, SIMPLIFY = FALSE,
+                 FUN=function(i, is_f){
+                   if (is_f){
+                     all.vars(formula(i))
+                   }else{
+                     attr(terms(reformulate(i)), "term.labels")
+                   }
+                  })
+  if (length(intersect(term[[1]], term[[2]])) > 0){
+    stop('v_hier_mi does not allow overlapping terms between "u" and "v".')
+  }
+  label <- paste0("v_hier_mi(", paste(sapply(term, FUN=function(i){i[1]}), collapse=', '), ")")
+  ret <- list(
+    mi = TRUE,
+    hier = TRUE,
+    hier_fmla = term,
+    is_formula = is_formula,
+    term = unlist(term),
     rank = rank,
     by = "NA"
   )
@@ -234,8 +275,23 @@ vglmer_build_spline <- function(x, knots = NULL, Boundary.knots = NULL,
   }
 }
 
-vglmer_build_mi <- function(x, rank){
-  if (ncol(x) != 2){stop('must have two factors...')}
+vglmer_build_mi <- function(x, rank, hier, hier_fmla){
+  
+  if (hier){
+    if (length(hier_fmla) != 2){
+      stop('must have two factors...')
+    }
+    nested_hier <- lapply(hier_fmla, FUN=function(i){unique(x[,i,drop=F])})
+    sapply(nested_hier, FUN=function(i){
+      if (anyDuplicated(i[,1]) != 0){
+        warning('Non-hierarchical multiplicative term', immediate. = TRUE)
+      }
+    })
+  }else{
+    nested_hier <- NULL
+    hier_fmla <- as.list(colnames(x))
+    if (ncol(x) != 2){stop('must have two factors...')}
+  }
   
   list_x <- as.list(x)
   list_x <- lapply(list_x, factor)
@@ -251,10 +307,12 @@ vglmer_build_mi <- function(x, rank){
     colnames(i) <- j
     return(i)
   })
-  special_attr <- list(storage = coef_storage, id = M_id, levels = levels_x)
+  special_attr <- list(storage = coef_storage, id = M_id, 
+                       hier_grouping = hier_fmla, hier = hier,
+                       levels = levels_x,
+                       nested_hier = nested_hier)
   out <- list(x = M_matrix, attr = special_attr)
   class(out) <- c('mi_sparse')
-  
   min_size <- min(sapply(levels_x, length))
   return(list(out))
 }
