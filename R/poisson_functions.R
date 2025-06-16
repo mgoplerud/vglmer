@@ -1,4 +1,66 @@
 
+damp_FF <- function(
+    y, X, Z, old_par, new_par, Tinv,
+    offset_weight
+){
+  dat_list <- list(y = y, X = X, Z = Z, Tinv = bdiag(Tinv), offset_weight =offset_weight)
+  f <- function(dat, par){
+    lndet_beta <- 2 * sum(log(diag(par$vi_beta_decomp)))
+    lndet_alpha <- 2 * sum(log(diag(par$vi_alpha_decomp)))
+    do.call('obj_poisson_FF', 
+      c(dat, par, list(lndet_beta = lndet_beta, lndet_alpha = lndet_alpha))
+    )
+  }
+  names_loop <- c('vi_beta_mean', 'vi_alpha_mean', 'vi_beta_decomp', 'vi_alpha_decomp')
+  g <- function(alpha){
+    int <- setNames(lapply(names_loop,
+           FUN=function(i){
+             old_par[[i]] * (1-alpha) + alpha * new_par[[i]]
+           }), names_loop)
+    return(int)
+  }
+  grid_alpha <- seq(0, 1, length.out=100)
+  opt_alpha <- optimize(f = function(i){f(dat_list, g(i))}, lower = 0, upper = 1, maximum = T)
+  if (opt_alpha$maximum < 1e-8 | abs(opt_alpha$objective) > 1e6){
+    browser()
+  }  
+  return(c(g(opt_alpha$maximum), 'xx_alpha' = opt_alpha))
+}
+
+obj_poisson_FF <- function(y, X, Z, vi_beta_mean, 
+                           vi_alpha_mean, vi_beta_decomp, vi_alpha_decomp,
+                           lndet_beta, lndet_alpha,
+                           Tinv, offset_weight){
+
+  any_RE <- ncol(Z) > 0
+  
+  if (any_RE){
+    mean_lp <- X %*% vi_beta_mean + Z %*% vi_alpha_mean  
+    alpha_quad <- rowSums((Z %*% t(vi_alpha_decomp))^2)
+  }else{
+    mean_lp <- X %*% vi_beta_mean
+    alpha_quad <- 0
+  }
+  beta_quad <- rowSums((X %*% t(vi_beta_decomp))^2)
+  var_lp <- beta_quad + alpha_quad
+  
+  poisson_weight <- exp(mean_lp + 1/2 * var_lp + offset_weight)
+  
+  ll_1 <- sum(y * mean_lp)
+  ll_2 <- sum(-poisson_weight)
+  
+  if (any_RE){
+    lp_1 <- -1/2 * sum( (Tinv %*% vi_alpha_mean) * vi_alpha_mean )
+    lp_2 <- -1/2 * sum(diag((Tinv %*% t(vi_alpha_decomp)) %*% vi_alpha_decomp))
+    lndet <- 1/2 * lndet_beta + 1/2 * lndet_alpha  
+  }else{
+    lp_1 <- lp_2 <- 0
+    lndet <- 1/2 * lndet_beta
+  }
+
+  out <- ll_1 + ll_2 + lp_1 + lp_2 + lndet  
+  return(out) 
+}
 
 fast_contr_sum <- function(N){
   N_1 <- N - 1; grid_N1 <- seq_len(N_1) 
@@ -475,6 +537,92 @@ cyclical_update_poisson <- function(X, Z,
   
 }
 
+update_poisson_FE_new <- function(y,
+  FE_data, FE_lookup, FE_rowtens,
+  vi_FE_mean, vi_FE_var, vi_FE_lndet,
+  weight, it, old_FE_mean, old_weights,
+  dim_fe, levels_fe, quiet = FALSE){
+  
+  n_FE <- length(FE_data)
+  vi_FE_raw <- as.list(rep(NA, n_FE))
+  log_weight <- log(weight)
+  
+  for (v in 1:n_FE) {
+    
+    FE_rt_v <- FE_rowtens[[v]]
+    FE_data_v <- FE_data[[v]]
+    FE_lookup_v <- FE_lookup[[v]]
+    
+    long_init_mean_v <- rowSums(FE_data_v * (FE_lookup_v %*% vi_FE_mean[[v]]))
+    long_init_var_v <- rowSums(FE_rt_v * (FE_lookup_v %*% vi_FE_var[[v]]))
+    
+    starting_obj_v <- sum(long_init_mean_v * y) - sum(weight) + 1/2 * vi_FE_lndet[v]
+    names(starting_obj_v) <- NULL
+    
+    init_update <- fast_generic_FE(
+      FS_XX = FE_rt_v, X = FE_data_v, Z = FE_lookup_v,
+      y = y - weight, weights = weight,
+      dim_fe = dim_fe[v], levels_fe = levels_fe[v])
+    
+    # Initial update with *incorrect*
+    update_var_v <- init_update$var
+    update_mean_v <- init_update$mean
+    update_lndet_v <- init_update$lndet
+    update_raw_v <- init_update$raw
+    long_update_mean_v <- rowSums(FE_data_v * (FE_lookup_v %*% update_mean_v))
+    long_update_var_v <- rowSums(FE_rt_v * (FE_lookup_v %*% update_var_v))
+    update_weight <- exp(log_weight - 1/2 * long_init_var_v + 1/2 * long_update_var_v) 
+    update_obj_v <- sum(long_update_mean_v * y) - sum(update_weight) + 1/2 * update_lndet_v
+    
+    if (dim_fe[v] > 1){stop('....')}
+    
+    XtWX <- t(FE_lookup_v) %*% Diagonal(x=update_weight) %*% FE_lookup_v
+    inv_XtWX <- solve(XtWX)
+    L <- t(matrix(1, levels_fe[v]))
+    inner <- L %*% inv_XtWX %*% t(L)
+    # proj <- inv_XtWX %*% (XtWX - t(L) %*% solve(inner) %*% L) %*% inv_XtWX
+    # shift <- proj %*% (t(FE_lookup_v) %*% (y - update_weight))
+    grad <- t(FE_lookup_v) %*% (y - update_weight)
+    shift <- inv_XtWX %*% (XtWX %*% ((inv_XtWX) %*% grad) - t(L) %*% solve(inner) %*% (L %*% inv_XtWX %*% grad))
+    # proj <- inv_XtWX %*% (XtWX - t(L) %*% solve(inner) %*% L) %*% inv_XtWX
+    # shift <- proj %*% (t(FE_lookup_v) %*% (y - update_weight))
+    newton_mean_v <- vi_FE_mean[[v]] + shift
+    newton_var_v <- update_var_v
+    newton_lndet_v <- update_lndet_v
+    newton_raw_v <- update_raw_v
+    long_newton_mean_v <- rowSums(FE_data_v * (FE_lookup_v %*% newton_mean_v))
+    long_newton_var_v <- rowSums(FE_rt_v * (FE_lookup_v %*% newton_var_v))
+    newton_weight <- exp(
+      log_weight - 1/2 * long_init_var_v + 1/2 * long_newton_var_v +
+                 - long_init_mean_v + long_newton_mean_v) 
+    newton_obj_v <- sum(long_newton_mean_v * y) - sum(newton_weight) + 1/2 * newton_lndet_v
+
+    if (newton_obj_v < starting_obj_v){
+      browser()
+    }    
+    if (!quiet){
+      print(c('init' = starting_obj_v, 'incorrect/grad' = update_obj_v, 'newton' = newton_obj_v))
+    }
+    weight <- newton_weight
+    log_weight <- log(newton_weight)
+    if (!quiet){
+      print(sqrt(sum( (t(FE_lookup_v) %*% (y - weight))^2 )))
+    }
+    vi_FE_mean[[v]] <- newton_mean_v
+    vi_FE_var[[v]] <- newton_var_v
+    vi_FE_lndet[v] <- newton_lndet_v
+    vi_FE_raw[[v]] <- newton_raw_v
+  }
+  
+  return(list(
+    weight = weight,
+    mean = vi_FE_mean,
+    var = vi_FE_var,
+    lndet = vi_FE_lndet,
+    raw = vi_FE_raw
+  ))
+  
+}
 
 update_poisson_FE <- function(y,
   FE_data, FE_lookup, FE_rowtens,
@@ -497,6 +645,7 @@ update_poisson_FE <- function(y,
     
     starting_obj_v <- sum(init_mean_v * y) - sum(weight) + 1/2 * vi_FE_lndet[v]
     names(starting_obj_v) <- NULL
+    
     # NVMP update
     if (dim_fe[v] == 1){
       # NVMP_FE <- fast_1D_FE(X = FE_data_v, Z = FE_lookup_v, weights = weight, y = y - weight)
@@ -964,4 +1113,95 @@ update_rho_poisson <- function(X, B, W, y, W_pos_ij,
   return(opt_rho)
 }  
 
-
+# Testing code not in use in package
+# lbfgs_obj_mean <- function(par, y, joint.XZ, null_FE, offset, Textend){
+#   par_reg <- par[1:ncol(joint.XZ)]
+#   par_null_FE <- par[-(1:ncol(joint.XZ))]
+#   lp.mean <- as.vector(joint.XZ %*% par_reg + null_FE %*% par_null_FE)
+#   weight <- exp(lp.mean + offset)
+#   out <- sum(y * lp.mean) - sum(weight) - 1/2 * sum((Textend %*% par_reg) * par_reg)
+#   return(-out)
+# }
+# lbfgs_grad_mean <- function(par, y, joint.XZ, null_FE, offset, Textend){
+#   par_reg <- par[1:ncol(joint.XZ)]
+#   par_null_FE <- par[-(1:ncol(joint.XZ))]
+#   lp.mean <- joint.XZ %*% par_reg + null_FE %*% par_null_FE
+#   weight <- exp(lp.mean + offset)
+#   -1 * as.vector(rbind(t(joint.XZ) %*% (y - weight) - Textend %*% par_reg, t(null_FE) %*% (y - weight)))
+# }
+# 
+# test_lbfgs <- function(y, joint.XZ, par_reg, par_FE, FE, starting_weight, Textend){
+#   offset <- log(starting_weight) - (joint.XZ %*% par_reg) - (FE %*% par_FE)
+#   basis <- rbind(-1, Diagonal(n = ncol(FE) - 1))
+#   null_FE <- FE %*% basis
+#   par_null_FE <- par_FE[-1]
+#   fit <- lbfgs::lbfgs(call_eval = lbfgs_obj_mean, call_grad = lbfgs_grad_mean,
+#                       vars = c(par_reg, par_null_FE), offset = offset, max_iterations = 2,
+#                       y = y, joint.XZ = joint.XZ, null_FE = null_FE, Textend = Textend)
+#   par <- fit$par
+#   lbfgs_reg_par <- par[1:ncol(joint.XZ)]
+#   lbfgs_null_FE_par <- par[-(1:ncol(joint.XZ))]
+#   lbfgs_FE_par <- as.vector(basis %*% lbfgs_null_FE_par)
+#   return(list(reg = lbfgs_reg_par, FE = lbfgs_FE_par))
+# }
+# 
+# vi_FE_mean <- est_FE$mean
+# vi_FE_var <- est_FE$var
+# vi_FE_lndet <- est_FE$lndet
+# vi_pg_mean <- est_FE$weight
+# vi_FE_raw_var <- est_FE$raw
+# 
+# old_vi_FE_mean <- vi_FE_mean
+# 
+# adjust_fe <- calculate_FE(X = Z.FE.data, 
+#                           Z = Z.FE.lookup, FS_XX = Z.FE.rowTensor, 
+#                           mean = vi_FE_mean,
+#                           var = vi_FE_var)
+# 
+# adjust_fe_mean <- adjust_fe[,1]
+# adjust_fe_var <- adjust_fe[,2]
+# adj_fe <- adjust_fe_mean + 1/2 * adjust_fe_var
+# 
+# update_lbfgs <- test_lbfgs(y = y, joint.XZ = joint.XZ, par_reg = as.vector(rbind(vi_beta_mean, vi_alpha_mean)),
+#                            Textend = Textend,
+#                            FE = Z.FE.lookup[[1]], par_FE = vi_FE_mean[[1]], starting_weight = vi_pg_mean)
+# update_lbfgs$vi_beta_mean <- update_lbfgs$reg[1:ncol(X)]
+# update_lbfgs$vi_alpha_mean <- update_lbfgs$reg[-(1:ncol(X))]
+# 
+# pre_lbfgs <- obj_poisson_FF(y = y, X  =X, Z = Z, vi_beta_mean = vi_beta_mean,
+#                             vi_alpha_mean = vi_alpha_mean, vi_beta_decomp = vi_beta_decomp,
+#                             vi_alpha_decomp = vi_alpha_decomp, lndet_beta = log_det_beta_var,
+#                             lndet_alpha = log_det_alpha_var,
+#                             offset_weight = adjust_fe[,1] + 1/2 * adjust_fe[,2], Tinv = bdiag(Tinv))
+# pre_lbfgs <- pre_lbfgs + sum(y * (Z.FE.lookup[[1]] %*% vi_FE_mean[[1]]))
+# 
+# post_lbfgs <- obj_poisson_FF(y = y, X  =X, Z = Z,
+#                              vi_beta_mean = update_lbfgs$vi_beta_mean,
+#                              vi_alpha_mean = update_lbfgs$vi_alpha_mean, vi_beta_decomp = vi_beta_decomp,
+#                              vi_alpha_decomp = vi_alpha_decomp, lndet_beta = log_det_beta_var,
+#                              lndet_alpha = log_det_alpha_var,
+#                              offset_weight = 1/2 * adjust_fe_var + as.vector(Z.FE.lookup[[1]] %*% update_lbfgs$FE),
+#                              Tinv = bdiag(Tinv))
+# post_lbfgs <- post_lbfgs + sum(y * (Z.FE.lookup[[1]] %*% update_lbfgs$FE))
+# if (pre_lbfgs < post_lbfgs){
+#   vi_pg_mean <- log(vi_pg_mean) - X %*% vi_beta_mean - Z %*% vi_alpha_mean -
+#     Z.FE.lookup[[1]] %*% vi_FE_mean[[1]]
+#   vi_beta_mean <- Matrix(update_lbfgs$vi_beta_mean)
+#   vi_alpha_mean <- Matrix(update_lbfgs$vi_alpha_mean)
+#   vi_FE_mean[[1]] <- Matrix(update_lbfgs$FE)
+#   vi_pg_mean <- as.vector(exp(vi_pg_mean +
+#                                 X %*% vi_beta_mean + Z %*% vi_alpha_mean +
+#                                 Z.FE.lookup[[1]] %*% vi_FE_mean[[1]]))
+# }else{
+#   browser()
+# }
+# 
+# adjust_fe <- calculate_FE(X = Z.FE.data,
+#                           Z = Z.FE.lookup, FS_XX = Z.FE.rowTensor,
+#                           mean = vi_FE_mean,
+#                           var = vi_FE_var)
+# 
+# adjust_fe_mean <- adjust_fe[,1]
+# adjust_fe_var <- adjust_fe[,2]
+# adj_fe <- adjust_fe_mean + 1/2 * adjust_fe_var
+# diag_vi_pg_mean <- sparseMatrix(i = seq_N, j = seq_N, x = vi_pg_mean)

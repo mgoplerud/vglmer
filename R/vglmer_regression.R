@@ -1243,7 +1243,6 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
         loop_j <- 1:j
       }
       for (jprime in loop_j){
-        print(c(j, jprime))
         umap <- unique(Mmap[, c(j, jprime)])
         store_re_id_j[[jprime]] <- unlist(apply(umap, MARGIN = 1, list), recursive = F)
         # store_re_id_j[[jprime]] <- purrr::array_branch(umap, margin = 1)
@@ -1279,6 +1278,9 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
     store_sigma <- array(NA, dim = c(iterations, sum(d_j^2)))
     if (do_huangwand){
       store_hw <- array(NA, dim = c(iterations, sum(d_j)))
+    }
+    if (any_FE){
+      store_FE <- array(NA, dim = c(iterations, dim(vi_FE_mean[[1]])))
     }
   }
   if (do_timing) {
@@ -1553,7 +1555,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
       
         starting_obj <- obj_poisson(par = c(current_param, current_lowertri),
           y = y, Textend = Textend, P = vi_joint_LP, 
-          offset_weight = adj_fe,
+          offset_weight = adjust_fe_mean + 1/2 * adjust_fe_var,
           joint.XZ = cbind(X,Z), diag_position = diag_position, mask_lowertri = mask_lowertri)
         
         est_poisson <- update_poisson(current_param = current_param,
@@ -1571,7 +1573,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
         if (est_poisson$type != "NVMP"){
           print(est_poisson$type)
         }
-        # # Update Poisson parameters
+        # Update Poisson parameters
         vi_joint_decomp <- vi_joint_L_nonpermute %*% t(vi_joint_LP)
         joint_quad <- rowSums( (joint.XZ %*% t(vi_joint_decomp))^2 )
         log_det_joint_var <- 2 * sum(log(diag(vi_joint_L_nonpermute)))
@@ -1599,44 +1601,181 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
         
       }else if (factorization_method == "strong") {
 
-        est_poisson <- cyclical_update_poisson(X = drop0(X), 
-          Z = Z, y = y, cyclical_pos = cyclical_pos,
-          vi_pg_mean = vi_pg_mean, diag_vi_pg_mean = diag_vi_pg_mean,
-          number_of_RE = number_of_RE, name_RE = names(names_of_RE),
-          vi_alpha_mean = vi_alpha_mean, vi_beta_mean = vi_beta_mean,
-          vi_beta_L_nonpermute = vi_beta_L_nonpermute, 
-          vi_alpha_L_nonpermute = vi_alpha_L_nonpermute,
-          vi_alpha_decomp = vi_alpha_decomp,
-          vi_beta_decomp = vi_beta_decomp,
-          zeromat = zero_mat, it = it, Tinv = Tinv,
-          mask_lowertri = mask_lowertri, seq_N = seq_N,
-          vi_beta_LP = vi_beta_LP, 
-          vi_alpha_LP = vi_alpha_LP, force_ascent = force_ascent,
-          old_Tinv = old_Tinv, old_param = old_param, 
-          old_vi_pg_mean = old_vi_pg_mean, adj_fe = adj_fe)
-        
-        for (v in names(est_poisson)){
-          assign(v, est_poisson[[v]])
-        }
+        if (linpred_method == 'joint'){
+          
+          # Ensure this is correctly summed
+          adj_fe <- adjust_fe_mean + 1/2 * adjust_fe_var
+          
+          if (any_RE){
+            Textend <- bdiag(zero_mat, bdiag(Tinv))
+          }else{
+            Textend <- zero_mat
+            Tinv <- list()
+            vi_alpha_decomp <- matrix(nrow=0,ncol=0)
+          }
 
-        sqrt_pg_weights <- sqrt(diag_vi_pg_mean)
+          old_par <- list(vi_beta_mean = vi_beta_mean,
+                          vi_alpha_mean = vi_alpha_mean,
+                          vi_beta_decomp = vi_beta_decomp,
+                          vi_alpha_decomp = vi_alpha_decomp)
+          
+          starting_value <- obj_poisson_FF(y = y, X = X, Z = Z,
+                         vi_beta_mean = vi_beta_mean,
+                         vi_alpha_mean = vi_alpha_mean,
+                         vi_beta_decomp = vi_beta_decomp,
+                         vi_alpha_decomp = vi_alpha_decomp,
+                         Tinv= bdiag(Tinv),
+                         offset_weight = adj_fe,
+                         lndet_beta = log_det_beta_var,
+                         lndet_alpha = log_det_alpha_var)
+          
+          # Get weight from *old* q(beta) and q(alpha)
+          mean_lp <- X %*% vi_beta_mean + Z %*% vi_alpha_mean  
+          beta_quad <- rowSums((X %*% t(vi_beta_decomp))^2)
+          alpha_quad <- rowSums((Z %*% t(vi_alpha_decomp))^2)
+          var_lp <- beta_quad + alpha_quad
+          poisson_weight <- as.vector(exp(mean_lp + 1/2 * var_lp + adj_fe))
+          # Get the update for Var[q(alpha)]
+          sqrt_pg_weights <- Diagonal(x=sqrt(poisson_weight))
+          if (any_RE){
+            number_of_RE <- length(cyclical_pos)
+            running_log_det_alpha_var <- rep(NA, number_of_RE)
+            for (j in 1:number_of_RE) {
+              index_j <- cyclical_pos[[j]]
+              prec_j <- crossprod(sqrt_pg_weights %*% Z_list[[j]]) + Tinv[[j]]
+              chol_var_j <- solve(t(chol(prec_j)))
+              running_log_det_alpha_var[j] <- 2 * sum(log(diag(chol_var_j)))
+              vi_alpha_decomp[index_j, index_j] <- as(chol_var_j, "dgTMatrix")
+            }
+            vi_alpha_L_nonpermute <- vi_alpha_decomp
+            vi_alpha_LP <- Diagonal(n = nrow(vi_alpha_L_nonpermute))
+            log_det_alpha_var <- sum(running_log_det_alpha_var)
+          }
+          # Get the update for Var[q(beta)]
+          vi_beta_decomp <- solve(t(chol(as.matrix(crossprod(sqrt_pg_weights %*% X)))))
+          vi_beta_L_nonpermute <- vi_beta_decomp
+          vi_beta_LP <- Diagonal(n = nrow(vi_beta_decomp))
+          log_det_beta_var <- 2 * sum(log(diag(vi_beta_decomp)))
+          
+          if (it == 1){
+            joint.XZ <- cbind(X, Z)
+          }
+          old_mean <- rbind(vi_beta_mean, vi_alpha_mean)
+          # This, effectively, does a *Newton-Raphson* step
+          beta_quad <- rowSums((X %*% t(vi_beta_decomp))^2)
+          if (any_RE){
+            alpha_quad <- rowSums((Z %*% t(vi_alpha_decomp))^2)
+          }else{alpha_quad <- 0}
+          
+          var_lp <- beta_quad + alpha_quad
+          poisson_weight <- as.vector(exp(mean_lp + 1/2 * var_lp + adj_fe))
+          joint_update <- old_mean + solve(
+            Cholesky(t(joint.XZ) %*% Diagonal(x = poisson_weight) %*% joint.XZ + Textend),
+            t(joint.XZ) %*% (y - poisson_weight) - Textend %*% old_mean)
+          
+          if (any_RE){
+            vi_beta_mean <- joint_update[1:ncol(X),,drop=F]
+            vi_alpha_mean <- joint_update[-(1:ncol(X)),,drop=F]
+          }else{
+            vi_beta_mean <- joint_update
+          }
+          # This does a gradient ascent using a diagonal preconditioner...
+          # vi_beta_mean <- vi_beta_mean + t(vi_beta_decomp) %*% (vi_beta_decomp %*% (t(X) %*% (y - poisson_weight)))
+          # vi_alpha_mean <- vi_alpha_mean + t(vi_alpha_decomp) %*% (vi_alpha_decomp %*% (t(Z) %*% (y - poisson_weight) - bdiag(Tinv) %*% vi_alpha_mean))
 
-        rm(est_poisson)
-        
-        old_param <- c(as.vector(vi_beta_mean), as.vector(vi_alpha_mean))
-        old_vi_pg_mean <- vi_pg_mean
-        if (any_RE){
-          old_Tinv <- Tinv
-        }
+          update_value <- obj_poisson_FF(y = y, X = X, Z = Z,
+             vi_beta_mean = vi_beta_mean,
+             vi_alpha_mean = vi_alpha_mean,
+             vi_beta_decomp = vi_beta_decomp,
+             vi_alpha_decomp = vi_alpha_decomp,
+             offset_weight = adj_fe,
+             Tinv= bdiag(Tinv),
+             lndet_beta = log_det_beta_var,
+             lndet_alpha = log_det_alpha_var)
+          if (it > 1){
+            # print(c('start' = starting_value, 'update' = update_value))
+            
+            if (update_value < starting_value){
+              # print('DAMP')
+              damp_update <- damp_FF(y = y, X = X, Z = Z, old_par = old_par,
+                      new_par = list(vi_beta_mean = vi_beta_mean,
+                                     vi_alpha_mean = vi_alpha_mean,
+                                     vi_beta_decomp = vi_beta_decomp,
+                                     vi_alpha_decomp = vi_alpha_decomp),
+                      Tinv = Tinv, offset_weight = adj_fe)
+              # print(paste('DAMP WEIGHT:', round(damp_update$xx_alpha.maximum, 2)))
+              # print(c( 'start' = starting_value, 'update' = update_value, 'damp' = damp_update$xx_alpha.objective))
+              for (v in names(damp_update)){
+                assign(x = v, value = damp_update[[v]])
+              }
+              log_det_beta_var <- 2 * sum(log(diag(vi_beta_decomp)))
+              log_det_alpha_var <- 2 * sum(log(diag(vi_alpha_decomp)))
+              
+              damp_value <- obj_poisson_FF(y = y, X = X, Z = Z,
+                                             vi_beta_mean = vi_beta_mean,
+                                             vi_alpha_mean = vi_alpha_mean,
+                                             vi_beta_decomp = vi_beta_decomp,
+                                             vi_alpha_decomp = vi_alpha_decomp,
+                                             offset_weight = adj_fe,
+                                             Tinv= bdiag(Tinv),
+                                             lndet_beta = log_det_beta_var,
+                                             lndet_alpha = log_det_alpha_var)
+            }
+          }
+          
+          mean_lp <- X %*% vi_beta_mean + Z %*% vi_alpha_mean  
+          beta_quad <- rowSums((X %*% t(vi_beta_decomp))^2)
+          alpha_quad <- rowSums((Z %*% t(vi_alpha_decomp))^2)
+          var_lp <- beta_quad + alpha_quad
+          vi_pg_mean <- as.vector(
+            exp(mean_lp + 1/2 * var_lp + adj_fe)
+          )
+          diag_vi_pg_mean <- sparseMatrix(i = seq_N, j = seq_N, x = vi_pg_mean)
+          sqrt_pg_weights <- sqrt(diag_vi_pg_mean)
+          
+          old_param <- c(as.vector(vi_beta_mean), as.vector(vi_alpha_mean))
+          old_vi_pg_mean <- vi_pg_mean
+          if (any_RE){
+            old_Tinv <- Tinv
+          }
+          gc()
+          
+        }else if (linpred_method == 'cyclical'){
+
+          est_poisson <- cyclical_update_poisson(X = drop0(X), 
+           Z = Z, y = y, cyclical_pos = cyclical_pos,
+           vi_pg_mean = vi_pg_mean, diag_vi_pg_mean = diag_vi_pg_mean,
+           number_of_RE = number_of_RE, name_RE = names(names_of_RE),
+           vi_alpha_mean = vi_alpha_mean, vi_beta_mean = vi_beta_mean,
+           vi_beta_L_nonpermute = vi_beta_L_nonpermute, 
+           vi_alpha_L_nonpermute = vi_alpha_L_nonpermute,
+           vi_alpha_decomp = vi_alpha_decomp,
+           vi_beta_decomp = vi_beta_decomp,
+           zeromat = zero_mat, it = it, Tinv = Tinv,
+           mask_lowertri = mask_lowertri, seq_N = seq_N,
+           vi_beta_LP = vi_beta_LP, 
+           vi_alpha_LP = vi_alpha_LP, force_ascent = force_ascent,
+           old_Tinv = old_Tinv, old_param = old_param, 
+           old_vi_pg_mean = old_vi_pg_mean, adj_fe = adj_fe)
+          
+          for (v in names(est_poisson)){
+            assign(v, est_poisson[[v]])
+          }
+          
+          sqrt_pg_weights <- sqrt(diag_vi_pg_mean)
+          
+          rm(est_poisson)
+          
+          old_param <- c(as.vector(vi_beta_mean), as.vector(vi_alpha_mean))
+          old_vi_pg_mean <- vi_pg_mean
+          if (any_RE){
+            old_Tinv <- Tinv
+          }
+          
+        }else{stop('linpred_method must be "cyclical" or "joint" for Poisson')}
         
       }else{stop('Poisson not set up yet...')}
-      
-      
-      if (it >= 6){
-        plot(store_ELBO$ELBO[-1], type = 'l')
-      }
-      
-      
+
     }else if (factorization_method == "weak") {
       ## Update <beta, alpha> jointly
 
@@ -1942,38 +2081,170 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
       
       if (family == 'poisson'){
 
-        est_FE <- update_poisson_FE(y = y,
+        if (linpred_method == 'joint'){
+          est_FE <- update_poisson_FE_new(y = y,
             FE_data = Z.FE.data, weight = as.vector(vi_pg_mean),
             FE_lookup = Z.FE.lookup, FE_rowtens = Z.FE.rowTensor, 
             vi_FE_mean = vi_FE_mean, vi_FE_var = vi_FE_var, 
             old_FE_mean = old_vi_FE_mean, 
-            vi_FE_lndet = vi_FE_lndet, it = it, 
-            force_ascent = force_ascent,
+            vi_FE_lndet = vi_FE_lndet, it = it, quiet = TRUE,
             dim_fe = Z.FE.size, levels_fe = Z.FE.levels)
+        }else{
+          est_FE <- update_poisson_FE(y = y,
+                FE_data = Z.FE.data, weight = as.vector(vi_pg_mean),
+                FE_lookup = Z.FE.lookup, FE_rowtens = Z.FE.rowTensor, 
+                vi_FE_mean = vi_FE_mean, vi_FE_var = vi_FE_var, 
+                old_FE_mean = old_vi_FE_mean, 
+                vi_FE_lndet = vi_FE_lndet, it = it, 
+                force_ascent = force_ascent,
+                dim_fe = Z.FE.size, levels_fe = Z.FE.levels)
+        }
+        
+        # Experimental Newton-Update that is not used...
+        # if (FALSE){
+        # 
+        #   
+        #   vi_pg_mean <- exp(
+        #     log(vi_pg_mean) - 1/2 * adjust_fe_var +
+        #       1/2 * as.vector(Z.FE.lookup[[1]] %*% est_FE$var[[1]])
+        #   )
+        #   adjust_fe[,2] <- as.vector(Z.FE.lookup[[1]] %*% est_FE$var[[1]])
+        #   
+        #   newton_reg_FE <- function(y, weight, X, Z, Tinv, adjust_score_X){
+        #     
+        #     ZtZ <- t(Z) %*% Diagonal(x = weight) %*% Z
+        #     inv_ZtZ <- Diagonal(x=1/diag(ZtZ))
+        #     XtX <- t(X) %*% Diagonal(x = weight) %*% X
+        #     XtZ <- t(X) %*% Diagonal(x = weight) %*% Z
+        #     L <- t(matrix(1, nrow = ncol(Z), ncol = 1))
+        #     inv_LLt <- solve(L %*% inv_ZtZ %*% t(L))
+        #     chol_XtX <- expand(Cholesky(XtX + Tinv))$L
+        #     update_XtX <- (Tinv + XtX - XtZ %*% inv_ZtZ %*% t(XtZ))
+        #     direct_XtX <- update_XtX + XtZ %*% t(L) %*% (inv_LLt %*% L %*% t(XtZ))
+        #     chol_Schur <- Cholesky(direct_XtX)
+        #     
+        #     score_X <- t(X) %*% (y - weight) + adjust_score_X
+        #     score_W <- t(Z) %*% (y - weight)
+        #     
+        #     # M (M^T Z^T Z M)^{-1} M^T = solve(crossprod(Z)) * (crossprod(Z) - P_{L,X}) solve(crossprod(Z))
+        #     # P_{L,Z} = t(L) %*% solve(L %*% solve(crossprod(Z)) %*% t(L)) L
+        #     NS_adjust <- function(a, L, inv_LLt, invZtZ){
+        #       invZtZ %*% a - invZtZ %*% (t(L) %*% inv_LLt %*% (L %*% invZtZ %*% a))
+        #     }
+        #     
+        #     adjust_grad_W <- NS_adjust(score_W, L = L,inv_LLt = inv_LLt, invZtZ = inv_ZtZ)
+        #     
+        #     g_11 <- solve(chol_Schur, score_X)
+        #     adjust_cross_X <- solve(chol_Schur, XtZ %*% adjust_grad_W)
+        #     g_12 <- -adjust_cross_X
+        #     g_22 <- adjust_grad_W + 
+        #       NS_adjust(a = t(XtZ) %*% adjust_cross_X, L = L, inv_LLt = inv_LLt, invZtZ = inv_ZtZ)
+        #     g_21 <- -NS_adjust(a = t(XtZ) %*% g_11, L = L, inv_LLt = inv_LLt, invZtZ = inv_ZtZ)
+        #     
+        #     grad_X <- g_11 + g_12
+        #     grad_W <- g_21 + g_22
+        #     naive_X <- solve(Cholesky(XtX + Tinv), score_X)
+        #     naive_W <- adjust_grad_W
+        #     
+        #     basis <- rbind(-1, Diagonal(n=ncol(Z)-1))
+        #     direct_hessian <- cbind(X, Z %*% basis)
+        #     direct_hessian <- solve(t(direct_hessian) %*% Diagonal(x=weight) %*% direct_hessian + bdiag(Tinv, Diagonal(x=rep(0, ncol(basis)))))
+        #     direct_direction <- bdiag(Diagonal(n=ncol(X)), basis) %*% direct_hessian %*% rbind(score_X, solve(crossprod(basis), t(basis) %*% score_W))
+        #     
+        #     grad_X <- direct_direction[1:ncol(X)]
+        #     grad_W <- direct_direction[-(1:ncol(X))]
+        #     
+        #     return(list(grad_X = grad_X, grad_W = grad_W, naive_X = naive_X, naive_W = naive_W))
+        #   }
+        #   
+        #   update_newton <- newton_reg_FE(y = y,
+        #      weight = vi_pg_mean, 
+        #      X = joint.XZ, Z = Z.FE.lookup[[1]],
+        #      Tinv = Textend,
+        #      adjust_score_X = -Textend %*% rbind(vi_beta_mean, vi_alpha_mean))
+        #   
+        #   pre_lbfgs <- obj_poisson_FF(y = y, X  =X, Z = Z, vi_beta_mean = vi_beta_mean,
+        #     vi_alpha_mean = vi_alpha_mean, vi_beta_decomp = vi_beta_decomp,
+        #     vi_alpha_decomp = vi_alpha_decomp, lndet_beta = log_det_beta_var,
+        #     lndet_alpha = log_det_alpha_var,
+        #     offset_weight = adjust_fe[,1] + 1/2 * adjust_fe[,2], Tinv = bdiag(Tinv))
+        #   pre_lbfgs <- pre_lbfgs + sum(y * (Z.FE.lookup[[1]] %*% vi_FE_mean[[1]]))
+        #   
+        #   naive_par <- list(
+        #     vi_beta_mean = vi_beta_mean + update_newton$naive_X[1:ncol(X)],
+        #     vi_alpha_mean = vi_alpha_mean + update_newton$naive_X[-(1:ncol(X))],
+        #     vi_FE_mean = list(vi_FE_mean[[1]] + update_newton$naive_W)
+        #   )
+        #   naive_update <- obj_poisson_FF(y = y, X  =X, Z = Z, 
+        #                                  vi_beta_mean = naive_par$vi_beta_mean,
+        #                                  vi_alpha_mean = naive_par$vi_alpha_mean, 
+        #                                  vi_beta_decomp = vi_beta_decomp,
+        #                                  vi_alpha_decomp = vi_alpha_decomp, lndet_beta = log_det_beta_var,
+        #                                  lndet_alpha = log_det_alpha_var,
+        #                                  offset_weight = (Z.FE.lookup[[1]] %*% naive_par$vi_FE_mean[[1]]) + 
+        #                                    1/2 * adjust_fe[,2], Tinv = bdiag(Tinv))
+        #   naive_update <- naive_update + 
+        #     sum(y * (Z.FE.lookup[[1]] %*% naive_par$vi_FE_mean[[1]]))
+        #   
+        #   
+        #   step_newton <- 1 * (1-0.95^(it-1)) + 2 * 0.95^(it-1)
+        #   newton_par <- list(
+        #     vi_beta_mean = vi_beta_mean + step_newton * update_newton$grad_X[1:ncol(X)],
+        #     vi_alpha_mean = vi_alpha_mean + step_newton * update_newton$grad_X[-(1:ncol(X))],
+        #     vi_FE_mean = list(vi_FE_mean[[1]] + step_newton * update_newton$grad_W)
+        #   )
+        #   newton_update <- obj_poisson_FF(y = y, X  =X, Z = Z, vi_beta_mean = newton_par$vi_beta_mean,
+        #                                   vi_alpha_mean = newton_par$vi_alpha_mean, 
+        #                                   vi_beta_decomp = vi_beta_decomp,
+        #                                   vi_alpha_decomp = vi_alpha_decomp, 
+        #                                   lndet_beta = log_det_beta_var,
+        #                                   lndet_alpha = log_det_alpha_var,
+        #                                   offset_weight = (Z.FE.lookup[[1]] %*% newton_par$vi_FE_mean[[1]]) + 
+        #                                     1/2 * adjust_fe[,2], Tinv = bdiag(Tinv))
+        #   newton_update <- newton_update + sum(y * (Z.FE.lookup[[1]] %*% newton_par$vi_FE_mean[[1]]))
+        #   
+        #   print(c('start' = pre_lbfgs, 'naive' = naive_update, 'newton' = newton_update))
+        #   if (pre_lbfgs > max(c(naive_update, newton_update))){
+        #     browser()
+        #   }
+        # 
+        #   up_weight <- log(vi_pg_mean) - (X %*% vi_beta_mean) - (Z %*% vi_alpha_mean) - adjust_fe_mean
+        #   vi_pg_mean <- NA
+        #   if (newton_update < naive_update){
+        #     print('ACCEPTING NAIVE')
+        #     est_FE$weight <- as.vector(exp(up_weight + X %*% naive_par$vi_beta_mean + Z %*% naive_par$vi_alpha_mean +
+        #                                      Z.FE.lookup[[1]] %*% naive_par$vi_FE_mean[[1]]))
+        #     est_FE$mean <- naive_par$vi_FE_mean
+        #     vi_beta_mean <- naive_par$vi_beta_mean
+        #     vi_alpha_mean <- naive_par$vi_alpha_mean
+        #   }else{
+        #     est_FE$weight <- as.vector(exp(up_weight + X %*% newton_par$vi_beta_mean + Z %*% newton_par$vi_alpha_mean +
+        #                                      Z.FE.lookup[[1]] %*% newton_par$vi_FE_mean[[1]]))
+        #     est_FE$mean <- newton_par$vi_FE_mean
+        #     vi_beta_mean <- newton_par$vi_beta_mean
+        #     vi_alpha_mean <- newton_par$vi_alpha_mean
+        #   }
+        #   
+        # }
         
         vi_FE_mean <- est_FE$mean
         vi_FE_var <- est_FE$var
         vi_FE_lndet <- est_FE$lndet
         vi_pg_mean <- est_FE$weight
         vi_FE_raw_var <- est_FE$raw
-        
+          
         old_vi_FE_mean <- vi_FE_mean
         
         adjust_fe <- calculate_FE(X = Z.FE.data, 
           Z = Z.FE.lookup, FS_XX = Z.FE.rowTensor, 
           mean = vi_FE_mean,
           var = vi_FE_var)
+        
         adjust_fe_mean <- adjust_fe[,1]
         adjust_fe_var <- adjust_fe[,2]
         adj_fe <- adjust_fe_mean + 1/2 * adjust_fe_var
-        
-        # vi_pg_mean <- as.vector(
-        #   exp(X %*% vi_beta_mean + Z %*% vi_alpha_mean + 
-        #         1/2 * joint_quad + adj_fe)
-        # )
-        
         diag_vi_pg_mean <- sparseMatrix(i = seq_N, j = seq_N, x = vi_pg_mean)
-        
+
       }else{
         
         if (family == 'linear'){
@@ -2991,15 +3262,20 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
           squarem_structure <- squarem_structure[!grepl(squarem_par, pattern='vi_a_b_jp|vi_sigma_alpha|vi_alpha_L_nonpermute|vi_alpha_mean')]
           squarem_par <- squarem_par[!grepl(squarem_par, pattern='vi_a_b_jp|vi_sigma_alpha|vi_alpha_L_nonpermute|vi_alpha_mean')]
         }
+        
         if (any_FE){
-          squarem_type <- c(squarem_type, 'real', 'positive')
-          squarem_structure <- c(squarem_structure, 'list', 'list')
+          squarem_type <- c(squarem_type, 'real')
+          squarem_structure <- c(squarem_structure, 'list')
           if (any(Z.FE.size > 1)){browser()}
-          squarem_list[[1]]$vi_FE_raw_var <- lapply(squarem_list[[1]]$vi_FE_raw_var, as.vector)
-          squarem_list[[2]]$vi_FE_raw_var <- lapply(squarem_list[[2]]$vi_FE_raw_var, as.vector)
-          squarem_list[[3]]$vi_FE_raw_var <- lapply(squarem_list[[3]]$vi_FE_raw_var, as.vector)
-          
-          squarem_par <- c(squarem_par, 'vi_FE_mean', 'vi_FE_raw_var')
+          squarem_par <- c(squarem_par, 'vi_FE_mean')
+          # squarem_type <- c(squarem_type, 'real', 'positive')
+          # squarem_structure <- c(squarem_structure, 'list', 'list')
+          # if (any(Z.FE.size > 1)){browser()}
+          # squarem_list[[1]]$vi_FE_raw_var <- lapply(squarem_list[[1]]$vi_FE_raw_var, as.vector)
+          # squarem_list[[2]]$vi_FE_raw_var <- lapply(squarem_list[[2]]$vi_FE_raw_var, as.vector)
+          # squarem_list[[3]]$vi_FE_raw_var <- lapply(squarem_list[[3]]$vi_FE_raw_var, as.vector)
+          # 
+          # squarem_par <- c(squarem_par, 'vi_FE_mean', 'vi_FE_raw_var')
           
         }
 
@@ -3302,19 +3578,61 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
           
           if (any_FE){
             prop_ELBOargs$vi_FE_mean <- mapply(prop_ELBOargs$vi_FE_mean,
-              Z.FE.size, SIMPLIFY = FALSE, FUN=function(i,j){matrix(i, ncol = j)})
-            reformat_var <- mapply(prop_ELBOargs$vi_FE_raw_var, 
-                  Z.FE.size, SIMPLIFY = FALSE, FUN=function(i,j){
-              lndet <- sum(log(i)) - log(sum(i))
-              i <- i - i^2/sum(i)
-              return(list(var = matrix(i, ncol = j^2), lndet = lndet))
-            })
-            prop_ELBOargs$vi_FE_var <- lapply(reformat_var, FUN=function(i){i$var})
-            names(prop_ELBOargs$vi_FE_var) <- names(ELBOargs$vi_FE_var)
-            prop_ELBOargs$vi_FE_lndet <- sapply(reformat_var, FUN=function(i){i$lndet})
-            names(prop_ELBOargs$vi_FE_lndet) <- names(ELBOargs$vi_FE_lndet)
-            squarem_par <- setdiff(squarem_par, 'vi_FE_raw_var')
-            squarem_par <- c(squarem_par, 'vi_FE_mean', 'vi_FE_var', 'vi_FE_lndet')
+               Z.FE.size, SIMPLIFY = FALSE, FUN=function(i,j){matrix(i, ncol = j)})
+            if (family != 'poisson'){
+              stop('Set up SQUAREM for non-poisson')
+              
+            }else if (family == 'poisson'){
+              
+              if (factorization_method %in% 'weak'){
+                prop_joint_var <- cpp_zVz(Z = joint.XZ, V = as(prop_ELBOargs$vi_joint_decomp, "dgCMatrix")) 
+              } else {
+                prop_beta_quad <- rowSums((X %*% t(prop_ELBOargs$vi_beta_decomp))^2)
+                prop_alpha_quad <- rowSums((Z %*% t(prop_ELBOargs$vi_alpha_decomp))^2)
+                prop_joint_var <- prop_beta_quad + prop_alpha_quad
+              }
+              prop_FE <- calculate_FE(X = Z.FE.data, 
+                                      Z = Z.FE.lookup, FS_XX = Z.FE.rowTensor, 
+                                      mean = prop_ELBOargs$vi_FE_mean,
+                                      # use *CURRENT* variance
+                                      var = vi_FE_var)
+              # update weight
+              prop_FE_weight <- exp(X %*% prop_ELBOargs$vi_beta_mean + 
+                                  Z %*% prop_ELBOargs$vi_alpha_mean + 
+                                  1/2 * prop_joint_var + prop_FE[,1] +
+                                  1/2 * prop_FE[,2])
+              # reupdate FE, and then use those *valid* updates
+              prop_est_FE <- update_poisson_FE_new(y = y,
+               FE_data = Z.FE.data, weight = as.vector(prop_FE_weight),
+               FE_lookup = Z.FE.lookup, FE_rowtens = Z.FE.rowTensor, 
+               vi_FE_mean = prop_ELBOargs$vi_FE_mean, vi_FE_var = vi_FE_var, 
+               old_FE_mean = NA, 
+               vi_FE_lndet = vi_FE_lndet, it = it, quiet = TRUE,
+               dim_fe = Z.FE.size, levels_fe = Z.FE.levels)
+              
+              prop_ELBOargs$vi_FE_mean <- prop_est_FE$mean
+              prop_ELBOargs$vi_FE_var <- prop_est_FE$var
+              prop_ELBOargs$vi_FE_lndet <- prop_est_FE$lndet
+              prop_ELBOargs$vi_pg_mean <- prop_est_FE$weight
+              squarem_par <- c(squarem_par, 'vi_FE_mean', 'vi_FE_var', 
+                               'vi_FE_lndet', 'vi_pg_mean')
+              
+            }else{stop('...')}
+
+            # prop_ELBOargs$vi_FE_mean <- mapply(prop_ELBOargs$vi_FE_mean,
+            #   Z.FE.size, SIMPLIFY = FALSE, FUN=function(i,j){matrix(i, ncol = j)})
+            # reformat_var <- mapply(prop_ELBOargs$vi_FE_raw_var, 
+            #       Z.FE.size, SIMPLIFY = FALSE, FUN=function(i,j){
+            #   lndet <- sum(log(i)) - log(sum(i))
+            #   i <- i - i^2/sum(i)
+            #   return(list(var = matrix(i, ncol = j^2), lndet = lndet))
+            # })
+            # prop_ELBOargs$vi_FE_var <- lapply(reformat_var, FUN=function(i){i$var})
+            # names(prop_ELBOargs$vi_FE_var) <- names(ELBOargs$vi_FE_var)
+            # prop_ELBOargs$vi_FE_lndet <- sapply(reformat_var, FUN=function(i){i$lndet})
+            # names(prop_ELBOargs$vi_FE_lndet) <- names(ELBOargs$vi_FE_lndet)
+            # squarem_par <- setdiff(squarem_par, 'vi_FE_raw_var')
+            # squarem_par <- c(squarem_par, 'vi_FE_mean', 'vi_FE_var', 'vi_FE_lndet')
             
             if (any_FE){
               
@@ -3401,7 +3719,8 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
                dim_all_FE = size_unres_FE,
                any_FE = any_FE, any_RE = any_RE
           )
-          if (test_ELBO$ELBO != elbo_squarem$ELBO){stop('....')}
+          if (test_ELBO$ELBO != elbo_squarem$ELBO){stop('SQUAREM TEST MISALIGN....')}
+          
         }else{
           if (!quiet_rho){cat('FAIL')}
           squarem_success[1] <- squarem_success[1] + 1
@@ -3510,6 +3829,9 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
       if (any_RE){
         store_sigma[it,] <- unlist(lapply(vi_sigma_alpha, as.vector))
         colnames(store_sigma) <- names(unlist(lapply(vi_sigma_alpha, as.vector)))
+      }
+      if (any_FE){
+        store_FE[it,,] <- as.matrix(vi_FE_mean[[1]])
       }
       
     }
@@ -3635,6 +3957,9 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
                                         alpha = store_alpha,
                                         sigma = store_sigma,
                                         hw = store_hw)
+    if (any_FE){
+      output$parameter_trajectory$FE <- store_FE
+    }
   }
   if (factorization_method %in% c("weak", "collapsed")) {
     output$joint <- list(decomp_var = vi_joint_decomp)
