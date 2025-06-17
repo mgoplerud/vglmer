@@ -2,6 +2,11 @@
 # Face-Splitting Product or Row-Tensor Product
 FS <- function(X,Z){t(KhatriRao(t(X), t(Z)))}
 
+#' Fixed Effects
+#' 
+#' This estimates (high-dimensional) fixed effects using the results in Auslen
+#' and Goplerud (2025). Its syntax is experimental but \code{y ~ v_fe(id) + (1 |
+#' x)} would estimate a fixed effect for \code{"id"} and a random effect for \code{"x"}.
 #' @export
 v_fe <- function(group, interactions = ~ 1){
   # Using mgcv's syntax for "s" to make it work with "interpret.gam"
@@ -15,8 +20,10 @@ v_fe <- function(group, interactions = ~ 1){
   term[1] <- attr(terms(reformulate(term[1])), "term.labels")
   if (any(term == '.')){stop('v_fe(.) not supported')}
   
-  fmt_interactions <- deparse(fmt_interactions[[1]], backtick = TRUE, width.cutoff = 500)
-  fake_by <- paste(attr(terms(as.formula(fmt_interactions)), 'term.labels'), collapse = ' + ')
+  fmt_interactions <- deparse(fmt_interactions[[1]], 
+    backtick = TRUE, width.cutoff = 500)
+  fake_by <- paste(attr(terms(as.formula(fmt_interactions)), 'term.labels'),
+    collapse = ' + ')
   if (fake_by == ""){
     fake_by <- "NA"
   }

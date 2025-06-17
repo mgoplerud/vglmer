@@ -191,8 +191,8 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
   # Needs to be cleaned up for CRAN; harmonize with existing code
   # note that we need to have vglmer::interpret.gam as backup
   # as two specials won't work for vglmer_interpret.gam0
-  interpret.gam <- mgcv:::interpret.gam
-  
+  interpret.gam <- utils::getFromNamespace('interpret.gam', 'mgcv')
+
   parse_formula <- vglmer_interpret.gam0(subbars(formula),
     extra.special = c('v_s', 'v_fe'))
 

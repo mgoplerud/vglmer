@@ -401,6 +401,7 @@ calculate_ELBO <- function(family, ELBO_type, factorization_method,
     }else{
       sum_logcomplete_2 <- 0
     }
+    
     if (family == 'linear'){
       e_ln_sigmasq <- log(vi_sigmasq_b) - digamma(vi_sigmasq_a)
       
@@ -476,6 +477,15 @@ calculate_ELBO <- function(family, ELBO_type, factorization_method,
     # logcomplete_1c <- N/2 * vi_r_mean * vi_r_sigma
     # logcomplete_1 <- logcomplete_1a + logcomplete_1b + logcomplete_1c + choose_term
 
+    # Get the terms for p(alpha | Sigma)
+    if (any_RE){
+      sum_logcomplete_2 <- sum(mapply(inv_sigma_alpha, vi_sigma_outer_alpha, FUN = function(a, b) {
+        sum(diag(a %*% b))
+      }))
+    }else{
+      sum_logcomplete_2 <- 0
+    }
+    
     logcomplete_2 <- sum(-d_j * g_j / 2 * log(2 * pi) - g_j / 2 * ln_det_sigma_alpha) +
       -1 / 2 * sum_logcomplete_2
     

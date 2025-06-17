@@ -58,7 +58,7 @@
 #' @importFrom stats delete.response terms
 #' @export
 predict.vglmer <- function(object, newdata,
-                           samples = 0, samples_only = FALSE, skip_fe = FALSE,
+                           samples = 0, samples_only = FALSE, skip_fe = TRUE,
                            summary = TRUE, allow_missing_levels = FALSE, ...) {
   if (length(list(...)) > 0) {
     stop("... not used for predict.vglmer")
@@ -262,6 +262,10 @@ predict.vglmer <- function(object, newdata,
     Z.spline.attr <- NULL
     Z.spline <- NULL
     Z.spline.size <- NULL
+  }
+  
+  if (length(fe_special) > 0 & skip_fe == FALSE){
+    stop('skip_fe=FALSE not yet set up...')
   }
   
   if (length(fe_special) > 0 & FALSE){
