@@ -2608,7 +2608,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
          d_j[!spline_REs], SIMPLIFY = FALSE,
          FUN=function(zi, ri, ai, di){
            mi <- kronecker(kronecker(Diagonal(n = di), sparse_K(di)), Diagonal(n = di))
-           as.matrix(FS(ri %*% ai, FS(zi, zi)) %*% mi)
+           return(FS(ri %*% ai, FS(zi, zi)) %*% mi)
          }))
         
         W_spline <- lapply(cyclical_pos[spline_REs], FUN=function(s){
@@ -2646,6 +2646,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
           p.X = p.X, px_it = px_it,
           init_rho = opt_prior_rho
         )
+        
         if (do_huangwand){
           px_improve <- update_expansion_XR$improvement
           opt_prior_rho <- update_expansion_XR$opt_par
