@@ -1653,6 +1653,8 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
           }
           # Get the update for Var[q(beta)]
           vi_beta_decomp <- solve(t(chol(as.matrix(crossprod(sqrt_pg_weights %*% X)))))
+          vi_beta_decomp[upper.tri(vi_beta_decomp)] <- 0
+          vi_beta_decomp <- drop0(vi_beta_decomp)
           vi_beta_L_nonpermute <- vi_beta_decomp
           vi_beta_LP <- Diagonal(n = nrow(vi_beta_decomp))
           log_det_beta_var <- 2 * sum(log(diag(vi_beta_decomp)))
@@ -3471,11 +3473,10 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
             
             
           }else{
-
             if (squarem_type[squarem_par == 'vi_beta_L_nonpermute'] == 'lu'){
               prop_ELBOargs$log_det_beta_var <- prop_squarem$vi_beta_L_nonpermute$logdet_M
-              prop_squarem$vi_beta_L_nonpermute <- prop_squarem$vi_beta_L_nonpermute$M
               prop_squarem$vi_beta_decomp <- prop_squarem$vi_beta_L_nonpermute$M
+              prop_squarem$vi_beta_L_nonpermute <- prop_squarem$vi_beta_L_nonpermute$M
             }else{
               prop_ELBOargs$log_det_beta_var <- 2 * sum(log(diag(prop_squarem$vi_beta_L_nonpermute)))
               prop_squarem$vi_beta_decomp <- prop_squarem$vi_beta_L_nonpermute %*% t(squarem_list[[1]]$vi_beta_LP)
