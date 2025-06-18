@@ -1974,10 +1974,6 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
           log_det_alpha_var <- sum(running_log_det_alpha_var)
         }
         
-        if (it > 1){
-          plot(store_ELBO$ELBO, type = 'l')
-        }
-
         if (do_timing){
           toc(quiet = verbose_time, log = T)
         }
