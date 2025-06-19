@@ -619,8 +619,6 @@ update_poisson_FE_new <- function(y,
 
     if (newton_obj_v < starting_obj_v){
       
-      browser()
-      
       old_newton <- newton_obj_v
       
       opt_alpha <- optimize(f = damp_newton_FE, 
@@ -648,6 +646,7 @@ update_poisson_FE_new <- function(y,
         warning('Backtraing failed for Newton FE failed', immediate. = TRUE) 
       }
     }    
+    
     if (!quiet){
       print(c('init' = starting_obj_v, 'incorrect/grad' = update_obj_v, 'newton' = newton_obj_v))
     }
@@ -785,10 +784,6 @@ update_poisson_FE <- function(y,
             opt_mean_i + 1/2 * rowSums(FE_rt_v * (FE_lookup_v %*% opt_var_v))
           opt_weight <- exp(opt_log_weight)
 
-          check_obj <- sum(opt_mean_i * y) - sum(opt_weight) + 1/2 * opt_lndet_v
-          if (abs(opt_FE_manual$value - check_obj) > 1e-6){
-            browser()
-          }
           weight <- opt_weight
           log_weight <- opt_log_weight
           vi_FE_mean[[v]] <- opt_mean_v

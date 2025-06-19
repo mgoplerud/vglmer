@@ -3265,7 +3265,7 @@ vglmer <- function(formula, data, family, control = vglmer_control()) {
         if (any_FE){
           squarem_type <- c(squarem_type, 'real')
           squarem_structure <- c(squarem_structure, 'list')
-          if (any(Z.FE.size > 1)){browser()}
+          if (any(Z.FE.size > 1)){stop('SQUAREM not set up for v_fe interactions yet')}
           squarem_par <- c(squarem_par, 'vi_FE_mean')
           # squarem_type <- c(squarem_type, 'real', 'positive')
           # squarem_structure <- c(squarem_structure, 'list', 'list')
