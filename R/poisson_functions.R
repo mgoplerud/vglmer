@@ -1,3 +1,19 @@
+damp_newton_FE <- function(alpha, shift, y, log_weight, mean, 
+                           lndet, FE_data, FE_lookup, FE_rt,
+                           long_mean_init, long_var_init, long_var_update){
+  mean_damp <- mean + shift
+  lndet_damp <- lndet
+  
+  long_mean_damp <- rowSums(FE_data * (FE_lookup %*% mean_damp))
+
+  weight_damp <- exp(
+    log_weight - 1/2 * long_var_init + 1/2 * long_var_update +
+      - long_mean_init + long_mean_damp
+  ) 
+  obj_damp <- sum(long_mean_damp * y) - 
+    sum(weight_damp) + 1/2 * lndet_damp
+  return(obj_damp)
+}
 
 damp_FF <- function(
     y, X, Z, old_par, new_par, Tinv,
@@ -22,7 +38,9 @@ damp_FF <- function(
   grid_alpha <- seq(0, 1, length.out=100)
   opt_alpha <- optimize(f = function(i){f(dat_list, g(i))}, lower = 0, upper = 1, maximum = T)
   if (opt_alpha$maximum < 1e-8 | abs(opt_alpha$objective) > 1e6){
-    browser()
+    warning('Failure in damping; returning previous estimate')
+    opt_alpha$maximum <- 0
+    opt_alpha$xx_alpha <- -Inf
   }  
   return(c(g(opt_alpha$maximum), 'xx_alpha' = opt_alpha))
 }
@@ -571,8 +589,10 @@ update_poisson_FE_new <- function(y,
     update_raw_v <- init_update$raw
     long_update_mean_v <- rowSums(FE_data_v * (FE_lookup_v %*% update_mean_v))
     long_update_var_v <- rowSums(FE_rt_v * (FE_lookup_v %*% update_var_v))
-    update_weight <- exp(log_weight - 1/2 * long_init_var_v + 1/2 * long_update_var_v) 
-    update_obj_v <- sum(long_update_mean_v * y) - sum(update_weight) + 1/2 * update_lndet_v
+    update_weight <- exp(log_weight +
+        - 1/2 * long_init_var_v + 1/2 * long_update_var_v) 
+    update_obj_v <- sum(long_update_mean_v * y) +
+      - sum(update_weight) + 1/2 * update_lndet_v
     
     if (dim_fe[v] > 1){stop('....')}
     
@@ -598,16 +618,44 @@ update_poisson_FE_new <- function(y,
     newton_obj_v <- sum(long_newton_mean_v * y) - sum(newton_weight) + 1/2 * newton_lndet_v
 
     if (newton_obj_v < starting_obj_v){
+      
       browser()
+      
+      old_newton <- newton_obj_v
+      
+      opt_alpha <- optimize(f = damp_newton_FE, 
+               lower = 0, upper = 1, maximum = TRUE,
+               log_weight = log_weight, shift = shift,
+               mean = vi_FE_mean[[v]],
+               lndet = update_lndet_v,
+               FE_data = FE_data_v,  y = y,
+               FE_lookup = FE_lookup_v, FE_rt = FE_rt_v,
+               long_mean_init = long_init_mean_v,
+               long_var_init = long_init_var_v,
+               long_var_update = long_update_var_v)
+      
+      newton_mean_v <- vi_FE_mean[[v]] + opt_alpha$maximum * shift
+      newton_var_v <- update_var_v
+      newton_lndet_v <- update_lndet_v
+      newton_raw_v <- update_raw_v
+      long_newton_mean_v <- rowSums(FE_data_v * (FE_lookup_v %*% newton_mean_v))
+      long_newton_var_v <- rowSums(FE_rt_v * (FE_lookup_v %*% newton_var_v))
+      newton_weight <- exp(
+        log_weight - 1/2 * long_init_var_v + 1/2 * long_newton_var_v +
+          - long_init_mean_v + long_newton_mean_v) 
+      newton_obj_v <- sum(long_newton_mean_v * y) - sum(newton_weight) + 1/2 * newton_lndet_v
+      if (newton_obj_v < starting_obj_v){
+        warning('Backtraing failed for Newton FE failed', immediate. = TRUE) 
+      }
     }    
     if (!quiet){
       print(c('init' = starting_obj_v, 'incorrect/grad' = update_obj_v, 'newton' = newton_obj_v))
     }
     weight <- newton_weight
-    log_weight <- log(newton_weight)
     if (!quiet){
       print(sqrt(sum( (t(FE_lookup_v) %*% (y - weight))^2 )))
     }
+    log_weight <- log(newton_weight)
     vi_FE_mean[[v]] <- newton_mean_v
     vi_FE_var[[v]] <- newton_var_v
     vi_FE_lndet[v] <- newton_lndet_v
