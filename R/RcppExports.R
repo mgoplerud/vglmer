@@ -49,6 +49,18 @@ cpp_zVz <- function(Z, V) {
     .Call('_vglmer_cpp_zVz', PACKAGE = 'vglmer', Z, V)
 }
 
+cpp_dense_zVz <- function(X, V) {
+    .Call('_vglmer_cpp_dense_zVz', PACKAGE = 'vglmer', X, V)
+}
+
+cpp_zipped_sum <- function(pos_U, pos_V, Ut, Vt) {
+    .Call('_vglmer_cpp_zipped_sum', PACKAGE = 'vglmer', pos_U, pos_V, Ut, Vt)
+}
+
+LinRegChol_fe <- function(X, omega, y, save_chol = TRUE) {
+    .Call('_vglmer_LinRegChol_fe', PACKAGE = 'vglmer', X, omega, y, save_chol)
+}
+
 vecR_ridge_general <- function(L, pg_mean, Z, M, mapping_J, d, start_z, diag_only) {
     .Call('_vglmer_vecR_ridge_general', PACKAGE = 'vglmer', L, pg_mean, Z, M, mapping_J, d, start_z, diag_only)
 }

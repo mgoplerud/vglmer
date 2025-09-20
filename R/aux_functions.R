@@ -428,15 +428,14 @@ eval_px_rotation_rho <- function(rho, SSQ_u, SSQ_v, dim_u, dim_v, nu,
                                  ESigma.inv, dim_rho, do_huangwand_mi,
                                  hw_a, A_prior, nu_prior, 
                                  iw_Phi, iw_nu, group_hier,
-                                 mi_prior_type, px_sigma, simple_j){
+                                 mi_prior_type, px_sigma, simple_j,
+                                 partial_fix){
+  
   Rmatrix <- matrix(rho, nrow = dim_rho)
   lndet_Rmatrix <- as.numeric(determinant(Rmatrix)$modulus)
   
   inv_Rmatrix <- solve(Rmatrix)
 
-  if (simple_j){
-    
-  }
   if (mi_prior_type %in% c('centered')){
     # u ~ N(0, R^T R) -> -1/2 tr(SSQ R^{-} R^{-T}) - 1/2 lndet(R) * 2
     prior_u <- -1/2 * sum(diag(SSQ_u %*% inv_Rmatrix %*% t(inv_Rmatrix)))
@@ -468,6 +467,7 @@ eval_px_rotation_rho <- function(rho, SSQ_u, SSQ_v, dim_u, dim_v, nu,
   }
   
   if (!px_sigma){
+    
     prior_variance <- 0
     
     # v ~ N(0, R^- Sigma_v R^{-T}) -> -1/2 tr(SSQ R^{T} Sigma_v^{-1} R)  - 1/2 lndet(R^{-1})* 2
@@ -490,6 +490,7 @@ eval_px_rotation_rho <- function(rho, SSQ_u, SSQ_v, dim_u, dim_v, nu,
     }
     
   }else{
+    
     prior_v <- 0
     if (do_huangwand_mi){
       if (mi_prior_type %in% c('shared', 'centered')){
@@ -563,7 +564,7 @@ update_px_rotation <- function(vi_mi_SSQ,
                                do_huangwand_mi,
                                mi_prior_type,
                                px_sigma, simple_j,
-                               VEM_scalar
+                               VEM_scalar, partial_fix
                                ){
   if (do_huangwand_mi){
     prior_weight <- vi_mi_a_nu_jp + vi_mi_dim - 1
@@ -626,6 +627,7 @@ update_px_rotation <- function(vi_mi_SSQ,
                      f = eval_px_rotation_rho, do_huangwand_mi = do_huangwand_mi,
                      mi_prior_type = mi_prior_type, px_sigma = px_sigma,
                      simple_j = simple_j, group_hier = Z_MI_grouping_j,
+                     partial_fix = partial_fix,
                      control = list(fnscale = -1),
                      method = 'BFGS')
     
@@ -633,7 +635,7 @@ update_px_rotation <- function(vi_mi_SSQ,
       SSQ_u = SSQ_u, SSQ_v = SSQ_v, mi_prior_type = mi_prior_type,
       dim_u = dim_u, dim_v = dim_v, nu = nu,  do_huangwand_mi = do_huangwand_mi,
       ESigma.inv = ESigma.inv, dim_rho = dim_rho, group_hier = Z_MI_grouping_j,
-      simple_j = simple_j,
+      simple_j = simple_j, partial_fix = partial_fix,
       iw_Phi = Phi, iw_nu = nu, px_sigma = px_sigma,
       hw_a = hw_a, A_prior = A_prior, nu_prior = nu_prior
     )
@@ -652,6 +654,7 @@ update_px_rotation <- function(vi_mi_SSQ,
             diag_meat <- diag(t(inv_R) %*% ESigma.inv[[2]] %*% inv_R)
             opt_rho_hw <- list(NA, nu_prior * diag_meat + 1/A_prior[[2]]^2)
           }else{
+            if (partial_fix){browser()}
             opt_rho_hw <- mapply(ESigma.inv[Z_MI_grouping_j[[2]]], A_prior[Z_MI_grouping_j[[2]]],
                    SIMPLIFY = FALSE,
               FUN=function(Einv_l, A_prior_l){
@@ -683,4 +686,45 @@ update_px_rotation <- function(vi_mi_SSQ,
   )
   out$diff <- sum(out$diff)
   return(out)
+}
+
+
+fast_insert <- function(A, B, index){
+  # B[index, index] <- A
+  # can be *frightfully* expensive to do computationally
+  A_dgT <- as(A, 'dgTMatrix')
+  B_dgT <- as(B, 'dgTMatrix')
+  
+  zero_index <- index - 1
+  # These are the positions of the non-A block of "B" that should be kept
+  nonA_pos <- !( (B_dgT@i %in% zero_index) & (B_dgT@j %in% zero_index) )
+  
+  out <- sparseMatrix(
+    # Add in triplet form the non-A block of "B" and the 
+    # block of "A"
+    i = c(B_dgT@i[nonA_pos], zero_index[A_dgT@i + 1]),
+    j = c(B_dgT@j[nonA_pos], zero_index[A_dgT@j + 1]),
+    x = c(B_dgT@x[nonA_pos], A_dgT@x),
+    use.last.ij = FALSE,
+    index1 = FALSE,
+    repr = 'C',
+    dims = dim(B)
+  )  
+  return(out)
+  
+  # Version 1: Reasonable but B[index, index] can be expensive  
+  # # This is a matrix with zeros everywhere except "A"
+  # aug_A <- sparseMatrix(i = index[A_dgT@i + 1],
+  #                       j = index[A_dgT@j + 1],
+  #                       x = A@x, dims = dim(B)
+  # )
+  # # This is matrix with zeros everywhere except for the old values of "B"
+  # old_B <- as(B[index,index], 'dgTMatrix')
+  # old_B <- sparseMatrix(i = index[old_B@i + 1],
+  #                       j = index[old_B@j + 1],
+  #                       x = old_B@x, dims = dim(B)
+  # )
+  # # This removes the old_B and adds the new A
+  # out <- (B - old_B + aug_A)
+  # return(out)
 }

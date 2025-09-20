@@ -84,7 +84,7 @@ v_s <- function(..., type = 'tpf', knots = NULL, by = NA,
   return(ret)
 }
 
-v_mi <- function(..., rank){
+v_mi <- function(..., rank, xt = NULL){
 
   vars <- as.list(substitute(list(...)))[-1]
   if (length(vars) != 2){stop('must provide two grouping factors')}
@@ -99,13 +99,14 @@ v_mi <- function(..., rank){
     hier = FALSE,
     term = term,
     rank = rank,
-    by = "NA"
+    by = "NA",
+    xt = xt
   )
   class(ret) <- 'vglmer_multiplicative'
   return(ret)
 }
 
-v_hier_mi <- function(..., rank){
+v_hier_mi <- function(..., rank, xt = NULL){
   
   vars <- as.list(substitute(list(...)))[-1]
   if (length(vars) != 2){stop('must provide two grouping factors')}
@@ -137,168 +138,277 @@ v_hier_mi <- function(..., rank){
     hier = TRUE,
     hier_fmla = term,
     is_formula = is_formula,
+    raw_formula = vars,
     term = unlist(term),
     rank = rank,
-    by = "NA"
+    by = "NA",
+    xt = xt
   )
   class(ret) <- 'vglmer_multiplicative'
   return(ret)
 }
 
+#' @importFrom mgcv smooth.construct
 #' @importFrom splines spline.des
-vglmer_build_spline <- function(x, knots = NULL, Boundary.knots = NULL, 
-  by, type, override_warn = FALSE, 
-  outer_okay = FALSE, by_re = NULL, force_vector = FALSE){
+vglmer_build_spline <- function(object, data){
 
-  if (is.null(knots)){
-    ux <- length(unique(x))
-    if (ux < 4){stop('Cannot fit spline with fewer than 4 unique values.')}
-    # Use the knot heuristic in Ruppert by default.
-    # Keeps the size of the problem feasible.
-    numIntKnots <- floor(c(min(ux/4, 35)))
+  if (inherits(object, 'vglmer_spline')){
 
-    intKnots <- quantile(unique(x),
-      seq(0,1,length=(numIntKnots+2)
-    )[-c(1,(numIntKnots+2))])
-    names(intKnots) <- NULL
-  }else if (length(knots) == 1 & !force_vector){
-
-    if (knots < 1){
-      stop('If an integer, at least one knot must be provided. force_vector=TRUE may be useful here.')
-    }
-    if (as.integer(knots) != knots){
-      warning('knots appears to be not be an integer. Using "as.integer"')
-      knots <- as.integer(knots)
-      message(paste0('knots argument turned into ', knots, ' by coercion.'))
-    }
-
-    numIntKnots <- knots
+    x <- data[[object$term]]
+    by <- data[[object$by]]
+    knots <- object$knots
+    type <- object$type 
+    force_vector <- object$force_vector
+    outer_okay <- object$outer_okay
+    by_re <- object$by_re
+    Boundary.knots <- NULL
+    # x, knots = NULL, Boundary.knots = NULL, 
+    # by, type, override_warn = FALSE, 
+    # outer_okay = FALSE, by_re = NULL, force_vector = FALSE
     
-    intKnots <- quantile(unique(x),seq(0,1,length=
-        (numIntKnots+2))[-c(1,(numIntKnots+2))])
-    names(intKnots) <- NULL
-  }else{
-    # Sort user provided knots
-    knots <- sort(knots)
-    
-    # Is any knot big above the maximum in the data?
-    cond_1 <- any(knots >= max(x, na.rm=T))
-    # Is any knot below the minimum in the data?
-    cond_2 <- any(knots <= min(x, na.rm=T))
-    # If so, issue warning
-    if (!cond_1 | !cond_2){
-      if (!override_warn){
-        warning('observed data is outside of the self-provided knots')
+    if (is.null(knots)){
+      ux <- length(unique(x))
+      if (ux < 4){stop('Cannot fit spline with fewer than 4 unique values.')}
+      # Use the knot heuristic in Ruppert by default.
+      # Keeps the size of the problem feasible.
+      numIntKnots <- floor(c(min(ux/4, 35)))
+      
+      intKnots <- quantile(unique(x),
+                           seq(0,1,length=(numIntKnots+2)
+                           )[-c(1,(numIntKnots+2))])
+      names(intKnots) <- NULL
+    }else if (length(knots) == 1 & !force_vector){
+      
+      if (knots < 1){
+        stop('If an integer, at least one knot must be provided. force_vector=TRUE may be useful here.')
       }
-    }
-    intKnots <- knots
-  }
-  
-  if (is.null(Boundary.knots)){
-    Boundary.knots <- range(x, na.rm=T) 
-  }else{
-    stopifnot(length(Boundary.knots) == 2)
-  }
-  
-  if (type == 'tpf'){
-    aug_knots <- c(Boundary.knots[1], intKnots, Boundary.knots[2])
-    
-    x <- outer(x, aug_knots[-c(1,length(aug_knots))], '-')
-    x <- drop0(x * (x > 0))
-    spline_attr <- list(D = Diagonal(n = ncol(x)), Boundary.knots = Boundary.knots,
-                        knots = intKnots)
-  
-  }else if (type == 'o'){
-    
-    # Form Omega from Wand and Ormerod (2008)
-    D <- formOmega(a = Boundary.knots[1], b = Boundary.knots[2], intKnots = intKnots)
-    # eigen decompose
-    eD <- eigen(D)
-    # transform spline design
-    if (override_warn){
-      wrapper_bs <- function(x){suppressWarnings(x)}
+      if (as.integer(knots) != knots){
+        warning('knots appears to be not be an integer. Using "as.integer"')
+        knots <- as.integer(knots)
+        message(paste0('knots argument turned into ', knots, ' by coercion.'))
+      }
+      
+      numIntKnots <- knots
+      
+      intKnots <- quantile(unique(x),seq(0,1,length=
+                                           (numIntKnots+2))[-c(1,(numIntKnots+2))])
+      names(intKnots) <- NULL
     }else{
-      wrapper_bs <- function(x){x}
+      # Sort user provided knots
+      knots <- sort(knots)
+      
+      # Is any knot big above the maximum in the data?
+      cond_1 <- any(knots >= max(x, na.rm=T))
+      # Is any knot below the minimum in the data?
+      cond_2 <- any(knots <= min(x, na.rm=T))
+      # If so, issue warning
+      if (!cond_1 | !cond_2){
+        if (!override_warn){
+          warning('observed data is outside of the self-provided knots')
+        }
+      }
+      intKnots <- knots
     }
-    x <- wrapper_bs(splines::bs(x = x, knots = intKnots, 
-                     degree = 3, intercept = TRUE,
-                     Boundary.knots = Boundary.knots))
     
+    if (is.null(Boundary.knots)){
+      Boundary.knots <- range(x, na.rm=T) 
+    }else{
+      stopifnot(length(Boundary.knots) == 2)
+    }
+    
+    if (type == 'tpf'){
+      aug_knots <- c(Boundary.knots[1], intKnots, Boundary.knots[2])
+      
+      x <- outer(x, aug_knots[-c(1,length(aug_knots))], '-')
+      x <- drop0(x * (x > 0))
+      spline_attr <- list(D = Diagonal(n = ncol(x)), 
+                          Boundary.knots = Boundary.knots,
+                          knots = intKnots)
+      
+    }else if (type == 'o'){
+      
+      # Form Omega from Wand and Ormerod (2008)
+      D <- formOmega(a = Boundary.knots[1], b = Boundary.knots[2], intKnots = intKnots)
+      # eigen decompose
+      eD <- eigen(D)
+      # transform spline design
+      if (override_warn){
+        wrapper_bs <- function(x){suppressWarnings(x)}
+      }else{
+        wrapper_bs <- function(x){x}
+      }
+      x <- wrapper_bs(splines::bs(x = x, knots = intKnots, 
+                                  degree = 3, intercept = TRUE,
+                                  Boundary.knots = Boundary.knots))
+      
+      x <- x %*% eD$vectors[,seq_len(ncol(D)-2)] %*% 
+        Diagonal(x = 1/sqrt(eD$values[seq_len(ncol(D) - 2)]))
+      
+      spline_attr <- list(D = Diagonal(n = ncol(x)), 
+                          Boundary.knots = Boundary.knots,
+                          knots = intKnots, eigen_D = eD)
+      
+    }else{stop('splines only set up for tpf and o')}
+    
+    spline_attr$by_re <- by_re
+    
+    if (!is.null(by)){
+      
+      base_x <- x
+      u_by <- sort(unique(by))
+      
+      if (!outer_okay){
+        x_by <- sparseMatrix(i = 1:length(by), j = match(by, u_by), x = 1)
+      }else{
+        match_j <- match(by, u_by)
+        match_i <- 1:length(by)
+        
+        match_i <- match_i[!is.na(match_j)]
+        match_j <- match_j[!is.na(match_j)]
+        x_by <- sparseMatrix(i = match_i, j= match_j, x = 1, dims = c(length(by), length(u_by)))
+      }
+      
+      
+      names_x <- as.vector(outer(1:ncol(x), u_by, FUN=function(x,y){paste(y,x, sep = ' @ ')}))
+      x <- t(KhatriRao(t(x_by), t(x)))
+      colnames(x) <- names_x  
+      
+      colnames(base_x) <- paste0('base @ ', 1:ncol(base_x))
+      
+      out <- list(x = x, attr = spline_attr)
+      class(out) <- c('spline_sparse')
+      
+      base_out <- list(x = base_x, attr = spline_attr)
+      class(base_out) <- c('spline_sparse')
+      
+      return(
+        list(base_out, out)
+      )
+    }else{
+      colnames(x) <- paste0('base @ ', 1:ncol(x))
+      out <- list(x = x, attr = spline_attr)
+      class(out) <- c('spline_sparse')
+      return(list(out))
+    }
+  }else{
+    
+    # Use "mgcv" function to construct spline
+    parse_spline <- smooth.construct(object = object, data = data, knots = NULL)    
+    by <- parse_spline$by
+    if (by == "NA"){
+      by <- NULL
+    }else{
+      by <- data[[parse_spline$by]]
+    }
+    
+    if (length(parse_spline$S) != 1){
+      stop('Only one "S" allowed...')
+    }
+    D <- parse_spline$S[[1]]
+    eD <- eigen(D)
+    eD$vectors <- drop0(eD$vectors)
+    x <- drop0(parse_spline$X)
     x <- x %*% eD$vectors[,seq_len(ncol(D)-2)] %*% 
       Diagonal(x = 1/sqrt(eD$values[seq_len(ncol(D) - 2)]))
     
     spline_attr <- list(D = Diagonal(n = ncol(x)), 
-      Boundary.knots = Boundary.knots,
-      knots = intKnots, eigen_D = eD)
-
-  }else{stop('splines only set up for tpf and o')}
-  
-  spline_attr$by_re <- by_re
-  
-  if (!is.null(by)){
+                        mgcv_object = object, eigen_D = eD)
     
-    base_x <- x
-    u_by <- sort(unique(by))
+    by_re <- TRUE
+    outer_okay <- FALSE
+    spline_attr$by_re <- by_re
     
-    if (!outer_okay){
-      x_by <- sparseMatrix(i = 1:length(by), j = match(by, u_by), x = 1)
-    }else{
-      match_j <- match(by, u_by)
-      match_i <- 1:length(by)
+    if (!is.null(by)){
       
-      match_i <- match_i[!is.na(match_j)]
-      match_j <- match_j[!is.na(match_j)]
-      x_by <- sparseMatrix(i = match_i, j= match_j, x = 1, dims = c(length(by), length(u_by)))
+      base_x <- x
+      u_by <- sort(unique(by))
+      
+      if (!outer_okay){
+        x_by <- sparseMatrix(i = 1:length(by), j = match(by, u_by), x = 1)
+      }else{
+        match_j <- match(by, u_by)
+        match_i <- 1:length(by)
+        
+        match_i <- match_i[!is.na(match_j)]
+        match_j <- match_j[!is.na(match_j)]
+        x_by <- sparseMatrix(i = match_i, j= match_j, x = 1, dims = c(length(by), length(u_by)))
+      }
+      
+      
+      names_x <- as.vector(outer(1:ncol(x), u_by, FUN=function(x,y){paste(y,x, sep = ' @ ')}))
+      x <- t(KhatriRao(t(x_by), t(x)))
+      colnames(x) <- names_x  
+      
+      colnames(base_x) <- paste0('base @ ', 1:ncol(base_x))
+      
+      out <- list(x = x, attr = spline_attr)
+      class(out) <- c('spline_sparse')
+      
+      base_out <- list(x = base_x, attr = spline_attr)
+      class(base_out) <- c('spline_sparse')
+      return(list(base_out, out))
+    }else{
+      colnames(x) <- paste0('base @ ', 1:ncol(x))
+      out <- list(x = x, attr = spline_attr)
+      class(out) <- c('spline_sparse')
+      return(list(out))
     }
-    
-    
-    names_x <- as.vector(outer(1:ncol(x), u_by, FUN=function(x,y){paste(y,x, sep = ' @ ')}))
-    x <- t(KhatriRao(t(x_by), t(x)))
-    colnames(x) <- names_x  
-    
-    colnames(base_x) <- paste0('base @ ', 1:ncol(base_x))
-    
-    out <- list(x = x, attr = spline_attr)
-    class(out) <- c('spline_sparse')
-    
-    base_out <- list(x = base_x, attr = spline_attr)
-    class(base_out) <- c('spline_sparse')
-    
-    return(
-      list(base_out, out)
-    )
-  }else{
-    colnames(x) <- paste0('base @ ', 1:ncol(x))
-    out <- list(x = x, attr = spline_attr)
-    class(out) <- c('spline_sparse')
-    return(list(out))
   }
+
 }
 
-vglmer_build_mi <- function(x, rank, hier, hier_fmla){
+vglmer_build_mi <- function(object, data){
+  
+  x <- data[object$term]
+  rank <- object$rank
+  hier <- object$hier
+  raw_formula <- object$raw_formula
+  is_formula <- object$is_formula
+  hier_fmla <- object$hier_fmla
   
   if (hier){
     if (length(hier_fmla) != 2){
       stop('must have two factors...')
     }
     nested_hier <- lapply(hier_fmla, FUN=function(i){unique(x[,i,drop=F])})
-    sapply(nested_hier, FUN=function(i){
-      if (anyDuplicated(i[,1]) != 0){
-        warning('Non-hierarchical multiplicative term', immediate. = TRUE)
-      }
-    })
   }else{
     nested_hier <- NULL
     hier_fmla <- as.list(colnames(x))
     if (ncol(x) != 2){stop('must have two factors...')}
   }
   
-  list_x <- as.list(x)
-  list_x <- lapply(list_x, factor)
-  levels_x <- lapply(list_x, levels)
+  ooo <- mapply(raw_formula, is_formula, SIMPLIFY = FALSE, FUN=function(i,f){
+    if (f){
+      interpret_i <- mgcv:::interpret.gam0(i, extra.special = 'v_s')
+      parse_i <- lapply(interpret_i$smooth.spec, vglmer_build_spline, data = data)
+      names(parse_i) <- sapply(interpret_i$smooth.spec, `[[`, 'label')
+      x <- model.frame(formula = interpret_i$pf, data = data)
+      if (ncol(x) > 0){
+        factor_x <- lapply(x, factor)
+        levels_x <- lapply(factor_x, levels)
+        M_matrix <- lapply(factor_x, FUN=function(i){t(fac2sparse(i, to = 'd'))})      
+        M_id <- mapply(factor_x, levels_x, SIMPLIFY = FALSE,
+                       FUN=function(i,j){match(i,j)})
+        M_attr <- as.list(rep(NA, length(factor_x)))
+        parse_param <- mapply(M_matrix, M_attr, SIMPLIFY = FALSE, FUN=function(i,j){
+          list(list(x = i, attr = j))
+        })
+        parse_i <- c(parse_i, parse_param)
+      }
+      return(parse_i)
+    }else{
+      x <- as.list(data[i])
+      factor_x <- lapply(x, factor)
+      levels_x <- lapply(x, levels)
+      M_matrix <- lapply(factor_x, FUN=function(i){t(fac2sparse(i, to = 'd'))})      
+      M_id <- mapply(factor_x, levels_x, SIMPLIFY = FALSE,
+        FUN=function(i,j){match(i,j)})
+      browser()
+      return(M_id)
+    }
+  })
   
-  M_matrix <- lapply(list_x, FUN=function(i){t(fac2sparse(i, to = 'd'))})
-  M_id <- mapply(list_x, levels_x, FUN=function(i, l_i){match(i, l_i)})
+  browser()
   
   coef_storage <- lapply(levels_x, FUN=function(i){
     matrix(data = NA, nrow = length(i), ncol = rank, dimnames = list(i, 1:rank))

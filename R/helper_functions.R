@@ -222,11 +222,6 @@ calculate_ELBO <- function(family, ELBO_type, factorization_method,
      do_huangwand_mi = NULL, 
      any_RE = NULL, mi_prior_type = NULL,
      any_mi = NULL, 
-     # Extra Argus for UF_MI
-     UF_MI = NULL,
-     Z_MI_first = NULL, Z_MI_first_mapping = NULL,
-     vi_mi_decomp = NULL,
-     dim_MI_positions = NULL, 
      # Core Args
      Z_MI = NULL, Z_MI_grouping = NULL,
      vi_mi_mean = NULL, vi_mi_var = NULL,
@@ -239,6 +234,7 @@ calculate_ELBO <- function(family, ELBO_type, factorization_method,
      mi_prior_sigma_alpha_nu = NULL, mi_prior_sigma_alpha_phi = NULL, 
      mi_d_j = NULL, mi_g_j = NULL
   ) {
+
   ####
   ## PREPARE INTERMEDIATE QUANTITES
   ###
@@ -262,7 +258,8 @@ calculate_ELBO <- function(family, ELBO_type, factorization_method,
       var_XBZA <- var_XBZA + vi_r_sigma
     }
   } else {
-    beta_quad <- rowSums((X %*% t(vi_beta_decomp))^2)
+    # beta_quad <- rowSums((X %*% t(vi_beta_decomp))^2)
+    beta_quad <- cpp_dense_zVz(X, as.matrix(vi_beta_decomp))
     alpha_quad <- rowSums((Z %*% t(vi_alpha_decomp))^2)
     var_XBZA <- beta_quad + alpha_quad
     if (family == 'negbin'){
@@ -273,13 +270,8 @@ calculate_ELBO <- function(family, ELBO_type, factorization_method,
   # Add the contribution of the bilinear predictor
   if (any_mi){
     ex_XBZA <- ex_XBZA + get_bilinear_mean(Z_MI, vi_mi_mean, Z_MI_grouping)
-    if (UF_MI){
-      var_XBZA <- var_XBZA + get_bilinear_var_UF(
-        Z_MI, Z_MI_first, Z_MI_first_mapping, 
-        vi_mi_mean, vi_mi_decomp, Z_MI_grouping, dim_MI_positions, mi_d_j)
-    }else{
-      var_XBZA <- var_XBZA + get_bilinear_var(Z_MI, vi_mi_mean, vi_mi_var, Z_MI_grouping)
-    }
+    var_XBZA <- var_XBZA + get_bilinear_var(Z_MI, vi_mi_mean, 
+      vi_mi_var, Z_MI_grouping)
   }
   
   if (any_RE){
@@ -722,7 +714,8 @@ update_r <- function(vi_r_mu, vi_r_sigma, y, X, Z, factorization_method,
     }
     var_XBZA <- rowSums((cbind(X, Z) %*% t(vi_joint_decomp))^2)
   } else {
-    beta_quad <- rowSums((X %*% t(vi_beta_decomp))^2)
+    # beta_quad <- rowSums((X %*% t(vi_beta_decomp))^2)
+    beta_quad <- cpp_dense_zVz(X, as.matrix(vi_beta_decomp))
     alpha_quad <- rowSums((Z %*% t(vi_alpha_decomp))^2)
     var_XBZA <- beta_quad + alpha_quad
   }

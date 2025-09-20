@@ -43,6 +43,7 @@ Rcpp::List invert_rowwise(
   int row_X = X.rows();
   int dim_X_sq = dim_X * dim_X;
   
+  
   Eigen::MatrixXd solve_X(row_X, dim_X);
   Eigen::MatrixXd inv_X(row_X, X.cols());
   Eigen::VectorXd det_inv_X(row_X);
@@ -85,6 +86,7 @@ Rcpp::List invert_rowwise(
     );
     
   }else{
+    
     for (int i = 0; i < row_X; i++){
       // Loop over each row (group)
       Eigen::MatrixXd orig_i = X.row(i);
@@ -93,6 +95,7 @@ Rcpp::List invert_rowwise(
       Eigen::LLT<Eigen::MatrixXd> llt_of_X(X_i);
       // Get the inverse matrix
       Eigen::MatrixXd inv_Xi = llt_of_X.solve(IMatrix);
+      
       // Get the log-determinant
       Eigen::MatrixXd llt_X_i = llt_of_X.matrixL();
       Eigen::ArrayXd L = llt_X_i.diagonal();

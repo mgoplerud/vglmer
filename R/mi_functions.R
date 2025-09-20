@@ -124,78 +124,9 @@ get_bilinear_outer <- function(vi_mi_mean, vi_mi_var, vi_mi_diag, mi_prior_type,
   )
 }
 
-#' @importFrom RSpectra svds
-init_MI_from_svd <- function(data_mi, weight, rank, mi_prior_type, y = NULL, trials = NULL){
-
-  f <- function(x, args){
-    as.vector(t(args$Z1) %*% Diagonal(x=args$w) %*% (args$Z2 %*% x))
-  }
-  g <- function(x, args){
-    as.vector(t(args$Z2) %*% Diagonal(x=args$w) %*% (args$Z1 %*% x))
-  }
-
-  if (init_mi_type == 'svd'){
-    warning('init naive SVD: Setting d=identity; STD d by sd(vec(D))')
-    if (is.null(y)){
-      D <- t(data_mi[[1]]) %*% Diagonal(x=weight) %*% data_mi[[2]]
-      D <- D/sd(as.vector(D@x))
-    }else{
-      ratio <- (y/trials > 0.5)
-      ratio[is.na(ratio)] <- 1/2
-      D <- t(data_mi[[1]]) %*% Diagonal(x=2 * ratio  - 1) %*% data_mi[[2]]
-      D <- D/sd(as.vector(D@x))
-    }
-    D <- sweep(D, MARGIN = 1, STATS = rowMeans(D), FUN = '-')
-    D <- sweep(D, MARGIN = 2, STATS = colMeans(D), FUN = '-')
-    svd_weight <- RSpectra::svds(A = D, k = rank)
-    svd_weight$d <- svd_weight$d/svd_weight$d
-  }else if (init_mi_type == 'peress'){
-    warning('init bad peress')
-    if (is.null(y)){
-      svd_peress <- ipe::ipe_start(Y = t(data_mi[[1]]) %*%
-                                     Diagonal(x= as.numeric(weight < median(weight)) + 1) %*%
-                                     data_mi[[2]], D = rank)
-    }else{
-      ratio <- (y/trials > 0.5)
-      ratio[is.na(ratio)] <- 1/2
-      svd_peress <- ipe::ipe_start(Y = t(data_mi[[1]]) %*%
-                                     Diagonal(x= ratio) %*%
-                                     data_mi[[2]], D = rank)
-    }
-    svd_weight <- svd_peress[c('Alpha', 'Delta')]
-    names(svd_weight) <- c('u', 'v')
-    svd_weight$v <- svd_weight$v[,-1,drop=T]
-    svd_weight$d <- rep(1, rank)
-  }else{stop('....')}
-  # minimum_size <- min(sapply(data_mi, ncol))
-  # if (rank >= minimum_size){
-  #   warning('rank of a multiplicative interaction is above minimum size...')
-  #   svd_weight <- svd(t(data_mi[[1]]) %*% Diagonal(x=weight) %*% data_mi[[2]])
-  #   # Pad with zeros
-  #   svd_weight$d <- c(svd_weight$d, rep(0, rank - minimum_size))
-  #   svd_weight$u <- cbind(svd_weight$u, matrix(0, nrow = ncol(data_mi[[1]]), ncol = rank - minimum_size))
-  #   svd_weight$v <- cbind(svd_weight$v, matrix(0, nrow = ncol(data_mi[[2]]), ncol = rank - minimum_size))
-  # }else{
-  #   svd_weight <- RSpectra::svds(A = f, k = rank, Atrans = g, 
-  #                                dim = sapply(data_mi, ncol),
-  #                                args = list(Z1 = data_mi[[1]], Z2 = data_mi[[2]], weight = weight))
-  # }
-
-  
-  if (mi_prior_type %in% c('shared', 'separate')){
-    weight_d <- Diagonal(x=sqrt(svd_weight$d))
-    svd_weight$u <- svd_weight$u  %*% weight_d
-    svd_weight$v <- svd_weight$v  %*% weight_d
-  }else{
-    svd_weight$u <- svd_weight$u
-    svd_weight$v <- svd_weight$v %*% Diagonal(x=svd_weight$d)  
-  }
-  return(svd_weight)
-}
-
 bilinear_update <- function(Z_MI, Z_hier_mapping, prior_mi, d_mi, s,
                             vi_pg_mean, diag_vi_pg_mean, RFSmean, Rvar, Rmean, offset,
-                            return_chol, method, UF_MI, it,
+                            return_chol, method, it,
                             auxiliary_Z = NULL, auxiliary_prior = NULL){
   
   simple_j <- !inherits(Z_MI, 'list')
@@ -238,7 +169,6 @@ bilinear_update <- function(Z_MI, Z_hier_mapping, prior_mi, d_mi, s,
     }
     
     if (!is.null(auxiliary_Z)){
-      if (UF_MI){stop('...')}
       aug_Z <- cbind(auxiliary_Z, aug_Z)
       aug_prior <- bdiag(auxiliary_prior, aug_prior)
       aug_Rvar <- bdiag(Diagonal(x = rep(0, ncol(auxiliary_Z))), aug_Rvar)
@@ -267,10 +197,6 @@ bilinear_update <- function(Z_MI, Z_hier_mapping, prior_mi, d_mi, s,
     if (!is.null(Z_hier_mapping)){
       old_mean <- out_mean
       prior_mi <- lapply(prior_mi, FUN=function(i){matrix(i, nrow = sqrt(length(i)))})
-      if (do_PX_HIER & it > HIER_THRESH){
-        message('hier_PX ON')
-        out_mean <- hier_px(Z_hier_mapping, out_mean, d_mi, prior_mi)
-      }
     }
     
     ub <- mapply(Z_MI, prior_mi, out_mean, SIMPLIFY = FALSE, FUN=function(Z_j, prior_j, om_j){
@@ -302,34 +228,19 @@ bilinear_update <- function(Z_MI, Z_hier_mapping, prior_mi, d_mi, s,
                         Diagonal(x= s - vi_pg_mean * offset) %*% Rmean),
       return_chol = return_chol
     )
-
-    check <- max(abs(t(apply(as.matrix(
-      t(Z_MI) %*% diag_vi_pg_mean %*%
-        (RFSmean + Rvar)
-    ), MARGIN = 1, FUN=function(i){
-      as.vector(solve(matrix(i + prior_mi, 4)))
-    })) - update_bilinear$inverse))
-    if (check > 1e-7){stop("...")}
-    print(dim(update_bilinear$mean))    
-    print('var')
-    print(rowMeans(apply(update_bilinear$inverse, MARGIN = 1, FUN=function(i){diag(matrix(i, ncol = d_mi))})))
-    print('mean')
-    print(colMeans(update_bilinear$mean))
-    print('eigen')
-    print(colMeans(t(apply(as.matrix(
-      t(Z_MI) %*% diag_vi_pg_mean %*%
-        (RFSmean + Rvar)
-    ), MARGIN = 1, FUN=function(i){
-      eigen(solve(matrix(i + prior_mi, 4)))$values
-    }))))
     
-    if (!is.null(Z_hier_mapping)){
-      
-      old_mean <- update_bilinear$mean
-      browser()
-      stopifnot(all(sapply(prior_mi, FUN=function(i){isDiagonal(matrix(i, nrow = sqrt(length(i))))})))
-      update_bilinear$mean <- hier_px(Z_hier_mapping, update_bilinear$mean, d_mi)
-    }
+    # print(dim(update_bilinear$mean))
+    # print('var')
+    # print(rowMeans(apply(update_bilinear$inverse, MARGIN = 1, FUN=function(i){diag(matrix(i, ncol = d_mi))})))
+    # print('mean')
+    # print(colMeans(update_bilinear$mean))
+    # print('eigen')
+    # print(colMeans(t(apply(as.matrix(
+    #   t(Z_MI) %*% diag_vi_pg_mean %*%
+    #     (RFSmean + Rvar)
+    # ), MARGIN = 1, FUN=function(i){
+    #   eigen(solve(matrix(i + prior_mi, 4)))$values
+    # }))))
     
     return(update_bilinear)
   }else if (method == 'sparse_direct'){
@@ -361,15 +272,6 @@ bilinear_update <- function(Z_MI, Z_hier_mapping, prior_mi, d_mi, s,
       auxiliary_est <- NULL
     }
     out_mean <- matrix(aug_coef, ncol = d_mi, byrow = T)
-    
-    if (!is.null(Z_hier_mapping)){
-      
-      old_mean <- out_mean
-      browser()
-      stopifnot(all(sapply(prior_mi, FUN=function(i){isDiagonal(matrix(i, nrow = sqrt(length(i))))})))
-      
-      out_mean <- hier_px(Z_hier_mapping, out_mean, d_mi)
-    }
     
     ub <- invert_rowwise(
       X = as.matrix(t(Z_MI) %*% diag_vi_pg_mean %*% (
@@ -520,191 +422,4 @@ flatten_mi_mean <- function(x){
   do.call('c', lapply(x, FUN=function(i){as.vector(t(i))}))
 }
 
-get_bilinear_outer_UF <- function(vi_mi_mean, vi_mi_decomp, Z_MI_grouping, outer_MI_positions){
-  mapply(vi_mi_decomp, vi_mi_mean, Z_MI_grouping, outer_MI_positions,
-    SIMPLIFY = FALSE, FUN=function(decomp_i, mean_i, group_i, positions_i){
-      out <- mapply(decomp_i, group_i, positions_i, SIMPLIFY = FALSE, FUN=function(decomp_j, group_j, positions_j){
-        out_j <- calculate_expected_outer_alpha(
-           L = as(decomp_j, 'dgCMatrix'),
-           alpha_mu = flatten_mi_mean(mean_i[group_j]),
-           re_position_list = positions_j
-          )$outer_alpha
-        names(out_j) <- group_j
-        return(out_j)
-      })
-    out <- unlist(out, recursive = FALSE)[unlist(group_i)]
-  })
-}
- 
 
-get_longvar_UF <- function(d_mi, Z, pos_dim, var_decomp){
-  
-  fmt_var <- lapply(pos_dim, FUN=function(i){var_decomp[,i,drop=F]})
-  out <- array(NA, dim = c(nrow(Z), d_mi^2))
-  for (i in 1:d_mi){
-    for (j in 1:d_mi){
-      if (i < j){
-        out[,d_mi * (j-1) + i] <- rowSums( (Z %*% t(fmt_var[[i]])) * (Z %*% t(fmt_var[[j]])) ) 
-      }else if (i == j){
-        out[,d_mi * (j-1) + i] <- rowSums( (Z %*% t(fmt_var[[i]]))^2 ) 
-      }else{
-        out[,d_mi * (j-1) + i] <- out[, d_mi * (i-1) + j]
-      }
-    }
-  }
-  return(out)
-}
-
-get_bilinear_var_UF <- function(Z_MI, Z_MI_first, Z_MI_first_mapping, 
-                                vi_mi_mean, vi_mi_decomp, vi_hier_grouping, 
-                                dim_MI_positions, dim_MI, reduce = TRUE){
-  
-  if (length(Z_MI) != length(vi_mi_mean)){
-    stop('lengths misaligned')
-  }
-  if (length(Z_MI) != length(vi_mi_decomp)){
-    stop('lengths misaligned')
-  }
-  if (length(Z_MI) != length(vi_hier_grouping)){
-    stop("lengths misaligned")
-  }
-  if (reduce){
-
-    out <- mapply(Z_MI, Z_MI_first, Z_MI_first_mapping, 
-        vi_mi_mean, vi_mi_decomp, vi_hier_grouping, dim_MI_positions, dim_MI,
-      SIMPLIFY = FALSE,
-      FUN=function(mi_data, mi_first, mi_first_mapping, mi_mean, 
-                   mi_decomp, mi_grouping, mi_dim_pos, mi_dim){
-        mi_FS_mean <- lapply(mi_mean, FUN=function(i){FS(i,i)})
-        M_mean <- mapply(mi_data, mi_FS_mean, SIMPLIFY = FALSE, FUN=function(i,j){i %*% j})
-        # Sum by group to get the mean within "u" and "v"
-        M_mean <- lapply(mi_grouping, FUN=function(g){
-          # For each group, add first, then multiply (see below)
-          Reduce('+', lapply(g, FUN=function(g_i){
-            M_mean[[g_i]]
-          }))
-        })
-        
-        M_var <- mapply(mi_first, mi_dim_pos, mi_decomp, mi_first_mapping, SIMPLIFY = FALSE,
-               FUN=function(first_l, pos_l, decomp_l, mapping_l){
-                 mapping_l %*% get_longvar_UF(d_mi = mi_dim, Z = first_l,
-                                pos_dim = pos_l, var_decomp = decomp_l)
-               })
-
-        out_trace <- rowSums(Reduce('*', M_var))
-        out_quad <- 
-          rowSums( M_mean[[1]] * M_var[[2]] ) +
-          rowSums( M_mean[[2]] * M_var[[1]] )
-      })
-    out <- Reduce("+", out)
-  }else{
-    stop('...')
-  }
-  return(out)
-}
-
-bilinear_update_UF <- function(Z_wide, Z_MI, Z_hier_mapping,
-                               d_mi,
-                               diag_vi_pg_mean, it,
-                               s, vi_pg_mean, offset,
-                               prior_mi, Rmean, Rvar){
-
-  aug_Z <- FS(Z_wide, Rmean)  
-  list_aug_prior <- (
-    mapply(Z_MI, prior_mi, SIMPLIFY = FALSE,
-           FUN=function(i, p_i){kronecker(Diagonal(n=ncol(i)), matrix(p_i, d_mi))})
-  )
-  aug_prior <- bdiag(list_aug_prior)
-  aug_Rvar <- t(Z_wide) %*% diag_vi_pg_mean %*% Rvar
-  
-  if (d_mi == 1){
-    stop('WRONG RVAR')
-    aug_Rvar <- drop0(Diagonal(x=aug_Rvar[,1]))
-  }else{
-    stop('WRONG RVAR')
-    aug_Rvar <- bdiag(apply(aug_Rvar, MARGIN = 1, FUN=function(i){Matrix(i,d_mi)}))
-  }
-  
-  aug_chol <- Cholesky(t(aug_Z) %*% Diagonal(x=vi_pg_mean) %*% aug_Z + aug_prior + aug_Rvar)
-  aug_coef <- solve(
-    aug_chol,
-    t(aug_Z) %*% (s - vi_pg_mean * offset)
-  )
-  
-  out_mean <- matrix(aug_coef, ncol = d_mi, byrow = T)
-  split_out <- sapply(Z_MI, ncol)
-  split_out <- c(0, cumsum(split_out))
-  out_mean <- lapply(1:length(Z_MI), FUN=function(i){
-    out_mean[seq(split_out[i] + 1, split_out[i+1]),,drop=FALSE]
-  })
-  
-  vi_mi_decomp <- expand(aug_chol)
-  vi_mi_decomp_nonpermute <- drop0(solve(vi_mi_decomp$L))
-  vi_mi_decomp_LP <- t(vi_mi_decomp$P)
-  log_det_mi_var <- -2 * sum(log(diag(vi_mi_decomp$L)))
-  vi_mi_decomp <- vi_mi_decomp_nonpermute %*% t(vi_mi_decomp_LP)
-  vi_mi_decomp <- drop0(vi_mi_decomp)
-  
-  if (!is.null(Z_hier_mapping)){
-    
-    if (it > 50){
-      old_mean <- out_mean
-      browser()
-      stopifnot(all(sapply(prior_mi, FUN=function(i){isDiagonal(matrix(i, nrow = sqrt(length(i))))})))
-      prior_mi <- lapply(prior_mi, FUN=function(i){matrix(i, nrow = sqrt(length(i)))})
-      out_mean <- hier_px(Z_hier_mapping, out_mean, d_mi, prior_mi)
-    }
-    
-  }
-  
-  out <- list(
-    mean = out_mean,
-    lndet = log_det_mi_var,
-    decomp = vi_mi_decomp
-  )
-  return(out)
-}
-
-hier_px <- function(Z_hier_mapping, out_mean, d_mi, prior_mi){
-  
-  size_mean <- sapply(out_mean, nrow)
-  
-  wide_mapping <- do.call('cbind', Z_hier_mapping)
-  flat_X <- rbind(wide_mapping, bdiag(lapply(out_mean[-1], FUN=function(i){Diagonal(n=nrow(i))})))
-  level_flat <- sapply(out_mean, nrow)[-1]
-  level_flat <- rep(names(Z_hier_mapping), level_flat)
-  
-  px_hier <- lapply(1:d_mi, FUN=function(d){
-    prior_d <- sapply(prior_mi, FUN=function(i){i[d,d]})
-    W <- Diagonal(x=rep(prior_d, size_mean))
-    flat_aug <- do.call('c', mapply(out_mean[-1], SIMPLIFY = FALSE,
-                FUN=function(j,p){j[,d]}))
-    flat_y <- c(out_mean[[1]][,d], -1.0 * flat_aug)
-    flat_coef <- as.vector(solve(Cholesky(t(flat_X) %*% W %*% flat_X), t(flat_X) %*% W %*% flat_y))
-    return(split(flat_coef, level_flat))
-  })
-  
-  px_hier <- lapply(names(Z_hier_mapping), FUN=function(i){
-    sapply(px_hier, `[[`, i)
-  })
-  
-  names(px_hier) <- names(Z_hier_mapping)
-  print(px_hier)
-  print('Before')
-  print(t(wide_mapping) %*% out_mean[[1]])
-  print(out_mean[[2]])
-  
-  # print(lapply(px_hier, FUN=function(i){colMeans(abs(i))}))
-  out_mean[[1]] <- out_mean[[1]] - as.matrix(Reduce('+', mapply(Z_hier_mapping, px_hier, SIMPLIFY = FALSE, FUN=function(i,j){
-    i %*% j
-  })))
-  
-  out_mean[-1] <- mapply(out_mean[-1], px_hier, SIMPLIFY = FALSE, FUN=function(i,j){
-    i + j
-  })
-  print('After')
-  print(t(wide_mapping) %*% out_mean[[1]])
-  print(out_mean[[2]])
-
-  return(out_mean) 
-}

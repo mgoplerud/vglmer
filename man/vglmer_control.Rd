@@ -26,7 +26,10 @@ vglmer_control(
   quiet = TRUE,
   quiet_rho = TRUE,
   freeze_mi_var = FALSE,
-  mi_prior_type = c("centered", "separate", "shared"),
+  mi_init = c("nakajima", "random"),
+  mi_parameter_expansion = "rotate",
+  mi_prior_type = c("centered", "separate", "shared", "fixed", "partial_fixed"),
+  mi_prior_variance = c("hw", "mean_exists"),
   px_method = "dynamic",
   px_numerical_it = 10,
   hw_inner = 10,
@@ -122,6 +125,15 @@ convergence. Set to \code{TRUE} to debug.}
 
 \item{quiet_rho}{Default (\code{FALSE}) does not print information about
 parameter expansions. Set to \code{TRUE} to debug convergence issues.}
+
+\item{mi_init}{Initialization for MI: "random" or "nakajima"}
+
+\item{mi_parameter_expansion}{Parameter-Expansion for MI: "none" or "rotate"}
+
+\item{mi_prior_type}{Prior type: "centered", "separated", "shared", "fixed",
+or "partial_fixed"}
+
+\item{mi_prior_variance}{"hw" or "mean_exists"}
 
 \item{px_method}{When code \code{parameter_expansion="translation"}, default
 (\code{"dynamic"}) tries a one-step late update and, if this fails, a

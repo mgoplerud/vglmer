@@ -139,4 +139,3 @@ List calculate_expected_outer_alpha(
     Rcpp::Named("mu_j") = mu_alpha
   );
 }
-
