@@ -115,6 +115,7 @@ multi_digamma <- function(a, p) {
 #' @keywords internal
 #' @importFrom stats runif
 EM_prelim_logit <- function(X, Z, s, pg_b, iter, ridge = 2) {
+  
   jointXZ <- cbind(X, Z)
   N <- nrow(X)
   
@@ -127,7 +128,7 @@ EM_prelim_logit <- function(X, Z, s, pg_b, iter, ridge = 2) {
     EM_beta[1] <- runif(1, -.1, .1)
   }
   EM_variance <- sparseMatrix(i = 1:ncol(jointXZ), j = 1:ncol(jointXZ), x = 1 / ridge)
-  
+
   for (it in 1:iter) {
     EM_pg_c <- jointXZ %*% EM_beta
     EM_pg_mean <- as.vector(pg_b / (2 * EM_pg_c) * tanh(EM_pg_c / 2))
@@ -136,11 +137,16 @@ EM_prelim_logit <- function(X, Z, s, pg_b, iter, ridge = 2) {
       EM_pg_mean[tiny_c] <- pg_b[tiny_c] / 4
     }
     EM_pg_diag_sqrt <- sparseMatrix(i = 1:N, j = 1:N, x = sqrt(EM_pg_mean))
-    
+    if (it == 1){
+      EM_beta <- crossprod(EM_pg_diag_sqrt %*% jointXZ) 
+      sparse_X <- mean(EM_beta != 0)
+      sparse_X <- sparse_X < 0.25
+      if (!sparse_X){
+        jointXZ <- as.matrix(jointXZ)
+      }
+    }
     EM_beta <- solve(Matrix::Cholesky( crossprod(EM_pg_diag_sqrt %*% jointXZ) + EM_variance),
                      t(jointXZ) %*% (s) )
-    
-    # EM_beta <- LinRegChol(X = jointXZ, omega = EM_pg_diag, y = s, prior_precision = EM_variance)$mean
   }
   output <- list(beta = EM_beta[1:ncol(X)], alpha = EM_beta[-1:-ncol(X)])
   return(output)
@@ -215,7 +221,7 @@ calculate_ELBO <- function(family, ELBO_type, factorization_method,
    vi_P = NULL, log_det_M_var = NULL, log_det_C_var = NULL,
    vi_C_uncond = NULL, vi_C_mean = NULL, vi_M_mean = NULL,
    vi_FS_MC = NULL, lookup_marginal = NULL,
-   vi_FS_MM = NULL, vi_M_list = NULL,
+   vi_FS_MM = NULL, 
    design_M = NULL,  vi_M_B = NULL, vi_M_var_flat = NULL,
    design_C = NULL,
    # r Parameters
@@ -260,7 +266,7 @@ calculate_ELBO <- function(family, ELBO_type, factorization_method,
     }
   } else if (factorization_method %in% c("partially_factorized", "pf_diag")) {
     
-    var_XBZA <- cpp_var_lp_cyclical(
+    var_XBZA <- var_lp_cyclical(
       design_C,
       vi_C_uncond,
       vi_FS_MM,
@@ -270,34 +276,10 @@ calculate_ELBO <- function(family, ELBO_type, factorization_method,
       vi_M_B
     )
     
-    # var_XBZA <- rowSums( (design_C %*% vi_C_uncond) * design_C)
-    # 
-    # var_XBZA <- var_XBZA + rowSums(mapply(vi_FS_MM, vi_M_var_flat, lookup_marginal, names(lookup_marginal), FUN=function(xi,zi,gi, n){
-    #   if (ncol(xi) > 0){
-    #     rowSums( xi * (gi %*% zi))
-    #   }else{
-    #     return(rep(0, nrow(xi)))
-    #   }
-    # }))
-    # # Covariance
-    # var_XBZA <- var_XBZA + -2 * rowSums(
-    #   mapply(vi_FS_MC, vi_M_B, FUN=function(data_j, B_j){
-    #     as.vector(data_j %*% B_j)})
-    # )
-    
-    # # # Variance of Marginal
-    # var_XBZA <- var_XBZA + rowSums(mapply(vi_M_list, vi_M_var_flat, FUN=function(data_j, var_j){
-    #   rowSums( (data_j %*% Diagonal(x = var_j)) * data_j)
-    # }))
-    # # # Covariance
-    # var_XBZA <- var_XBZA + -2 * rowSums(
-    #   mapply(vi_M_list, vi_M_B, FUN=function(data_j, B_j){
-    #     rowSums((data_j %*% t(B_j)) * design_C)})
-    # )
-    #   
   } else {
     
-    beta_quad <- rowSums((X %*% t(vi_beta_decomp))^2)
+    beta_quad <- cpp_dense_zVz(X, as.matrix(vi_beta_decomp))
+    # beta_quad <- rowSums((X %*% t(vi_beta_decomp))^2)
     alpha_quad <- rowSums((Z %*% t(vi_alpha_decomp))^2)
     var_XBZA <- beta_quad + alpha_quad
     if (family == 'negbin'){
@@ -516,7 +498,8 @@ update_r <- function(vi_r_mu, vi_r_sigma, y, X, Z, factorization_method,
     }
     var_XBZA <- rowSums((cbind(X, Z) %*% t(vi_joint_decomp))^2)
   } else {
-    beta_quad <- rowSums((X %*% t(vi_beta_decomp))^2)
+    beta_quad <- cpp_dense_zVz(X, as.matrix(vi_beta_decomp))
+    # beta_quad <- rowSums((X %*% t(vi_beta_decomp))^2)
     alpha_quad <- rowSums((Z %*% t(vi_alpha_decomp))^2)
     var_XBZA <- beta_quad + alpha_quad
   }

@@ -268,7 +268,7 @@ Eigen::VectorXd cpp_var_lp_cyclical(
   // Loop over each random effect
   for (int j = 0; j < J; j++){
     
-    Eigen::SparseMatrix<double> xi = vi_FS_MM[j];
+    Eigen::MatrixXd xi = vi_FS_MM[j];
     Eigen::MatrixXd zi = vi_M_var_flat[j];
     Eigen::SparseMatrix<double> gi = lookup_marginal[j];
     Eigen::SparseMatrix<double> data_j = vi_FS_MC[j];

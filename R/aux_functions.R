@@ -1,3 +1,43 @@
+fast_insert <- function(A, B, index){
+  # B[index, index] <- A
+  # can be *frightfully* expensive to do computationally
+  A_dgT <- as(A, 'dgTMatrix')
+  B_dgT <- as(B, 'dgTMatrix')
+  
+  zero_index <- index - 1
+  # These are the positions of the non-A block of "B" that should be kept
+  nonA_pos <- !( (B_dgT@i %in% zero_index) & (B_dgT@j %in% zero_index) )
+  
+  out <- sparseMatrix(
+    # Add in triplet form the non-A block of "B" and the 
+    # block of "A"
+    i = c(B_dgT@i[nonA_pos], zero_index[A_dgT@i + 1]),
+    j = c(B_dgT@j[nonA_pos], zero_index[A_dgT@j + 1]),
+    x = c(B_dgT@x[nonA_pos], A_dgT@x),
+    use.last.ij = FALSE,
+    index1 = FALSE,
+    repr = 'C',
+    dims = dim(B)
+  )  
+  return(out)
+  
+  # Version 1: Reasonable but B[index, index] can be expensive  
+  # # This is a matrix with zeros everywhere except "A"
+  # aug_A <- sparseMatrix(i = index[A_dgT@i + 1],
+  #                       j = index[A_dgT@j + 1],
+  #                       x = A@x, dims = dim(B)
+  # )
+  # # This is matrix with zeros everywhere except for the old values of "B"
+  # old_B <- as(B[index,index], 'dgTMatrix')
+  # old_B <- sparseMatrix(i = index[old_B@i + 1],
+  #                       j = index[old_B@j + 1],
+  #                       x = old_B@x, dims = dim(B)
+  # )
+  # # This removes the old_B and adds the new A
+  # out <- (B - old_B + aug_A)
+  # return(out)
+}
+
 update_rho <- function(XR, y, omega, prior_precision, 
                        moments_sigma_alpha,
                        prior_sigma_alpha_nu, prior_sigma_alpha_phi,

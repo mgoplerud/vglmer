@@ -303,3 +303,41 @@ extract_precision <- function(object){
   
   return(vi_precision)
 }
+
+var_lp_cyclical <- function (design_C, vi_C_uncond, vi_FS_MM, vi_M_var_flat, lookup_marginal, 
+                             vi_FS_MC, vi_M_B) {
+  
+  # cpp_var_lp_cyclical(
+  #     design_C,
+  #     vi_C_uncond,
+  #     vi_FS_MM,
+  #     vi_M_var_flat,
+  #     lookup_marginal,
+  #     vi_FS_MC,
+  #     vi_M_B
+  # )
+  
+  # Variance of Collapsed 
+  if (length(vi_C_uncond@x) == 0){
+    joint_quad <- 0
+  }else{
+    joint_quad <- cpp_dense_zVz(design_C, as.matrix(chol(vi_C_uncond)))
+  }
+  # joint_quad <- rowSums( (design_C %*% vi_C_uncond) * design_C)
+  # Variance of Marginal
+  joint_quad <- joint_quad + rowSums(mapply(vi_FS_MM, vi_M_var_flat, lookup_marginal, names(lookup_marginal), FUN=function(xi,zi,gi, n){
+    if (ncol(xi) > 0){
+      rowSums( xi * (gi %*% zi))
+    }else{
+      return(rep(0, nrow(xi)))
+    }
+  }))
+  # Covariance
+  joint_quad <- joint_quad + -2 * rowSums(
+    mapply(vi_FS_MC, vi_M_B, FUN=function(data_j, B_j){
+      as.vector(data_j %*% B_j)})
+  )
+  joint_quad <- as.vector(joint_quad)
+  return(joint_quad)
+}
+  
