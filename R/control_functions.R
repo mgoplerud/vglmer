@@ -28,6 +28,9 @@
 #' @param tolerance_parameters Default (\code{1e-5}) sets a convergence
 #'   threshold that is achieved if no parameter changes by more than the
 #'   tolerance from the prior estimated value.
+#' @param tolerance_rel_elbo Default (\code{1e-8}) sets a convergence threshold
+#'   if the change in the ELBO divided by the number of observations (or number
+#'   of trials if \code{"family"} is binomial).
 #' @param parameter_expansion Default of \code{"translation"}  (see Goplerud
 #'   2022b). Valid options are \code{"translation"}, \code{"mean"}, or
 #'   \code{"none"}. \code{"mean"} should be employed if \code{"translation"} is
@@ -115,7 +118,9 @@ vglmer_control <- function(iterations = 1000,
                            prior_variance = "hw",
                            factorization_method = c("strong", "partial", "weak"),
                            parameter_expansion = "translation", do_SQUAREM = TRUE, 
-                           tolerance_elbo = 1e-8, tolerance_parameters = 1e-5,
+                           tolerance_elbo = 1e-8, 
+                           tolerance_rel_elbo = tolerance_elbo,
+                           tolerance_parameters = 1e-5,
                            force_whole = TRUE, print_prog = NULL,
                            do_timing = FALSE, verbose_time = FALSE,
                            return_data = FALSE, linpred_method = "joint",

@@ -45,3 +45,50 @@ Eigen::VectorXd cpp_zVz(
   //   output(j) = norm_j;
   // }
 }
+
+// [[Rcpp::export]]
+List LinRegChol_fe(
+    const Eigen::Map<Eigen::MatrixXd> &X,
+    const Eigen::MappedSparseMatrix<double> omega,
+    const Eigen::Map<Eigen::VectorXd> y,
+    const bool save_chol = true
+){
+  // The LDLt decomposition gives t(P) L D t(L) P
+  Eigen::LDLT<Eigen::MatrixXd> llt_reg(X.adjoint() * omega * X);
+  Eigen::VectorXd mean = llt_reg.solve(X.adjoint() * y);
+  if (save_chol == false){
+    return List::create(
+      Rcpp::Named("mean") = mean
+    );
+  }
+  // Adjust to get LL^T without the permutation
+  Eigen::VectorXd sqrtD = llt_reg.vectorD().cwiseSqrt();
+  Eigen::MatrixXd lower_l = Eigen::MatrixXd(llt_reg.matrixL());
+  int k = lower_l.cols();
+  for (int j = 0; j < k; j++) {
+    lower_l.col(j) *= sqrtD(j);
+  }
+  // Get the permutation order
+  Eigen::VectorXi perm_order = Eigen::VectorXi::LinSpaced(k, 0, k-1);
+  perm_order = llt_reg.transpositionsP() * perm_order;
+  
+  
+  return List::create(
+    Rcpp::Named("mean") = mean,
+    Rcpp::Named("diag_L") = sqrtD,
+    Rcpp::Named("Pindex") = perm_order,
+    Rcpp::Named("origL") = lower_l
+  );
+}
+
+// [[Rcpp::export]]
+Eigen::VectorXd cpp_dense_zVz(
+    const Eigen::Map<Eigen::MatrixXd> &X,
+    const Eigen::Map<Eigen::MatrixXd> &V) {
+  
+  int n = X.rows();
+  int k = V.rows();
+  Eigen::MatrixXd obj = X * V.transpose();
+  Eigen::VectorXd out = obj.rowwise().squaredNorm();
+  return out;
+}

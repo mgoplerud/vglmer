@@ -241,7 +241,8 @@ calculate_ELBO <- function(family, ELBO_type, factorization_method,
       var_XBZA <- var_XBZA + vi_r_sigma
     }
   } else {
-    beta_quad <- rowSums((X %*% t(vi_beta_decomp))^2)
+    beta_quad <- cpp_dense_zVz(X, as.matrix(vi_beta_decomp))
+    # beta_quad <- rowSums((X %*% t(vi_beta_decomp))^2)
     alpha_quad <- rowSums((Z %*% t(vi_alpha_decomp))^2)
     var_XBZA <- beta_quad + alpha_quad
     if (family == 'negbin'){
@@ -455,7 +456,8 @@ update_r <- function(vi_r_mu, vi_r_sigma, y, X, Z, factorization_method,
     }
     var_XBZA <- rowSums((cbind(X, Z) %*% t(vi_joint_decomp))^2)
   } else {
-    beta_quad <- rowSums((X %*% t(vi_beta_decomp))^2)
+    beta_quad <- cpp_dense_zVz(X, as.matrix(vi_beta_decomp))
+    # beta_quad <- rowSums((X %*% t(vi_beta_decomp))^2)
     alpha_quad <- rowSums((Z %*% t(vi_alpha_decomp))^2)
     var_XBZA <- beta_quad + alpha_quad
   }

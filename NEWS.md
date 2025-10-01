@@ -1,3 +1,17 @@
+# vglmer 1.0.7
+
+*** IMPORTANT: `summary(object)` reported the incorrect variational mean of q(Sigma_j) [variance components]. This has been fixed; nothing changes in estimation and `object$cov` has always extracted the correct variational distribution of q(Sigma_j). Thank you to Ruggero Bellio for bringing this to my attention.
+
+** Added convergence criterion using "relative" ELBO, i.e. stopping when ELBO/N increases by a small amount where N is the number of observations.
+
+** Adjustments to "print", e.g. only showing change in q(alpha,beta) at convergence
+
+* Small adjustments to sparse matrix algebra to improve speed in problems with high-dimensional REs. Thank you to Ruggero Bellio and Hanna Niwinska for finding datasets that illustrate this problem.
+
+* Updates to README to reference new papers and experimental package branches.
+
+* Address certain warnings raised by `Matrix`-package updates.
+
 # vglmer 1.0.6
 
 * Removes unnecessary model preparation steps for `parameter_expansion="translation"` and `factorization_method="strong"`. Improves speed on default settings for models with many random effects.

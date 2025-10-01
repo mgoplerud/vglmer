@@ -156,12 +156,21 @@ print.vglmer <- function(x, ...) {
   if (length(list(...)) > 0) {
     "print.vglmer does not use ..."
   }
-  N_obs <- x$internal_parameters$N
+  if (x$family == 'binomial'){
+    N_unweight <- x$internal_parameters$N
+    N_obs <- x$internal_parameters$N_weight
+  }else{
+    N_obs <- x$internal_parameters$N
+    N_unweight <- N_obs
+  }
   missing_obs <- x$internal_parameters$missing_obs
   it_used <- x$internal_parameters$it_used
   it_max <- x$internal_parameters$it_max
-  final_param_change <- round(max(x$internal_parameters$parameter.change), 6)
-  final_ELBO_change <- round(tail(diff(x$ELBO_trajectory$ELBO), 1), 8)
+  final_param_change <- x$internal_parameters$parameter.change
+  final_param_change <- final_param_change[grepl(names(final_param_change), 
+      pattern='^change_(alpha|beta|joint|vi)')]
+  final_param_change <- max(final_param_change)
+  final_ELBO_change <- tail(diff(x$ELBO_trajectory$ELBO), 1)/N_obs
   converged <- it_max != it_used
   p.X <- nrow(x$beta$mean)
   p.Z <- nrow(x$alpha$mean)
@@ -175,19 +184,24 @@ print.vglmer <- function(x, ...) {
   } else {
     missing_info <- " and"
   }
-  cat(paste0("Model fit with ", N_obs, " observations", missing_info))
+  if (N_obs == N_unweight){
+    cat(paste0("Model fit with ", N_obs, " observations", missing_info))
+  }else{
+    cat(paste0("Model fit with ", N_obs, " (weighted) observations", missing_info))
+  }
   if (converged) {
     cat(paste0(" converged after ", it_used, " iterations."))
+    type <- 'Convergence'
   } else {
     cat(paste0(" *failed* to converge after ", it_max, " iterations."))
+    type <- 'Final Iteration'
   }
   cat("\n\n")
   cat(paste0("ELBO: ", round(x$ELBO[1], 2), "\n\n"))
   cat(paste0("Factorization Method: ", x$control$factorization_method, "\n"))
   cat(paste0("Parameter Expansion: ", x$control$parameter_expansion, "\n\n"))
-  cat(paste0("Largest Parameter Change at Convergence: ", formatC(final_param_change, format = "e", digits = 2), "\n"))
-  cat(paste0("ELBO Change at Convergence: ", formatC(final_ELBO_change, format = "e", digits = 2), "\n"))
-
+  cat(paste0("Largest q(alpha,beta) Parameter Change at ", type, ": ", formatC(final_param_change, format = "e", digits = 2), "\n"))
+  cat(paste0("Change in ELBO/N at ", type, ": ", formatC(final_ELBO_change, format = "e", digits = 2), "\n"))
 
   invisible(list(paramater = final_param_change, ELBO = final_ELBO_change))
 }
@@ -271,7 +285,7 @@ erfinv <- function(x) {
 # Internal function to tidy-up
 # inverse Wishart to extract mean
 fmt_IW_mean <- function(Phi, nu, digits = 2) {
-  mean <- solve(as.matrix(Phi)) / (nu - nrow(Phi) - 1)
+  mean <- as.matrix(Phi) / (nu - nrow(Phi) - 1)
   if (nu - nrow(Phi) - 1 < 0) {
     return(matrix(NA, nrow = nrow(Phi), ncol = ncol(Phi)))
   } else {

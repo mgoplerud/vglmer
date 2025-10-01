@@ -1,4 +1,5 @@
-# vglmer: Variational Generalized Linear Mixed Effects Regression   
+# vglmer: Variational Generalized Linear Mixed Effects Regression
+
 [![CRAN status](https://www.r-pkg.org/badges/version/vglmer)](https://CRAN.R-project.org/package=vglmer) [![R-CMD-check](https://github.com/mgoplerud/vglmer/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/mgoplerud/vglmer/actions/workflows/R-CMD-check.yaml) [![codecov](https://codecov.io/gh/mgoplerud/vglmer/branch/master/graph/badge.svg?token=L8C4260BUW)](https://app.codecov.io/gh/mgoplerud/vglmer)
 
 A package to estimate non-linear hierarchical models using the variational algorithms described in [Goplerud (2022)](https://doi.org/10.1214/21-BA1266) and in [Goplerud (2024)](https://doi.org/10.1017/S0003055423000035). It also provides the option to improve an initial approximation using marginally augmented variational Bayes (MAVB) also described in [Goplerud (2022)](https://doi.org/10.1214/21-BA1266). It can be installed from CRAN or the most-to-update version can be installed using `devtools`.  
@@ -11,9 +12,9 @@ library(devtools)
 devtools::install_github("mgoplerud/vglmer", dependencies = TRUE)
 ```
 
-If you are interested in using partially factorized variational inference [(Goplerud, Papaspiliopoulos, and Zanella 2023)](https://arxiv.org/abs/2312.13148), please switch to the `collapsed` branch and install that version of the package. There are some important differences with this main branch, especially in terms of some `vglmer_control` naming conventions. This branch will be eventually integrated into the main package.
+If you are interested in using partially factorized variational inference [(Goplerud, Papaspiliopoulos, and Zanella 2025)](https://doi.org/10.1093/biomet/asae067), please switch to the `collapsed` branch and install that version of the package. There are some important differences with this main branch, especially in terms of some `vglmer_control` naming conventions. This branch will be eventually integrated into the main package. Similarly, if one is interested in the results in [Goplerud and Auslen (2025)](https://arxiv.org/abs/2507.03652), please switch to the `poisson` branch and install that version of the package.
 
-At present, `vglmer` can fit logistic, linear, and negative binomial outcomes with an arbitrary number of random effects. Details on negative binomial inference can be found [here](https://github.com/mgoplerud/vglmer/blob/master/.github/model_addendum.pdf) and are more experimental at the moment.
+At present, the CRAN version of `vglmer` can fit logistic, linear, and negative binomial outcomes with an arbitrary number of random effects. Details on negative binomial inference can be found [here](https://github.com/mgoplerud/vglmer/blob/master/.github/model_addendum.pdf) and are more experimental at the moment.
 
 This package accepts "standard" glmer syntax of the form:
 
