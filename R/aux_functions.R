@@ -435,7 +435,6 @@ eval_px_rotation_rho <- function(rho, SSQ_u, SSQ_v, dim_u, dim_v, nu,
   lndet_Rmatrix <- as.numeric(determinant(Rmatrix)$modulus)
   
   inv_Rmatrix <- solve(Rmatrix)
-
   if (mi_prior_type %in% c('centered')){
     # u ~ N(0, R^T R) -> -1/2 tr(SSQ R^{-} R^{-T}) - 1/2 lndet(R) * 2
     prior_u <- -1/2 * sum(diag(SSQ_u %*% inv_Rmatrix %*% t(inv_Rmatrix)))
@@ -618,6 +617,7 @@ update_px_rotation <- function(vi_mi_SSQ,
       ESigma.inv <- vi_mi_moments[[j]]
       null_rho <- as.vector(Diagonal(n=dim_rho))
     }
+
     opt_rho <- optim(par = null_rho,
                      SSQ_u = SSQ_u, SSQ_v = SSQ_v,
                      dim_u = dim_u, dim_v = dim_v, nu = nu, 

@@ -166,6 +166,7 @@ predict.vglmer <- function(object, newdata, type = 'link',
     
   }
   
+  re_type <- setNames(rep('RE', length(names_of_RE)), names(names_of_RE))
   # Extract the Specials
   if (length(parse_formula$smooth.spec) > 0){
     base_specials <- length(parse_formula$smooth.spec)
@@ -174,64 +175,142 @@ predict.vglmer <- function(object, newdata, type = 'link',
       sum(sapply(parse_formula$smooth.spec, FUN=function(i){i$by}) != "NA")
     
     
-    Z.spline <- as.list(rep(NA, n.specials))
-    Z.spline.size <- rep(NA, n.specials)
-    Z.spline.attr <- object$internal_parameters$spline$attr
-    
+    Z.special <- as.list(rep(NA, n.specials))
+    Z.special.size <- rep(NA, n.specials)
+    Z.special.attr <- object$internal_parameters$spline$attr
+    Z.special.type <- rep(NA, n.specials)
     special_counter <- 1
     store_spline_type <- rep(NA, n.specials)
     for (i in 1:base_specials){
       
       special_i <- parse_formula$smooth.spec[[i]]
       
-      all_splines_i <- vglmer_build_spline(x = newdata[[special_i$term]], 
-         knots = Z.spline.attr[[i]]$knots, 
-         Boundary.knots =  Z.spline.attr[[i]]$Boundary.knots,
-         by = newdata[[Z.spline.attr[[i]]$by]], outer_okay = TRUE,
-         type = Z.spline.attr[[i]]$type, override_warn = TRUE,
-         force_vector = TRUE)
-      
-      spline_counter <- 1
-      
-      for (spline_i in all_splines_i){
-        
-        stopifnot(spline_counter %in% 1:2)
-        
-        colnames(spline_i$x) <- paste0('spline @ ', special_i$term, ' @ ', colnames(spline_i$x))
-        
-        if (spline_counter > 1){
-          spline_name <- paste0('spline-',special_i$term,'-', i, '-int')
+        if (special_i$mi){
+          
+          special_i$knots <- Z.special.attr[[i]]$attr
+          all_special_i <- vglmer_build_mi(
+            data = newdata,
+            object = special_i
+          )
+
+          if (length(all_special_i) != 1){
+            browser()
+          }else{
+            # Ensure alignment if s(x) is used and unpenalized terms are generated
+            special_i$hier_fmla <- all_special_i[[1]]$attr$hier_grouping
+            special_i$term <- do.call('c', special_i$hier_fmla)
+            Z.special[[special_counter]] <- all_special_i[[1]]$x
+          }
+          
+          if (special_i$hier){
+            spline_name <- sapply(special_i$hier_fmla, FUN=function(i){i[1]})
+            spline_name <- paste0('mi-', paste(spline_name, collapse=','))
+          } else{
+            spline_name <- paste0('mi-', paste(special_i$term, collapse=','))
+          }
+
+          names_of_RE[[spline_name]] <- spline_name
+          d_j <- setNames(c(d_j, special_i$rank), c(names(d_j), spline_name))
+          g_j <- setNames(c(g_j, NA), c(names(g_j), spline_name))
+          Z.special.type[special_counter] <- 'mi'
+          re_type <- setNames(c(re_type, 'mi'), c(names(re_type), spline_name))
+          
+          special_counter <- special_counter + 1
+          
         }else{
-          spline_name <- paste0('spline-', special_i$term, '-', i, '-base')
+          object_spline_i <- Z.special.attr[[i]]
+          object_spline_i$outer_okay <- TRUE
+          object_spline_i$override_warn <- TRUE
+          object_spline_i$force_vector <- TRUE
+          object_spline_i$term <- special_i$term
+          if (is.list(object_spline_i$knots)){
+            object_spline_i$spline_type <- object_spline_i$knots$spline_type
+          }
+          
+          if (object_spline_i$spline_type == 'mgcv'){
+            class(object_spline_i) <- 'list'
+          }else{
+            class(object_spline_i) <- c('vglmer_spline')
+          }
+          
+          all_splines_i <- vglmer_build_spline(
+            object = object_spline_i,
+            data = newdata
+          )
+          # all_splines_i <- vglmer_build_spline(x = newdata[[special_i$term]], 
+          #    knots = Z.special.attr[[i]]$knots, 
+          #    Boundary.knots =  Z.special.attr[[i]]$Boundary.knots,
+          #    by = newdata[[Z.special.attr[[i]]$by]], outer_okay = TRUE,
+          #    type = Z.special.attr[[i]]$type, override_warn = TRUE,
+          #    force_vector = TRUE)
+          
+          spline_counter <- 1
+          
+          for (spline_i in all_splines_i){
+            
+            stopifnot(spline_counter %in% 1:2)
+            
+            colnames(spline_i$x) <- paste0('spline @ ', special_i$term, ' @ ', colnames(spline_i$x))
+            
+            if (spline_counter > 1){
+              spline_name <- paste0('spline-',special_i$term,'-', i, '-int')
+            }else{
+              spline_name <- paste0('spline-', special_i$term, '-', i, '-base')
+            }
+            
+            Z.special[[special_counter]] <- spline_i$x
+            Z.special.size[special_counter] <- ncol(spline_i$x)
+            
+            names_of_RE[[spline_name]] <- spline_name
+            number_of_RE <- number_of_RE + 1
+            d_j <- setNames(c(d_j, 1), c(names(d_j), spline_name))
+            g_j <- setNames(c(g_j, ncol(spline_i$x)), c(names(g_j), spline_name))
+            breaks_for_RE <- c(breaks_for_RE, max(breaks_for_RE) + ncol(spline_i$x))
+            fmt_names_Z <- c(fmt_names_Z, colnames(spline_i$x))
+            
+            store_spline_type[special_counter] <- spline_counter
+            Z.special.type[special_counter] <- 'spline'
+            
+            spline_counter <- spline_counter + 1
+            special_counter <- special_counter + 1
         }
-        
-        Z.spline[[special_counter]] <- spline_i$x
-        Z.spline.size[special_counter] <- ncol(spline_i$x)
-       
-        names_of_RE[[spline_name]] <- spline_name
-        number_of_RE <- number_of_RE + 1
-        d_j <- setNames(c(d_j, 1), c(names(d_j), spline_name))
-        g_j <- setNames(c(g_j, ncol(spline_i$x)), c(names(g_j), spline_name))
-        breaks_for_RE <- c(breaks_for_RE, max(breaks_for_RE) + ncol(spline_i$x))
-        fmt_names_Z <- c(fmt_names_Z, colnames(spline_i$x))
-        
-        store_spline_type[special_counter] <- spline_counter
-        
-        spline_counter <- spline_counter + 1
-        special_counter <- special_counter + 1
         
       }
       
     }
 
-    Z.spline <- drop0(do.call('cbind', Z.spline))
-    rownames(Z.spline) <- rownames(newdata)
+    if (any(Z.special.type == 'mi')){
+      Z_MI <- Z.special[which(Z.special.type == 'mi')]
+      onehot_Z_MI <- lapply(Z_MI, FUN=function(j){sapply(j, FUN=function(k){
+        onehot_k_1 <- all(rowSums(k) == 1)
+        onehot_k_2 <- all(rowSums(k != 0) == 1)
+        return(onehot_k_1 & onehot_k_2)
+      })})
+      Z_MI_attr <- Z.special.attr[which(Z.special.type == 'mi')]
+      Z_MI_hier_fmla <- lapply(Z_MI_attr, FUN=function(i){
+        i$attr$hier_grouping
+      })
+      Z.special <- Z.special[which(Z.special.type != 'mi')]
+      names(Z_MI) <- names(names_of_RE)[re_type == 'mi']
+      names_of_RE <- names_of_RE[re_type != 'mi']
+      Z_MI <- lapply(Z_MI, FUN=function(i){
+        lapply(i, FUN=function(j){
+          rownames(j) <- rownames(newdata); return(j)
+        })})
+    }
+    
+    if (length(Z.special) > 0){
+      Z.special <- drop0(do.call('cbind', Z.special))
+      rownames(Z.special) <- rownames(newdata)
+    }else{
+      Z.special <- matrix(nrow = nrow(Z), ncol = 0)
+    }
     
     if (ncol(Z) > 0){
-      Z.spline <- Z.spline[match(rownames(Z), rownames(Z.spline)),, drop = FALSE]
-      Z <- drop0(cbind(Z, Z.spline))
+      Z.special <- Z.special[match(rownames(Z), rownames(Z.special)),, drop = FALSE]
+      Z <- drop0(cbind(Z, Z.special))
     }else{
-      Z <- Z.spline
+      Z <- Z.special
     }
     
     if (!isTRUE(all.equal(names_of_RE, object$internal_parameters$names_of_RE))){
@@ -239,7 +318,7 @@ predict.vglmer <- function(object, newdata, type = 'link',
     }
     
     if (!isTRUE(identical(object$internal_parameters$spline$size[store_spline_type %in% 1], 
-                          Z.spline.size[store_spline_type  %in% 1]))){
+                          Z.special.size[store_spline_type  %in% 1]))){
       stop('Misalignment of splines in prediction.')
     }
     if (!isTRUE(identical(names_of_RE, object$internal_parameters$names_of_RE))){
@@ -247,11 +326,14 @@ predict.vglmer <- function(object, newdata, type = 'link',
     }
     
   }else{
+    Z_MI <- list()
     n.specials <- 0
-    Z.spline.attr <- NULL
-    Z.spline <- NULL
-    Z.spline.size <- NULL
+    Z.special.attr <- NULL
+    Z.special <- NULL
+    Z.special.size <- NULL
   }
+  
+  any_mi <- any(re_type == 'mi')
   
   #####
   ### Confirm Alignment of the Z
@@ -300,10 +382,19 @@ predict.vglmer <- function(object, newdata, type = 'link',
   Z <- recons_Z
   rm(recons_Z); gc()
 
+  #### Prepare the data for the multiplicative interactions
+  if (any_mi){
+    if (samples != 0){stop('predict.vglmer is not set up for MI with samples...')}
+  }
+  
   ####
   
   total_obs <- rownames(newdata)
-  obs_in_both <- intersect(rownames(X), rownames(Z))
+  if (ncol(Z) > 0){
+    obs_in_both <- intersect(rownames(X), rownames(Z))
+  }else{
+    obs_in_both <- rownames(X)
+  }
 
   if (type == 'terms'){
     if (samples != 0){stop('"terms" only enabled for samples=0.')}
@@ -321,14 +412,43 @@ predict.vglmer <- function(object, newdata, type = 'link',
     colnames(lp_terms) <- names(object$internal_parameters$names_of_RE)
     lp_terms <- cbind('FE' = lp_FE, lp_terms)
     lp_terms <- lp_terms[match(total_obs, obs_in_both), , drop = F]
+    
+    if (any_mi){
+      lp_MI <- get_bilinear_mean(Z_MI, 
+          object$mi$mean, Z_MI_hier_fmla, onehot_Z_MI, reduce = FALSE)
+      lp_uv <- mapply(lp_MI, Z_MI_hier_fmla, names(lp_MI), SIMPLIFY = FALSE, FUN=function(i,j, n_i){
+        out <- lapply(j, FUN=function(k){as.matrix(Reduce('+', i[k]))})
+        out <- do.call('cbind', out)
+        d_mi <- ncol(i[[1]])
+        colnames(out) <- paste0(rep(c('u', 'v'), each = d_mi), '_', rep(1:d_mi, 2))
+        colnames(out) <- paste(n_i, '@', colnames(out))
+        return(out)
+      })
+      lp_uv <- do.call('cbind', lp_uv)
+      lp_MI <- mapply(lp_MI, names(lp_MI), SIMPLIFY = FALSE, FUN=function(i, n_i){
+        d_mi <- ncol(i[[1]])
+        out <- do.call('cbind', i)
+        colnames(out) <- paste0(rep(names(i), each = d_mi), '_', rep(1:d_mi, length(i)))
+        colnames(out) <- paste(n_i, '@', colnames(out))
+        return(out)
+      })
+      lp_MI <- do.call('cbind', lp_MI)
+      lp_MI <- cbind(lp_uv, lp_MI)
+      lp_MI <- lp_MI[match(total_obs, obs_in_both), , drop = F]
+      lp_terms <- cbind(lp_terms, lp_MI)
+    }
     gc()
     return(lp_terms)
     
   }else{
-    XZ <- cbind(
-      X[match(obs_in_both, rownames(X)), , drop = F],
-      Z[match(obs_in_both, rownames(Z)), , drop = F]
-    )
+    if (ncol(Z) > 0){
+      XZ <- cbind(
+        X[match(obs_in_both, rownames(X)), , drop = F],
+        Z[match(obs_in_both, rownames(Z)), , drop = F]
+      )
+    }else{
+      XZ <- X[match(obs_in_both, rownames(X)), , drop = F]
+    }
   }
   gc()
   
@@ -404,8 +524,21 @@ predict.vglmer <- function(object, newdata, type = 'link',
   }
 
   lp <- XZ %*% samples
+  if (any_mi){
+    if (ncol(samples) > 1){stop('not set up MI for samples')}
+    lp_MI <- get_bilinear_mean(Z_MI, vi_mi_mean = object$mi$mean, 
+                      vi_hier_grouping = Z_MI_hier_fmla,
+                      is_onehot =  onehot_Z_MI)
+    if (ncol(XZ) == 0){
+      lp <- lp_MI
+    }else{
+      lp <- lp + lp_MI
+    }
+  }
+  
   if (summary) {
     if (!only.lp) {
+      if (any_mi){stop('set-up only.lp=FALSE for any MI terms')}
       lp <- t(apply(lp, MARGIN = 1, FUN = function(i) {
         c(mean(i), var(i))
       }))
@@ -426,6 +559,7 @@ predict.vglmer <- function(object, newdata, type = 'link',
     }
     return(lp)
   } else {
+    if (any_mi){stop('summary=TRUE if any MI terms are included...')}
     lp <- lp[match(total_obs, obs_in_both), , drop = F]
     rownames(lp) <- NULL
     return(t(lp))

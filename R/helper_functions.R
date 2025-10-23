@@ -225,7 +225,7 @@ calculate_ELBO <- function(family, ELBO_type, factorization_method,
      # Core Args
      Z_MI = NULL, Z_MI_grouping = NULL,
      vi_mi_mean = NULL, vi_mi_var = NULL,
-     vi_mi_lndet = NULL,
+     vi_mi_lndet = NULL, onehot_Z_MI = NULL,
      vi_mi_diag = NULL, vi_mi_sigma_outer_alpha = NULL,
      vi_mi_sigma_alpha = NULL, vi_mi_sigma_alpha_nu = NULL,
      vi_mi_a_a_jp = NULL, vi_mi_a_b_jp = NULL, vi_mi_a_nu_jp = NULL,
@@ -245,7 +245,7 @@ calculate_ELBO <- function(family, ELBO_type, factorization_method,
   }else{
     ex_XBZA <- (X %*% vi_beta_mean + Z %*% vi_alpha_mean)
   }
-
+  
   # quadratic var, i.e. Var(x_i^T beta + z_i^T alpha)
   if (factorization_method %in% c("weak", "collapsed")) {
     if (is.null(vi_joint_decomp)) {
@@ -271,7 +271,7 @@ calculate_ELBO <- function(family, ELBO_type, factorization_method,
   if (any_mi){
     ex_XBZA <- ex_XBZA + get_bilinear_mean(Z_MI, vi_mi_mean, Z_MI_grouping)
     var_XBZA <- var_XBZA + get_bilinear_var(Z_MI, vi_mi_mean, 
-      vi_mi_var, Z_MI_grouping)
+      vi_mi_var, Z_MI_grouping, onehot_Z_MI)
   }
   
   if (any_RE){
@@ -533,7 +533,7 @@ calculate_ELBO <- function(family, ELBO_type, factorization_method,
       
     }else if (mi_prior_type %in% c('separate')){
       
-      logcomplete_mi_prior <- mapply(
+      logcomplete_mi_prior <- sum(mapply(
         mi_d_j, mi_g_j, mi_ln_det_sigma_alpha, 
         mi_inv_sigma_alpha, vi_mi_sigma_outer_alpha,
           FUN=function(d_l, g_l, det_l, invsig_l, oa_l){
@@ -541,7 +541,7 @@ calculate_ELBO <- function(family, ELBO_type, factorization_method,
             -1 / 2 * sum(mapply(invsig_l, oa_l, FUN = function(a, b) {
               sum(diag(a %*% b))
           }))
-      })
+      }))
 
       # Entropy of VI distribution for MI
       entropy_mi_prior <- sum(mapply(mi_d_j, mi_g_j, FUN=function(d_l, g_l){
@@ -687,7 +687,6 @@ calculate_ELBO <- function(family, ELBO_type, factorization_method,
   
   ELBO <- entropy + logcomplete
 
-  
   # return(mget(ls()))
   return(data.frame(
     ELBO, logcomplete, entropy, logcomplete_1,

@@ -1,7 +1,7 @@
 
 FS <- function(X,Y){t(KhatriRao(t(X),t(Y)))}
 
-get_bilinear_mean <- function(Z_MI, vi_mi_mean, vi_hier_grouping, reduce = TRUE){
+get_bilinear_mean <- function(Z_MI, vi_mi_mean, vi_hier_grouping, is_onehot, reduce = TRUE){
   
   if (length(Z_MI) != length(vi_mi_mean)){
     stop('lengths misaligned')
@@ -39,7 +39,8 @@ get_bilinear_mean <- function(Z_MI, vi_mi_mean, vi_hier_grouping, reduce = TRUE)
   return(out)
 }
 
-get_bilinear_var <- function(Z_MI, vi_mi_mean, vi_mi_var, vi_hier_grouping, reduce = TRUE){
+get_bilinear_var <- function(Z_MI, vi_mi_mean, vi_mi_var,
+  vi_hier_grouping, is_onehot, reduce = TRUE){
   
   if (length(Z_MI) != length(vi_mi_mean)){
     stop('lengths misaligned')
@@ -51,11 +52,10 @@ get_bilinear_var <- function(Z_MI, vi_mi_mean, vi_mi_var, vi_hier_grouping, redu
     stop("lengths misaligned")
   }
   
-  
   if (reduce){
-    out <- mapply(Z_MI, vi_mi_mean, vi_mi_var, vi_hier_grouping, SIMPLIFY = FALSE, 
-        FUN=function(mi_data, mi_mean, mi_var, mi_grouping){
-          simple_model <- all(lengths(mi_grouping) == 1)
+    out <- mapply(Z_MI, vi_mi_mean, vi_mi_var, vi_hier_grouping, is_onehot, SIMPLIFY = FALSE, 
+        FUN=function(mi_data, mi_mean, mi_var, mi_grouping, mi_onehot){
+          simple_model <- all(lengths(mi_grouping) == 1) & all(mi_onehot)
           if (!simple_model){
             M_mean <- mapply(mi_data, mi_mean, SIMPLIFY = FALSE, FUN=function(i,j){i %*% j})
             # Sum by group to get the mean within "u" and "v"
@@ -67,7 +67,13 @@ get_bilinear_var <- function(Z_MI, vi_mi_mean, vi_mi_var, vi_hier_grouping, redu
             })
             M_mean <- lapply(M_mean, FUN=function(i){FS(i,i)})
             # For Var(u_i + u_p) given Var(u_i) and Var(u_p) are independent
-            M_var <- mapply(mi_data, mi_var, SIMPLIFY = FALSE, FUN=function(i,j){i %*% j})
+            M_var <- mapply(mi_data, mi_var, mi_onehot, SIMPLIFY = FALSE, FUN=function(i,j,o){
+              if (o){
+                i %*% j
+              }else{
+                i^2 %*% j
+              }
+            })
             M_var <- lapply(mi_grouping, FUN=function(g){
               # For each group, add together the variance
               Reduce('+', lapply(g, FUN=function(g_i){
@@ -77,7 +83,12 @@ get_bilinear_var <- function(Z_MI, vi_mi_mean, vi_mi_var, vi_hier_grouping, redu
           }else{
             mi_FS_mean <- lapply(mi_mean, FUN=function(i){FS(i,i)})
             M_mean <- mapply(mi_data, mi_FS_mean, SIMPLIFY = FALSE, FUN=function(i,j){i %*% j})
-            M_var <- mapply(mi_data, mi_var, SIMPLIFY = FALSE, FUN=function(i,j){i %*% j})
+            M_var <- mapply(mi_data, mi_var, mi_onehot, SIMPLIFY = FALSE, FUN=function(i,j,o){
+              if (o){i %*% j}else{
+                if (ncol(j) > 1){browser()}
+                i^2 %*% j
+              }
+            })
           }
           out_trace <- rowSums(Reduce('*', M_var))
           out_quad <- 
@@ -88,21 +99,30 @@ get_bilinear_var <- function(Z_MI, vi_mi_mean, vi_mi_var, vi_hier_grouping, redu
       })
     return(Reduce("+", out))
   }else{
-    out <- mapply(Z_MI, vi_mi_mean, vi_mi_var, SIMPLIFY = FALSE, 
-    FUN=function(mi_data, mi_mean, mi_var){
-      M_var <- mapply(mi_data, mi_var, SIMPLIFY = FALSE, FUN=function(i,j){i %*% j})
+    out <- mapply(Z_MI, vi_mi_mean, vi_mi_var, is_onehot, SIMPLIFY = FALSE, 
+    FUN=function(mi_data, mi_mean, mi_var, mi_onehot){
+      M_var <- mapply(mi_data, mi_var, mi_onehot,
+        SIMPLIFY = FALSE, FUN=function(i,j,o){
+          if (o){
+            i %*% j
+          }else{
+            if (ncol(j) > 1){browser()}
+            return(i^2 %*% j)
+          }
+        })
       return(M_var)
     })
     return(out) 
   }
 }
 
-get_bilinear_outer <- function(vi_mi_mean, vi_mi_var, vi_mi_diag, mi_prior_type,  reduce = TRUE){
+get_bilinear_outer <- function(vi_mi_mean, vi_mi_var, vi_mi_diag, mi_prior_type,
+                               is_onehot, reduce = TRUE){
 
   mapply(
-    vi_mi_mean, vi_mi_var, vi_mi_diag, 
+    vi_mi_mean, vi_mi_var, vi_mi_diag, is_onehot,
     SIMPLIFY = FALSE,
-    FUN=function(m_mean, m_var, m_diag, m_hier){
+    FUN=function(m_mean, m_var, m_diag, m_hier, m_onehot){
       if (reduce & (mi_prior_type != 'separate')){
         if (mi_prior_type %in% c('centered')){
           out_mean <- Reduce("+", lapply(m_mean[2], crossprod))
@@ -124,13 +144,13 @@ get_bilinear_outer <- function(vi_mi_mean, vi_mi_var, vi_mi_diag, mi_prior_type,
   )
 }
 
-bilinear_update <- function(Z_MI, Z_hier_mapping, prior_mi, d_mi, s,
+bilinear_update <- function(Z_MI, prior_mi, d_mi, s, is_onehot,
                             vi_pg_mean, diag_vi_pg_mean, RFSmean, Rvar, Rmean, offset,
                             return_chol, method, it,
                             auxiliary_Z = NULL, auxiliary_prior = NULL){
   
-  simple_j <- !inherits(Z_MI, 'list')
-  
+  simple_j <- !inherits(Z_MI, 'list') & all(is_onehot)
+
   if (!simple_j){
     
     full_Z <- do.call('cbind', Z_MI)
@@ -157,7 +177,8 @@ bilinear_update <- function(Z_MI, Z_hier_mapping, prior_mi, d_mi, s,
         })
       })
       flat_tile <- do.call('rbind', lapply(tile, FUN=function(i){do.call('rbind', i)}))
-      aug_Rvar <- sparseMatrix(i = flat_tile[,1], j = flat_tile[,2], x = flat_tile[,3])
+      aug_Rvar <- sparseMatrix(i = flat_tile[,1], j = flat_tile[,2], x = flat_tile[,3],
+                               dims = rep(ncol(full_Z) * d_mi,2))
       # # Correct but extremely slow method...
       # slow_aug_Rvar <- Reduce('+', lapply(1:nrow(full_Z), FUN=function(i){
       #   z_i <- full_Z[i,,drop=F]
@@ -174,7 +195,8 @@ bilinear_update <- function(Z_MI, Z_hier_mapping, prior_mi, d_mi, s,
       aug_Rvar <- bdiag(Diagonal(x = rep(0, ncol(auxiliary_Z))), aug_Rvar)
     }
     
-    aug_chol <- Cholesky(t(aug_Z) %*% Diagonal(x=vi_pg_mean) %*% aug_Z + aug_prior + aug_Rvar)
+    prec_aug <- t(aug_Z) %*% Diagonal(x=vi_pg_mean) %*% aug_Z + aug_prior + aug_Rvar
+    aug_chol <- Cholesky(prec_aug)
     aug_coef <- solve(
       aug_chol,
       t(aug_Z) %*% (s - vi_pg_mean * offset)
@@ -194,22 +216,46 @@ bilinear_update <- function(Z_MI, Z_hier_mapping, prior_mi, d_mi, s,
       out_mean[seq(split_out[i] + 1, split_out[i+1]),,drop=FALSE]
     })
     
-    if (!is.null(Z_hier_mapping)){
-      old_mean <- out_mean
-      prior_mi <- lapply(prior_mi, FUN=function(i){matrix(i, nrow = sqrt(length(i)))})
-    }
+    old_mean <- out_mean
+    prior_mi <- lapply(prior_mi, FUN=function(i){matrix(i, nrow = sqrt(length(i)))})
     
-    ub <- mapply(Z_MI, prior_mi, out_mean, SIMPLIFY = FALSE, FUN=function(Z_j, prior_j, om_j){
-      ub_j <- invert_rowwise(
-        X = as.matrix(t(Z_j) %*% diag_vi_pg_mean %*% (
-          RFSmean + Rvar)
-        ),
-        vec_prior = prior_j,
-        dim = d_mi,
-        RHS = array(0, dim = c(nrow(Z_j), d_mi)),
-        return_chol = return_chol
-      )
-      ub_j$mean <- om_j
+    ub <- mapply(Z_MI, prior_mi, out_mean, is_onehot[names(Z_MI)], SIMPLIFY = FALSE, FUN=function(Z_j, prior_j, om_j, onehot_j){
+      if (onehot_j){
+        ub_j <- invert_rowwise(
+          X = as.matrix(t(Z_j) %*% diag_vi_pg_mean %*% (
+            RFSmean + Rvar)
+          ),
+          vec_prior = prior_j,
+          dim = d_mi,
+          RHS = array(0, dim = c(nrow(Z_j), d_mi)),
+          return_chol = return_chol
+        )
+        ub_j$mean <- om_j
+      }else{
+        if (d_mi > 1){
+          
+          prec_j <- sapply(1:d_mi^2, FUN=function(d){
+            diag(t(Z_j) %*% 
+                   Diagonal(x=as.vector(diag_vi_pg_mean %*% (RFSmean[,d] + Rvar[,d]))) %*% 
+                   Z_j)
+          })
+          if (ncol(Z_j) == 1){
+            prec_j <- t(prec_j)
+          }
+          prec_j <- as.matrix(prec_j)
+          ub_j <- invert_rowwise(prec_j, vec_prior = matrix(as.vector(prior_j)), 
+                         RHS = matrix(rep(0, nrow(prec_j))),
+                         dim = d_mi, return_chol = return_chol)
+          ub_j$mean <- om_j
+        }else{
+          if (it == 1){warning('inefficient')}
+          # prec_j <- diag(t(Z_j) %*% Diagonal(x=as.vector(diag_vi_pg_mean %*% (RFSmean + Rvar))) %*% Z_j)
+          prec_j <- colSums((Diagonal(x=sqrt(as.vector(diag_vi_pg_mean %*% (RFSmean + Rvar)))) %*% Z_j)^2)
+          var_j <- matrix(1/(prec_j + as.vector(prior_j)))
+          ub_j <- list(inverse = var_j, det = 0.5 * log(var_j), mean = om_j)
+        }
+      }
+      
       return(ub_j)
     })
     ub$aux <- auxiliary_est
@@ -422,4 +468,128 @@ flatten_mi_mean <- function(x){
   do.call('c', lapply(x, FUN=function(i){as.vector(t(i))}))
 }
 
+initalize_mi_mean <- function(Z_j, j_group, j_hier, j_attr,
+                              j_nesting, mi_d_j, init_method,
+                              init_y = NULL, init_w = NULL){
+  if (j_hier){
+    if (init_method == 'random'){
+      principal_group <- sapply(j_group, FUN=function(i){i[1]})
+      out <- lapply(Z_j[principal_group], FUN=function(i){
+        matrix(rnorm(mi_d_j * ncol(i), 
+                     sd = 1/rep(apply(i, MARGIN = 2, sd), mi_d_j)),
+               ncol = mi_d_j)
+      })
+      names(out) <- c('u', 'v')
+      out_var <- NULL
+    }else{
+      principal_group <- sapply(j_group, FUN=function(i){i[1]})
+      out <- init_MI_from_svd(
+        data_mi = Z_j[principal_group],
+        rank = mi_d_j,
+        y = init_y, pg_weight = init_w,
+        prior_U = 1, prior_V = 1
+      )
+      out_var <- out[c('var_U', 'var_V')]
+      out <- out[c('mean_U', 'mean_V')]
+      names(out) <- c('u', 'v')
+    }
+    out_data <- lapply(1:2, FUN=function(k){
+      if (k == 1){
+        init_principal_k <- out$u
+      }else{
+        init_principal_k <- out$v
+      }
+      principal_k <- j_group[[k]][1]
+      other_levels <- j_group[[k]][-1]
+      levels_k <- j_attr$levels[j_group[[k]]]
+      if (length(other_levels) > 0){
+        
+        # Estimate lambda needed to calibrate edf at around 90% of maximum
+        # (light but some stabilization)
+        block_prior <- sapply(Z_j[other_levels], FUN=function(i){
+          iti <- crossprod(i)
+          if (isDiagonal(iti)){
+            diag_iti <- diag(iti)
+            out_cl <- optim(par = 0, fn = get_edf_uni,
+                            diag_z = diag_iti, target = ncol(iti) * 0.90,
+                            method = 'L-BFGS-B')
+            return(exp(out_cl$par))
+          }else{
+            
+            f <- function(alpha, M, x, target){
+              return((get_edf_diag(alpha, M, x) - target)^2)
+            }
+            out_cl <- optim(par = 0, 
+                  fn = f, M = iti, x = ncol(iti),
+                  target = ncol(iti) * 0.90,
+                  method = 'L-BFGS-B')
+            return(exp(out_cl$par))
+          }
+        })        
+        n_other <- sapply(Z_j[other_levels], ncol)
+        block_prior <- Diagonal(x=rep(block_prior, n_other))
+        block_Z <- do.call('cbind', Z_j[other_levels])
 
+        out_decompose <- lapply(1:ncol(init_principal_k), FUN=function(d){
+          # Take the initial estimates from, e.g., Nakajima or random
+          # and assign to each observed for the corresponding principal group
+          initial_estimate <- as.vector(Z_j[[principal_k]] %*% init_principal_k[,d])
+          # Estimate a regression of initial ~ others
+          block_estimates <- 
+            solve(Cholesky(crossprod(block_Z) + block_prior), 
+                  t(block_Z) %*% initial_estimate)
+          # Get the average residual for each group in the principal mapping
+          principal_estimate <- 
+            as.vector(
+              solve(Cholesky(crossprod(Z_j[[principal_k]])),
+                    t(Z_j[[principal_k]]) %*%
+                      (initial_estimate - block_Z %*% block_estimates)
+              ))
+          block_estimates <- split(block_estimates, rep(1:length(n_other), n_other))
+          return(c(list(principal_estimate), block_estimates))
+        })
+        
+        out_decompose <- lapply(1:length(j_group[[k]]), FUN=function(m){
+          out_iii <- do.call('cbind', lapply(out_decompose, FUN=function(iii){iii[[m]]}))
+          rownames(out_iii) <- levels_k[[m]]
+          colnames(out_iii) <- paste0('dim', 1:ncol(init_principal_k))
+          return(out_iii)
+        })
+        names(out_decompose) <- j_group[[k]]
+        return(out_decompose)
+      }else{
+        init_principal_k <- as.matrix(init_principal_k)
+        rownames(init_principal_k) <- levels_k[[principal_k]]
+        colnames(init_principal_k) <- paste0('dim', 1:ncol(init_principal_k))
+        out_decompose <- setNames(list(init_principal_k), principal_k)
+      }
+      return(out_decompose)
+    })
+    out_data <- unlist(out_data, recursive = FALSE)
+    out_data <- out_data[names(Z_j)]
+    if (is.null(out_var)){
+      return(list(mean = out_data))
+    }else{
+      names(out_var) <- principal_group
+      return(list(mean = out_data, var = out_var))
+    }
+  }else{
+    if (length(Z_j) != 2){stop('...')}
+    if (control$mi_init == 'random'){
+      out <- sapply(j_group, FUN=function(i){i[1]})
+      out <- lapply(Z_MI[[j]][out], FUN=function(i){
+        matrix(rnorm(mi_d_j[j] * ncol(i)), ncol = mi_d_j[j])
+      })
+      out <- list(mean = out)
+    }else{
+      out <- init_MI_from_svd(
+        data_mi = Z_j,
+        rank = mi_d_j[j], y = init_y,
+        pg_weight = init_w,
+        prior_U = 1, prior_V = 1)
+      out <- list(mean = list(out$mean_U, out$mean_V),
+                  var = list(out$var_U, out$var_V))
+    }
+    return(out)
+  }
+}

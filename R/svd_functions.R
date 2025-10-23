@@ -257,7 +257,7 @@ MM_nakajima <- function(y, w, init_U, init_V,
     
     if (max(abs(grad_U)) > 1e-5 | max(abs(grad_V)) > 1e-5){
       print('NAKAJIMA ERROR')
-      browser()
+      # browser()
     }
     
     mean_U <- fit$U_mean  
@@ -270,7 +270,7 @@ MM_nakajima <- function(y, w, init_U, init_V,
     
     old_U <- mean_U
     old_V <- mean_V
-    print(c(change_U, change_V))
+    # print(c(change_U, change_V))
     
     if (max(abs(mean_U)) > 0){
       safe_U <- mean_U

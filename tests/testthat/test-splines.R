@@ -122,11 +122,17 @@ test_that("fit and predict with splines and missing data", {
   
   expect_equivalent(pred_spline, rowSums(pred_spline_terms))
   
-  raw_X <- vglmer_build_spline(x = dat$x, 
+  object <- list(
+    term = 'x',
+    by = "NA",
+    force_vector = FALSE, 
+    override_warn = TRUE,
     knots = fit_spline$internal_parameters$spline$attr[[1]]$knots,
     type = fit_spline$internal_parameters$spline$attr[[1]]$type,
-    Boundary.knots = fit_spline$internal_parameters$spline$attr[[1]]$Boundary.knots, 
-    by = NULL)[[1]]$x
+    Boundary.knots = fit_spline$internal_parameters$spline$attr[[1]]$Boundary.knots
+  )
+  class(object) <- 'vglmer_spline'
+  raw_X <- vglmer_build_spline(data = dat, object = object)[[1]]$x
 
   expect_equivalent(
     pred_spline_terms[, 'spline-x-1-base'],
@@ -320,9 +326,16 @@ test_that("Prediction spline test", {
     diff_in_diff <- range(diff(diff(predict_vglmer)))
     expect_gte(max(abs(diff_in_diff)), sqrt(.Machine$double.eps))
     
-    raw_X <- vglmer_build_spline(x = predict_dat$x, knots = m1$internal_parameters$spline$attr[[1]]$knots,
-                                 type = m1$internal_parameters$spline$attr[[1]]$type,
-                                 Boundary.knots = m1$internal_parameters$spline$attr[[1]]$Boundary.knots, by = NULL)[[1]]$x
+    object <- list(
+      term = 'x',
+      knots = m1$internal_parameters$spline$attr[[1]]$knots,
+      type = m1$internal_parameters$spline$attr[[1]]$type,
+      force_vector = FALSE, override_warn = TRUE,
+      Boundary.knots = m1$internal_parameters$spline$attr[[1]]$Boundary.knots, 
+      by = "NA"
+    )
+    class(object) <- c('vglmer_spline')
+    raw_X <- vglmer_build_spline(data = predict_dat, object = object)[[1]]$x
     term_1 <- raw_X %*% m1$alpha$mean
     term_2 <- cbind(1, 0, predict_dat$x) %*% m1$beta$mean
     direct_predict <- as.vector(term_1 + term_2)
@@ -351,11 +364,18 @@ test_that("Prediction spline test", {
         return(max(abs(diff_in_diff)))        
       })
       expect_true(all(diff_in_diff > sqrt(.Machine$double.eps)))
-      
-      raw_X <- vglmer_build_spline(x = predict_dat$x, knots = m1$internal_parameters$spline$attr[[1]]$knots,
-       type = m1$internal_parameters$spline$attr[[1]]$type,
-       by = predict_dat$f,
-       Boundary.knots = m1$internal_parameters$spline$attr[[1]]$Boundary.knots)[[1]]$x
+
+      object <- list(
+        term = 'x',
+        knots = m1$internal_parameters$spline$attr[[1]]$knots,
+        type = m1$internal_parameters$spline$attr[[1]]$type,
+        force_vector = FALSE, override_warn = TRUE,
+        Boundary.knots = m1$internal_parameters$spline$attr[[1]]$Boundary.knots, 
+        by = "f",
+        outer_okay = TRUE
+      )
+      class(object) <- c('vglmer_spline')
+      raw_X <- vglmer_build_spline(data = predict_dat, object = object)[[1]]$x
       
       expand_x <- do.call('cbind', lapply(c('a', 'c', 'd', 'e'), FUN=function(i){
         drop0(Diagonal(x = predict_dat$f == i) %*% raw_X)
