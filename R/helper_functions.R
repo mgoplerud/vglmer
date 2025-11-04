@@ -394,6 +394,8 @@ calculate_ELBO <- function(family, ELBO_type, factorization_method,
 
   } else if (ELBO_type == "profiled") {
     
+    choose_term <- 0
+    
     vi_r_var <- (exp(vi_r_sigma) - 1) * vi_r_mean^2
 
     psi <- ex_XBZA + vi_r_mu
@@ -551,7 +553,7 @@ calculate_ELBO <- function(family, ELBO_type, factorization_method,
     }else{
       stop('invalid mi_prior_type')
     }
-    
+
     # Expectation of log prior for sigma^2 for MI
     if (do_huangwand_mi){
       
@@ -667,7 +669,12 @@ calculate_ELBO <- function(family, ELBO_type, factorization_method,
         }), sum)
     entropy_mi_sigma <- sum(entropy_mi_sigma)
 
-    if (family == 'linear'){stop('...')}
+    if (family == 'linear'){
+      logcomplete_mi_prior <- logcomplete_mi_prior + 
+        -1/2 * sum(mapply(mi_d_j, mi_g_j, FUN=function(d_j,g_j){sum(d_j * g_j)})) * 
+          e_ln_sigmasq
+        
+    }
 
     logcomplete_mi <- logcomplete_mi_prior + logcomplete_mi_sigma
     entropy_mi <- entropy_mi_prior + entropy_mi_sigma + entropy_mi_hw
@@ -700,23 +707,24 @@ calculate_ELBO <- function(family, ELBO_type, factorization_method,
 update_r <- function(vi_r_mu, vi_r_sigma, y, X, Z, factorization_method,
                      vi_beta_mean, vi_alpha_mean,
                      vi_joint_decomp, vi_beta_decomp, vi_alpha_decomp,
-                     vi_r_method) {
+                     vi_r_method, bilinear_mean, bilinear_var) {
   if (vi_r_method == "fixed") {
     return(c(vi_r_mu, vi_r_sigma))
   }
   # Get intermediate quantities
-  ex_XBZA <- (X %*% vi_beta_mean + Z %*% vi_alpha_mean)
+  ex_XBZA <- (X %*% vi_beta_mean + Z %*% vi_alpha_mean) + bilinear_mean
   # quadratic var, i.e. Var(x_i^T beta + z_i^T alpha)
   if (factorization_method == "weak") {
     if (is.null(vi_joint_decomp)) {
       stop("Need to provide joint decomposition for ELBO weak")
     }
-    var_XBZA <- rowSums((cbind(X, Z) %*% t(vi_joint_decomp))^2)
+    var_XBZA <- rowSums((cbind(X, Z) %*% t(vi_joint_decomp))^2) +
+      bilinear_var
   } else {
     # beta_quad <- rowSums((X %*% t(vi_beta_decomp))^2)
     beta_quad <- cpp_dense_zVz(X, as.matrix(vi_beta_decomp))
     alpha_quad <- rowSums((Z %*% t(vi_alpha_decomp))^2)
-    var_XBZA <- beta_quad + alpha_quad
+    var_XBZA <- beta_quad + alpha_quad + bilinear_var
   }
 
   N <- length(y)
@@ -746,10 +754,12 @@ update_r <- function(vi_r_mu, vi_r_sigma, y, X, Z, factorization_method,
       out_par <- c(opt_vi_r$par[1], exp(opt_vi_r$par[2]))
     }
   } else if (vi_r_method %in% c("VEM", "Laplace")) {
+    
     opt_vi_r <- optim(
       par = vi_r_mu, fn = VEM.PELBO.r, gr = VEM.PELBO.r_deriv,
       y = y, psi = ex_XBZA, zVz = var_XBZA,
-      control = list(fnscale = -1), method = "L-BFGS"
+      control = list(fnscale = -1, reltol = 0,
+                     abstol = 1e-8, maxit = 200), method = "L-BFGS"
     )
 
     if (vi_r_method == "Laplace") {

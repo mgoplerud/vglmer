@@ -26,10 +26,9 @@ vglmer_control(
   debug_px = FALSE,
   quiet = TRUE,
   quiet_rho = TRUE,
-  freeze_mi_var = FALSE,
   mi_init = c("nakajima", "random"),
   mi_parameter_expansion = "rotate",
-  mi_prior_type = c("partial_fixed", "centered", "separate", "shared", "fixed"),
+  mi_prior_type = c("partial_fixed", "separate", "shared", "fixed", "centered"),
   mi_prior_variance = c("hw", "mean_exists"),
   px_method = "dynamic",
   px_numerical_it = 10,
@@ -127,12 +126,15 @@ convergence. Set to \code{TRUE} to debug.}
 \item{quiet_rho}{Default (\code{FALSE}) does not print information about
 parameter expansions. Set to \code{TRUE} to debug convergence issues.}
 
-\item{mi_init}{Initialization for MI: "random" or "nakajima"}
+\item{mi_init}{Initialization for MI: "random" or "nakajima". "nakajima" is
+potentially helpful but if slow, try random.}
 
 \item{mi_parameter_expansion}{Parameter-Expansion for MI: "none" or "rotate"}
 
 \item{mi_prior_type}{Prior type: "centered", "separated", "shared", "fixed",
-or "partial_fixed"}
+or "partial_fixed". See examples for how to do this, at the simplest way,
+use the `xt = list(person=1)` to fix various terms. If nothing is provided,
+things are fixed at 1 and 25, respectively.}
 
 \item{mi_prior_variance}{"hw" or "mean_exists"}
 

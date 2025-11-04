@@ -234,10 +234,13 @@ bilinear_update <- function(Z_MI, prior_mi, d_mi, s, is_onehot,
       }else{
         if (d_mi > 1){
           
+          Z_j <- as.matrix(Z_j)
           prec_j <- sapply(1:d_mi^2, FUN=function(d){
-            diag(t(Z_j) %*% 
-                   Diagonal(x=as.vector(diag_vi_pg_mean %*% (RFSmean[,d] + Rvar[,d]))) %*% 
-                   Z_j)
+            colSums(Z_j * (Diagonal(x=as.vector(diag_vi_pg_mean %*% (RFSmean[,d] + Rvar[,d]))) %*% Z_j))
+            # colSums((Diagonal(x=sqrt(as.vector(diag_vi_pg_mean %*% (RFSmean[,d] + Rvar[,d])))) %*% Z_j)^2)
+            # diag(t(Z_j) %*%
+            #        Diagonal(x=as.vector(diag_vi_pg_mean %*% (RFSmean[,d] + Rvar[,d]))) %*%
+            #        Z_j)
           })
           if (ncol(Z_j) == 1){
             prec_j <- t(prec_j)
@@ -468,16 +471,23 @@ flatten_mi_mean <- function(x){
   do.call('c', lapply(x, FUN=function(i){as.vector(t(i))}))
 }
 
-initalize_mi_mean <- function(Z_j, j_group, j_hier, j_attr,
+initalize_mi_mean <- function(Z_j, Z_j_onehot, j_group, j_hier, j_attr,
                               j_nesting, mi_d_j, init_method,
                               init_y = NULL, init_w = NULL){
   if (j_hier){
     if (init_method == 'random'){
       principal_group <- sapply(j_group, FUN=function(i){i[1]})
-      out <- lapply(Z_j[principal_group], FUN=function(i){
-        matrix(rnorm(mi_d_j * ncol(i), 
-                     sd = 1/rep(apply(i, MARGIN = 2, sd), mi_d_j)),
+      out <- mapply(Z_j[principal_group], Z_j_onehot[principal_group], 
+                    SIMPLIFY = FALSE, FUN=function(i, oh){
+        if (oh){
+          sd_i <- 1
+        }else{
+          sd_i <- sqrt(colMeans(i^2) - colMeans(i)^2)
+        }
+        out_i <- matrix(rnorm(mi_d_j * ncol(i), 
+                     sd = 1/rep(sd_i/mi_d_j, mi_d_j)),
                ncol = mi_d_j)
+        return(out_i)
       })
       names(out) <- c('u', 'v')
       out_var <- NULL
@@ -592,4 +602,57 @@ initalize_mi_mean <- function(Z_j, j_group, j_hier, j_attr,
     }
     return(out)
   }
+}
+
+expect_mi_prior_kernel <- function(
+    vi_mi_sigma_alpha, vi_mi_sigma_alpha_nu, 
+    vi_mi_sigma_outer_alpha, 
+    mi_d_j, mi_prior_type){
+  
+  
+  mi_moments_sigma_alpha <- mapply(
+    vi_mi_sigma_alpha, vi_mi_sigma_alpha_nu, mi_d_j,
+    SIMPLIFY = FALSE, FUN = function(phi, nu, d) {
+      if (mi_prior_type %in% c('centered', 'shared')){
+        inv_phi <- solve(phi)
+        sigma.inv <- nu * inv_phi
+        ln.det <- log(det(phi)) - sum(digamma((nu - 1:d + 1) / 2)) - d * log(2)
+        return(list(sigma.inv = sigma.inv, ln.det = ln.det))
+      }else{
+        mapply(phi, nu, d, SIMPLIFY = FALSE, FUN=function(phi_l, nu_l, d_l){
+          inv_phi_l <- solve(phi_l)
+          sigma.inv_l <- nu_l * inv_phi_l
+          ln.det_l <- log(det(phi_l)) - sum(digamma((nu_l - 1:d_l + 1) / 2)) - d_l * log(2)
+          return(list(sigma.inv = sigma.inv_l, ln.det = ln.det_l))
+        })
+      }
+    })
+
+  mi_inv_sigma_alpha <- lapply(mi_moments_sigma_alpha, FUN = function(i) {
+    if (mi_prior_type %in% c('centered', 'shared')){
+      i$sigma.inv
+    }else{
+      lapply(i, `[[`, 'sigma.inv')
+    }
+  })
+  
+  if (mi_prior_type %in% c('centered', 'shared')){
+    
+    out <- sum(
+      mapply(mi_inv_sigma_alpha, vi_mi_sigma_outer_alpha, FUN = function(a, b) {
+        sum(diag(a %*% b))
+    }))
+
+  }else if (mi_prior_type %in% c('separate')){
+    
+    out <- sum(mapply(
+      mi_inv_sigma_alpha, vi_mi_sigma_outer_alpha,
+      FUN=function(invsig_l, oa_l){
+        sum(mapply(invsig_l, oa_l, FUN = function(a, b) {
+            sum(diag(a %*% b))
+          }))
+      }))
+  }else{stop('set up kernel for mi_prior_type')}
+
+  return(out)
 }

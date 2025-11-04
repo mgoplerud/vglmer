@@ -1,7 +1,6 @@
 VB_nakajima <- function(svd_Y, c_a, c_b, sigmasq, H, Y,
                         M = NULL, L = NULL){
   
-  
   if ( (length(c_a) != H) | (length(c_b) != H) ){
     stop('c_a and c_b must be of length "H"')
   }
@@ -65,16 +64,20 @@ VB_nakajima <- function(svd_Y, c_a, c_b, sigmasq, H, Y,
     real_root <- Re(poly_root)
     im_root <- Im(poly_root)
     if (!(sum(real_root > 0) == 2)){
-      browser()
+      stop('error in nakajima; set mi_init="random"')
     }
     if (max(abs(im_root)) > 1e-4){
+      stop('error in nakajima; set mi_init="random"')
       browser()
     }
     real_root <- real_root[real_root > 0]
     # Return the *second largest* real root
     sort_root <- sort(real_root, decreasing = TRUE)
     second_root <- sort_root[2]
-    if (second_root < 0){browser()}
+    if (second_root < 0){
+      stop('error in nakajima; set mi_init="random"')
+      browser()
+    }
     return(second_root)
   })
   
@@ -214,10 +217,15 @@ MM_nakajima <- function(y, w, init_U, init_V,
                            x = pos_nonzero_x * (pos_sparse_Y_x - impute_UVt) ,
                            dims = dim(weighted_avg_Y))
     args_svd <- list(TERM_2 = TERM_2, mean_U = mean_U, mean_V = mean_V)
-    svd_Y <- RSpectra::svds(
-      A = svd_A, Atrans = svd_Atrans, k = D,
-      dim = c(ncol(Z_U), ncol(Z_V)),
-      args = args_svd)
+    if (!requireNamespace('RSpectra', quietly = TRUE)){
+      stop('RSpectra must be installed for Nakajima initialization')
+    }else{
+      svd_Y <- RSpectra::svds(
+        A = svd_A, Atrans = svd_Atrans, k = D,
+        dim = c(ncol(Z_U), ncol(Z_V)),
+        args = args_svd)
+    }
+    
     
     # Y is L x M where the decomposition is B A^T where
     # B is L x H and A is M x H
@@ -256,7 +264,7 @@ MM_nakajima <- function(y, w, init_U, init_V,
       - fit$V_mean/prior_V
     
     if (max(abs(grad_U)) > 1e-5 | max(abs(grad_V)) > 1e-5){
-      print('NAKAJIMA ERROR')
+      warning('Error in NAKAJIMA ERROR init')
       # browser()
     }
     
@@ -300,7 +308,6 @@ MM_nakajima <- function(y, w, init_U, init_V,
 }
 
 
-#' @importFrom RSpectra svds
 init_MI_from_svd <- function(data_mi, y, pg_weight, rank, prior_U, prior_V){
   
   minimum_size <- min(sapply(data_mi, ncol))
