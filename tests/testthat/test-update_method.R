@@ -88,12 +88,14 @@ test_that("Joint vs Cyclical Update (Nested)", {
     formula = fmla_perm, family = "binomial",
     data = NULL, control = vglmer_control(
       iterations = 100, print_prog = 500,
+      tolerance_rel_elbo = 0,
       init = 'EM', linpred_method = "cyclical")
   ))
   
   ex_vglmer_joint_perm <- vglmer(
     formula = fmla_perm, family = "binomial",
-    control = vglmer_control(iterations = 100, print_prog = 500),
+    control = vglmer_control(iterations = 100, 
+                             tolerance_rel_elbo = 0, print_prog = 500),
     data = NULL
   )
   
@@ -101,6 +103,7 @@ test_that("Joint vs Cyclical Update (Nested)", {
     formula = fmla, family = "binomial",
     data = NULL, control = vglmer_control(
       iterations = 100, print_prog = 500,
+      tolerance_rel_elbo = 0,
       init = 'EM', linpred_method = "cyclical")
   ))
   
@@ -109,7 +112,7 @@ test_that("Joint vs Cyclical Update (Nested)", {
   
   ex_vglmer_joint <- vglmer(
     formula = fmla, family = "binomial",
-    control = vglmer_control(iterations = 100,
+    control = vglmer_control(iterations = 100, tolerance_rel_elbo = 0,
                              print_prog = 500),
     data = NULL 
   )
