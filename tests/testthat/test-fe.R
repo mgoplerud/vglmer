@@ -1,4 +1,31 @@
 warning('SETUP FE TESTS')
+data('Fishing', package = 'mlogit')
+Fish <- dfidx(Fishing, varying = 2:9, shape = "wide", choice = "mode")
+Fish$person <- Fish$idx$id1
+Fish$type <- Fish$idx$id2
+Fish$bin_catch <- cut(Fish$catch, 3)
+
+
+fit <- vglmer(as.numeric(mode) ~ income + (1 | bin_catch) +
+                v_fe(person) + v_s(catch),
+              data = Fish, family = 'linear',
+              control = vglmer_control(do_SQUAREM = FALSE, parameter_expansion = 'mean'))
+
+# This should work too...
+# fit <- vglmer(as.numeric(mode) ~ type + 
+#                 (1 | bin_catch) + v_fe(person) + v_s(income),
+#        data = Fish, family = 'linear',
+#        control = vglmer_control(do_SQUAREM = FALSE))
+
+newFish <- tidyr::crossing(
+  data.frame(bin_catch = levels(Fish$bin_catch)),
+  data.frame(catch = mean(Fish$catch), 
+             type = unique(Fish$type)),
+  data.frame(income = seq(min(Fish$income), max(Fish$income), length.out=100))
+) %>% data.frame
+a <- predict(fit, newdata = newFish)
+b <- predict(fit, newdata = newFish %>% dplyr::mutate(income = 0))
+
 # est_1 <- vglmer(as.numeric(mode) ~ catch + v_s(person, type = 'fe') + (1 | choice), 
 #                 data = Fish, family = 'linear', 
 #                 control = vglmer_control(debug_px = T, 

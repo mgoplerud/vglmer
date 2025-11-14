@@ -72,8 +72,11 @@ predict.vglmer <- function(object, newdata,
     fe_names <- sapply(object$formula$interpret_gam$smooth.spec, FUN=function(i){
       if (i$type == 'fe'){
         return(i$term)
+      }else{
+        return(NA)
       }
     })
+    fe_names <- setdiff(fe_names, NA)
   }
   
   
