@@ -37,10 +37,6 @@ cpp_quad_collapsed <- function(V, re_position_list, Z_list_raw, individual_assig
     .Call('_vglmer_cpp_quad_collapsed', PACKAGE = 'vglmer', V, re_position_list, Z_list_raw, individual_assignments, vi_beta_var, P, X)
 }
 
-cpp_quad_legacy <- function(tZ, varA, tP, X, vi_beta_var) {
-    .Call('_vglmer_cpp_quad_legacy', PACKAGE = 'vglmer', tZ, varA, tP, X, vi_beta_var)
-}
-
 cpp_var_lp_joint <- function(design_C, vi_C_uncond, vi_M_var, vi_M_list, vi_P, sparse_input, skip_vector) {
     .Call('_vglmer_cpp_var_lp_joint', PACKAGE = 'vglmer', design_C, vi_C_uncond, vi_M_var, vi_M_list, vi_P, sparse_input, skip_vector)
 }
@@ -53,20 +49,17 @@ cpp_update_m_var <- function(diag_vi_pg_mean, design_C, Tinv_C, list_Tinv_M, vi_
     .Call('_vglmer_cpp_update_m_var', PACKAGE = 'vglmer', diag_vi_pg_mean, design_C, Tinv_C, list_Tinv_M, vi_M_list, any_collapsed_C, lndet_C)
 }
 
+cpp_quad_legacy <- function(tZ, varA, tP, X, vi_beta_var) {
+    .Call('_vglmer_cpp_quad_legacy', PACKAGE = 'vglmer', tZ, varA, tP, X, vi_beta_var)
+}
+
 test_f <- function(diag_vi_pg_mean, design_C, Tinv_C, s, vi_M_list) {
     .Call('_vglmer_test_f', PACKAGE = 'vglmer', diag_vi_pg_mean, design_C, Tinv_C, s, vi_M_list)
 }
 
-block_diag_product <- function(A, B, block_size, blocks) {
-    .Call('_vglmer_block_diag_product', PACKAGE = 'vglmer', A, B, block_size, blocks)
+calculate_alpha_decomp_full_factor <- function(X, Z, P, omega, d_j, g_j, Tinv, re_position_list) {
+    .Call('_vglmer_calculate_alpha_decomp_full_factor', PACKAGE = 'vglmer', X, Z, P, omega, d_j, g_j, Tinv, re_position_list)
 }
-
-invert_rowwise <- function(X, vec_prior, dim_X) {
-    .Call('_vglmer_invert_rowwise', PACKAGE = 'vglmer', X, vec_prior, dim_X)
-}
-
-#' Cyclical Calculation of Variance Decomposition
-NULL
 
 prepare_Z_for_px <- function(Mmap) {
     .Call('_vglmer_prepare_Z_for_px', PACKAGE = 'vglmer', Mmap)
@@ -90,6 +83,14 @@ cpp_dense_zVz <- function(X, V) {
 
 LinRegChol_fe <- function(X, omega, y, save_chol = TRUE) {
     .Call('_vglmer_LinRegChol_fe', PACKAGE = 'vglmer', X, omega, y, save_chol)
+}
+
+block_diag_product <- function(A, B, block_size, blocks) {
+    .Call('_vglmer_block_diag_product', PACKAGE = 'vglmer', A, B, block_size, blocks)
+}
+
+invert_rowwise <- function(X, vec_prior, dim_X) {
+    .Call('_vglmer_invert_rowwise', PACKAGE = 'vglmer', X, vec_prior, dim_X)
 }
 
 vecR_ridge_general <- function(L, pg_mean, Z, M, mapping_J, d, start_z, diag_only) {

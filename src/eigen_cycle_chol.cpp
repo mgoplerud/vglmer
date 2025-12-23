@@ -4,7 +4,7 @@
 
 using namespace Rcpp;
 
-//' Cyclical Calculation of Variance Decomposition
+// [[Rcpp::export]]
 List calculate_alpha_decomp_full_factor(
     const Eigen::Map<Eigen::MatrixXd> X,
     const Eigen::MappedSparseMatrix<double> Z,

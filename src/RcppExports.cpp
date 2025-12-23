@@ -110,21 +110,6 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
-// cpp_quad_legacy
-Eigen::VectorXd cpp_quad_legacy(const Eigen::SparseMatrix<double> tZ, const Eigen::SparseMatrix<double> varA, const Eigen::MatrixXd tP, const Eigen::MatrixXd X, const Eigen::MatrixXd vi_beta_var);
-RcppExport SEXP _vglmer_cpp_quad_legacy(SEXP tZSEXP, SEXP varASEXP, SEXP tPSEXP, SEXP XSEXP, SEXP vi_beta_varSEXP) {
-BEGIN_RCPP
-    Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< const Eigen::SparseMatrix<double> >::type tZ(tZSEXP);
-    Rcpp::traits::input_parameter< const Eigen::SparseMatrix<double> >::type varA(varASEXP);
-    Rcpp::traits::input_parameter< const Eigen::MatrixXd >::type tP(tPSEXP);
-    Rcpp::traits::input_parameter< const Eigen::MatrixXd >::type X(XSEXP);
-    Rcpp::traits::input_parameter< const Eigen::MatrixXd >::type vi_beta_var(vi_beta_varSEXP);
-    rcpp_result_gen = Rcpp::wrap(cpp_quad_legacy(tZ, varA, tP, X, vi_beta_var));
-    return rcpp_result_gen;
-END_RCPP
-}
 // cpp_var_lp_joint
 Eigen::VectorXd cpp_var_lp_joint(const Eigen::SparseMatrix<double> design_C, const Eigen::SparseMatrix<double> vi_C_uncond, const Rcpp::List vi_M_var, const Rcpp::List vi_M_list, const Rcpp::List vi_P, const bool sparse_input, const Rcpp::LogicalVector skip_vector);
 RcppExport SEXP _vglmer_cpp_var_lp_joint(SEXP design_CSEXP, SEXP vi_C_uncondSEXP, SEXP vi_M_varSEXP, SEXP vi_M_listSEXP, SEXP vi_PSEXP, SEXP sparse_inputSEXP, SEXP skip_vectorSEXP) {
@@ -176,6 +161,21 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// cpp_quad_legacy
+Eigen::VectorXd cpp_quad_legacy(const Eigen::SparseMatrix<double> tZ, const Eigen::SparseMatrix<double> varA, const Eigen::MatrixXd tP, const Eigen::MatrixXd X, const Eigen::MatrixXd vi_beta_var);
+RcppExport SEXP _vglmer_cpp_quad_legacy(SEXP tZSEXP, SEXP varASEXP, SEXP tPSEXP, SEXP XSEXP, SEXP vi_beta_varSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const Eigen::SparseMatrix<double> >::type tZ(tZSEXP);
+    Rcpp::traits::input_parameter< const Eigen::SparseMatrix<double> >::type varA(varASEXP);
+    Rcpp::traits::input_parameter< const Eigen::MatrixXd >::type tP(tPSEXP);
+    Rcpp::traits::input_parameter< const Eigen::MatrixXd >::type X(XSEXP);
+    Rcpp::traits::input_parameter< const Eigen::MatrixXd >::type vi_beta_var(vi_beta_varSEXP);
+    rcpp_result_gen = Rcpp::wrap(cpp_quad_legacy(tZ, varA, tP, X, vi_beta_var));
+    return rcpp_result_gen;
+END_RCPP
+}
 // test_f
 Rcpp::List test_f(const Eigen::SparseMatrix<double> diag_vi_pg_mean, const Eigen::SparseMatrix<double> design_C, const Eigen::SparseMatrix<double> Tinv_C, const Eigen::VectorXd s, const Rcpp::List vi_M_list);
 RcppExport SEXP _vglmer_test_f(SEXP diag_vi_pg_meanSEXP, SEXP design_CSEXP, SEXP Tinv_CSEXP, SEXP sSEXP, SEXP vi_M_listSEXP) {
@@ -191,30 +191,21 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
-// block_diag_product
-Eigen::MatrixXd block_diag_product(const Eigen::MatrixXd A, const Eigen::MatrixXd B, const int block_size, const int blocks);
-RcppExport SEXP _vglmer_block_diag_product(SEXP ASEXP, SEXP BSEXP, SEXP block_sizeSEXP, SEXP blocksSEXP) {
+// calculate_alpha_decomp_full_factor
+List calculate_alpha_decomp_full_factor(const Eigen::Map<Eigen::MatrixXd> X, const Eigen::MappedSparseMatrix<double> Z, const Eigen::Map<Eigen::MatrixXd> P, const Eigen::Map<Eigen::VectorXd> omega, const Eigen::Map<Eigen::ArrayXd> d_j, const Eigen::Map<Eigen::ArrayXd> g_j, const List Tinv, const Rcpp::List& re_position_list);
+RcppExport SEXP _vglmer_calculate_alpha_decomp_full_factor(SEXP XSEXP, SEXP ZSEXP, SEXP PSEXP, SEXP omegaSEXP, SEXP d_jSEXP, SEXP g_jSEXP, SEXP TinvSEXP, SEXP re_position_listSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< const Eigen::MatrixXd >::type A(ASEXP);
-    Rcpp::traits::input_parameter< const Eigen::MatrixXd >::type B(BSEXP);
-    Rcpp::traits::input_parameter< const int >::type block_size(block_sizeSEXP);
-    Rcpp::traits::input_parameter< const int >::type blocks(blocksSEXP);
-    rcpp_result_gen = Rcpp::wrap(block_diag_product(A, B, block_size, blocks));
-    return rcpp_result_gen;
-END_RCPP
-}
-// invert_rowwise
-Rcpp::List invert_rowwise(const Eigen::MatrixXd X, const Eigen::MatrixXd vec_prior, const int dim_X);
-RcppExport SEXP _vglmer_invert_rowwise(SEXP XSEXP, SEXP vec_priorSEXP, SEXP dim_XSEXP) {
-BEGIN_RCPP
-    Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< const Eigen::MatrixXd >::type X(XSEXP);
-    Rcpp::traits::input_parameter< const Eigen::MatrixXd >::type vec_prior(vec_priorSEXP);
-    Rcpp::traits::input_parameter< const int >::type dim_X(dim_XSEXP);
-    rcpp_result_gen = Rcpp::wrap(invert_rowwise(X, vec_prior, dim_X));
+    Rcpp::traits::input_parameter< const Eigen::Map<Eigen::MatrixXd> >::type X(XSEXP);
+    Rcpp::traits::input_parameter< const Eigen::MappedSparseMatrix<double> >::type Z(ZSEXP);
+    Rcpp::traits::input_parameter< const Eigen::Map<Eigen::MatrixXd> >::type P(PSEXP);
+    Rcpp::traits::input_parameter< const Eigen::Map<Eigen::VectorXd> >::type omega(omegaSEXP);
+    Rcpp::traits::input_parameter< const Eigen::Map<Eigen::ArrayXd> >::type d_j(d_jSEXP);
+    Rcpp::traits::input_parameter< const Eigen::Map<Eigen::ArrayXd> >::type g_j(g_jSEXP);
+    Rcpp::traits::input_parameter< const List >::type Tinv(TinvSEXP);
+    Rcpp::traits::input_parameter< const Rcpp::List& >::type re_position_list(re_position_listSEXP);
+    rcpp_result_gen = Rcpp::wrap(calculate_alpha_decomp_full_factor(X, Z, P, omega, d_j, g_j, Tinv, re_position_list));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -289,6 +280,33 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< const Eigen::Map<Eigen::VectorXd> >::type y(ySEXP);
     Rcpp::traits::input_parameter< const bool >::type save_chol(save_cholSEXP);
     rcpp_result_gen = Rcpp::wrap(LinRegChol_fe(X, omega, y, save_chol));
+    return rcpp_result_gen;
+END_RCPP
+}
+// block_diag_product
+Eigen::MatrixXd block_diag_product(const Eigen::MatrixXd A, const Eigen::MatrixXd B, const int block_size, const int blocks);
+RcppExport SEXP _vglmer_block_diag_product(SEXP ASEXP, SEXP BSEXP, SEXP block_sizeSEXP, SEXP blocksSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const Eigen::MatrixXd >::type A(ASEXP);
+    Rcpp::traits::input_parameter< const Eigen::MatrixXd >::type B(BSEXP);
+    Rcpp::traits::input_parameter< const int >::type block_size(block_sizeSEXP);
+    Rcpp::traits::input_parameter< const int >::type blocks(blocksSEXP);
+    rcpp_result_gen = Rcpp::wrap(block_diag_product(A, B, block_size, blocks));
+    return rcpp_result_gen;
+END_RCPP
+}
+// invert_rowwise
+Rcpp::List invert_rowwise(const Eigen::MatrixXd X, const Eigen::MatrixXd vec_prior, const int dim_X);
+RcppExport SEXP _vglmer_invert_rowwise(SEXP XSEXP, SEXP vec_priorSEXP, SEXP dim_XSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const Eigen::MatrixXd >::type X(XSEXP);
+    Rcpp::traits::input_parameter< const Eigen::MatrixXd >::type vec_prior(vec_priorSEXP);
+    Rcpp::traits::input_parameter< const int >::type dim_X(dim_XSEXP);
+    rcpp_result_gen = Rcpp::wrap(invert_rowwise(X, vec_prior, dim_X));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -367,19 +385,20 @@ static const R_CallMethodDef CallEntries[] = {
     {"_vglmer_cg_custom", (DL_FUNC) &_vglmer_cg_custom, 12},
     {"_vglmer_cpp_inv_alpha_var", (DL_FUNC) &_vglmer_cpp_inv_alpha_var, 6},
     {"_vglmer_cpp_quad_collapsed", (DL_FUNC) &_vglmer_cpp_quad_collapsed, 7},
-    {"_vglmer_cpp_quad_legacy", (DL_FUNC) &_vglmer_cpp_quad_legacy, 5},
     {"_vglmer_cpp_var_lp_joint", (DL_FUNC) &_vglmer_cpp_var_lp_joint, 7},
     {"_vglmer_cpp_var_lp_cyclical", (DL_FUNC) &_vglmer_cpp_var_lp_cyclical, 7},
     {"_vglmer_cpp_update_m_var", (DL_FUNC) &_vglmer_cpp_update_m_var, 7},
+    {"_vglmer_cpp_quad_legacy", (DL_FUNC) &_vglmer_cpp_quad_legacy, 5},
     {"_vglmer_test_f", (DL_FUNC) &_vglmer_test_f, 5},
-    {"_vglmer_block_diag_product", (DL_FUNC) &_vglmer_block_diag_product, 4},
-    {"_vglmer_invert_rowwise", (DL_FUNC) &_vglmer_invert_rowwise, 3},
+    {"_vglmer_calculate_alpha_decomp_full_factor", (DL_FUNC) &_vglmer_calculate_alpha_decomp_full_factor, 8},
     {"_vglmer_prepare_Z_for_px", (DL_FUNC) &_vglmer_prepare_Z_for_px, 1},
     {"_vglmer_chol_sparse", (DL_FUNC) &_vglmer_chol_sparse, 3},
     {"_vglmer_cpp_zVz", (DL_FUNC) &_vglmer_cpp_zVz, 2},
     {"_vglmer_cpp_zAz_nonfact", (DL_FUNC) &_vglmer_cpp_zAz_nonfact, 2},
     {"_vglmer_cpp_dense_zVz", (DL_FUNC) &_vglmer_cpp_dense_zVz, 2},
     {"_vglmer_LinRegChol_fe", (DL_FUNC) &_vglmer_LinRegChol_fe, 4},
+    {"_vglmer_block_diag_product", (DL_FUNC) &_vglmer_block_diag_product, 4},
+    {"_vglmer_invert_rowwise", (DL_FUNC) &_vglmer_invert_rowwise, 3},
     {"_vglmer_vecR_ridge_general", (DL_FUNC) &_vglmer_vecR_ridge_general, 8},
     {"_vglmer_vecR_design", (DL_FUNC) &_vglmer_vecR_design, 6},
     {"_vglmer_vecR_fast_ridge", (DL_FUNC) &_vglmer_vecR_fast_ridge, 5},

@@ -1,8 +1,5 @@
-
 #include "RcppEigen.h"
 // [[Rcpp::depends(RcppEigen)]]
-
-// #include "Rcpp/Benchmark/Timer.h"
 
 using namespace Rcpp;
 
@@ -151,51 +148,6 @@ Eigen::MatrixXd cpp_quad_collapsed(
   out += -2.0 * vector_weights;
   
   return out;
-}
-
-// [[Rcpp::export]]
-Eigen::VectorXd cpp_quad_legacy(
-    const Eigen::SparseMatrix<double> tZ,
-    const Eigen::SparseMatrix<double> varA,
-    const Eigen::MatrixXd tP,
-    const Eigen::MatrixXd X,
-    const Eigen::MatrixXd vi_beta_var
-){
-  
-  int N = tZ.cols();
-  Eigen::VectorXd out(N);
-  Eigen::MatrixXd P_varA_tP_plus_beta = tP.adjoint() * varA * tP + vi_beta_var;
-  
-  // Loop over each column (observation) in tZ //
-  for (int k = 0; k < N; ++k){
-    // Loop over each non-zero element
-    Eigen::VectorXd X_k = X.row(k);
-    Eigen::VectorXd tP_x_k = tP * X_k;
-    double quad_k = X_k.adjoint() * P_varA_tP_plus_beta * X_k;
-    
-    for (Eigen::SparseMatrix<double>::InnerIterator it(tZ, k); it; ++it){
-      int row_tZ_pos = it.row();
-      double row_tZ_value = it.value();
-      
-      // Faster version of varA.col(row_tZ_pos).dot(tP_x_k);
-      // double inter_value = varA.col(row_tZ_pos).dot(tP_x_k);
-      double inter_value = 0;
-      for (Eigen::SparseMatrix<double>::InnerIterator it3(varA, row_tZ_pos); it3; ++it3){
-        inter_value += tP_x_k(it3.row()) * it3.value();
-      }
-      
-      quad_k += -2.0 * inter_value * row_tZ_value;
-      double zt_A_z = 0;
-      for (Eigen::SparseMatrix<double>::InnerIterator it2(tZ, k); it2; ++it2){
-        zt_A_z += varA.coeff(row_tZ_pos,it2.row()) * row_tZ_value * it2.value();
-      }
-      quad_k += zt_A_z;
-    }
-    out(k) = quad_k;
-  }
-  
-  return out;
-  
 }
 
 // [[Rcpp::export]]
@@ -355,108 +307,4 @@ Rcpp::List cpp_update_m_var(
     Rcpp::Named("vi_M_var") = vi_M_var,
     Rcpp::Named("running_log_det_M_var") = running_log_det_M_var
   );
-}
-
-// [[Rcpp::export]]
-Rcpp::List test_f(
-  const Eigen::SparseMatrix<double> diag_vi_pg_mean,
-  const Eigen::SparseMatrix<double> design_C,
-  const Eigen::SparseMatrix<double> Tinv_C,
-  const Eigen::VectorXd s,
-  const Rcpp::List vi_M_list
-){
-
-  Eigen::SparseMatrix<double> t_design_C = design_C.adjoint();  
-  Eigen::SparseMatrix<double> inter_matrix_C = t_design_C * diag_vi_pg_mean * design_C + Tinv_C;
-  Eigen::SimplicialLDLT<Eigen::SparseMatrix<double> > chol_C(
-      inter_matrix_C
-  );
-  
-  double log_det_C_var = - chol_C.vectorD().array().log().sum();
-  
-  Eigen::SparseMatrix<double> ident_C(design_C.cols(), design_C.cols());
-  ident_C.setIdentity();
-  Eigen::SparseMatrix<double> vi_C_var = chol_C.solve(ident_C);
-  Eigen::VectorXd C_hat = chol_C.solve(t_design_C * s);
-  
-  int J = vi_M_list.length();
-  Rcpp::List vi_P(J);
-  int size_C = design_C.cols();
-  
-  for (int j = 0; j < J; j++){
-    Eigen::SparseMatrix<double> data_M_j = vi_M_list[j];
-    if (data_M_j.cols() == 0){
-      vi_P[j] = Eigen::SparseMatrix<double>(size_C, 0);
-    }else{
-      Eigen::SparseMatrix<double> inter_matrix = t_design_C * diag_vi_pg_mean * data_M_j;
-      vi_P[j] = chol_C.solve(inter_matrix);
-    }
-  }
-  
-  return Rcpp::List::create(
-    Rcpp::Named("vi_P") = vi_P,
-    Rcpp::Named("C_hat") = C_hat,
-    Rcpp::Named("vi_C_var") = vi_C_var,
-    Rcpp::Named("log_det_C_var") = log_det_C_var
-  );
-}
-  
-  
-// [[Rcpp::export]]
-Eigen::MatrixXd block_diag_product(
-    const Eigen::MatrixXd A,
-    const Eigen::MatrixXd B,
-    const int block_size,
-    const int blocks
-){
-  
-  Eigen::MatrixXd out(blocks, block_size * block_size);
-  // Loop over each row
-  for (int i = 0; i < blocks; i++){
-    for (int s = 0; s < block_size; s++){
-      Eigen::ArrayXd A_i = A.row(i * block_size + s);
-      for (int sprime = 0; sprime < block_size; sprime ++){
-        Eigen::ArrayXd B_j = B.row(i * block_size + sprime);
-        double out_ij = (A_i * B_j).sum();
-        out(i, s + sprime * block_size) = out_ij;
-      }
-    }
-  }
-  return out;
-}
-
-// [[Rcpp::export]]
-Rcpp::List invert_rowwise(
-    const Eigen::MatrixXd X,
-    const Eigen::MatrixXd vec_prior,
-    const int dim_X
-){
-  
-  int row_X = X.rows();
-  int dim_X_sq = dim_X * dim_X;
-  
-  Eigen::MatrixXd inv_X(row_X, X.cols());
-  Eigen::VectorXd det_inv_X(row_X);
-  Eigen::MatrixXd IMatrix(dim_X, dim_X);
-  IMatrix.setIdentity();
-  // Loop over each row / group
-  for (int i = 0; i < row_X; i++){
-    Eigen::MatrixXd orig_i = X.row(i);
-    orig_i += vec_prior;
-    Eigen::Map<Eigen::MatrixXd> X_i(orig_i.data(), dim_X, dim_X);
-    Eigen::LLT<Eigen::MatrixXd> llt_of_X(X_i);
-    // Get the inverse matrix
-    Eigen::MatrixXd inv_Xi = llt_of_X.solve(IMatrix);
-    // Get the log-determinant
-    Eigen::MatrixXd llt_X_i = llt_of_X.matrixL();
-    Eigen::ArrayXd L = llt_X_i.diagonal();
-    det_inv_X(i) = - L.log().sum();
-    
-    Eigen::Map<Eigen::ArrayXd> inv_Xi_flat(inv_Xi.data(), dim_X_sq, 1);
-    inv_X.row(i) = inv_Xi_flat;
-  }
-  return Rcpp::List::create(
-    Rcpp::Named("inverse") = inv_X,
-    Rcpp::Named("det") = det_inv_X
-  );  
 }
