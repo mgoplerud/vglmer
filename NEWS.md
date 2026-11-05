@@ -1,3 +1,8 @@
+# vglmer 1.0.8
+
+* Small adjustments to prepare for Eigen 5.0.*; thanks to Dirk Eddelbuettel for the PR
+* Small adjustments to avoid depreciation messages from reformulas/lme4
+
 # vglmer 1.0.7
 
 *** IMPORTANT: `summary(object)` reported the incorrect variational mean of q(Sigma_j) [variance components]. This has been fixed; nothing changes in estimation and `object$cov` has always extracted the correct variational distribution of q(Sigma_j). Thank you to Ruggero Bellio for bringing this to my attention.

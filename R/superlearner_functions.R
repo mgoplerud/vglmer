@@ -150,6 +150,7 @@ predict.SL.vglmer <- function(object, newdata, allow_missing_levels = TRUE, ...)
 }
 
 #' @importFrom stats predict
+#' @importFrom lme4 lmerControl glmerControl
 #' @rdname sl_vglmer
 #' @export
 SL.glmer <- function(Y, X, newX, formula, family, id, obsWeights, control = NULL) {

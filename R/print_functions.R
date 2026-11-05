@@ -56,6 +56,7 @@ fixef.vglmer <- function(object, ...) {
 }
 
 # Load fixef, ranef, sigma from lme4
+#' @importFrom lme4 fixef ranef
 #' @export
 lme4::fixef
 #' @export

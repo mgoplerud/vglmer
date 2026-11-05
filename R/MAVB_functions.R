@@ -135,7 +135,8 @@ MAVB <- function(object, samples, verbose = FALSE, var_px = Inf) {
 }
 
 
-#' @import lme4
+#' @import reformulas
+#' @importFrom lme4 factorize
 get_RE_groups <- function(formula, data) {
   
   if (inherits(formula, 'formula')){
@@ -147,7 +148,7 @@ get_RE_groups <- function(formula, data) {
     return(list(factor = NA, design = NA))
   }  
   
-  barnames <- utils::getFromNamespace('barnames', 'lme4')
+  barnames <- utils::getFromNamespace('barnames', 'reformulas')
   names(bars) <- barnames(bars)
   
   fr <- data
@@ -160,11 +161,11 @@ get_RE_groups <- function(formula, data) {
   return(list(factor = ff, design = mm))
 }
 
-#' @import lme4 
+#' @import reformulas 
 #' @importFrom utils getFromNamespace
 simple_blist <- function(x, frloc, drop.unused.levels = TRUE, reorder.vars = FALSE) {
   frloc <- factorize(x, frloc)
-  makeFac <- utils::getFromNamespace('makeFac', 'lme4')
+  makeFac <- utils::getFromNamespace('makeFac', 'reformulas')
   if (is.null(ff <- tryCatch(eval(substitute(makeFac(fac),
                                              list(fac = x[[3]])), frloc), error = function(e) NULL)))
     stop("couldn't evaluate grouping factor ", deparse(x[[3]]),
@@ -180,7 +181,7 @@ simple_blist <- function(x, frloc, drop.unused.levels = TRUE, reorder.vars = FAL
                      frloc)
   if (reorder.vars) {
     
-    colSort <- utils::getFromNamespace("colSort", "lme4")
+    colSort <- utils::getFromNamespace("colSort", "reformulas")
     mm <- mm[colSort(colnames(mm)), ]
   }
   list(ff = ff, nl = nl, mm = mm, cnms = colnames(mm))

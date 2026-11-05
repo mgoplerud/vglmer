@@ -153,7 +153,7 @@
 #' original formula, fixed effects, and random effects parts separately for
 #' post-estimation functions. See \code{formula.vglmer} for more details.}
 #' }
-#' @importFrom lme4 mkReTrms findbars subbars
+#' @importFrom reformulas mkReTrms findbars subbars
 #' @importFrom stats model.response model.matrix model.frame rnorm rWishart
 #'   qlogis optim residuals lm plogis setNames .getXlevels
 #' @importFrom graphics plot
