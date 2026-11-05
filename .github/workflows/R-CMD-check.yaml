@@ -26,7 +26,7 @@ jobs:
           - {os: ubuntu-latest,   r: 'devel',   rspm: "https://packagemanager.rstudio.com/cran/__linux__/jammy/latest"}
           - {os: ubuntu-latest,   r: 'release', rspm: "https://packagemanager.rstudio.com/cran/__linux__/jammy/latest"}
           - {os: ubuntu-latest,   r: 'oldrel',  rspm: "https://packagemanager.rstudio.com/cran/__linux__/jammy/latest"}
-          - {os: ubuntu-24.04,   r: '3.6.3',   rspm: "https://packagemanager.rstudio.com/cran/__linux__/focal/latest"}
+          - {os: ubuntu-24.04,   r: '4.0.0',   rspm: "https://packagemanager.rstudio.com/cran/__linux__/focal/latest"}
     env:
       R_KEEP_PKG_SOURCE: yes
       R_REMOTES_NO_ERRORS_FROM_WARNINGS: true
