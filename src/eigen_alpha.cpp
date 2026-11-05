@@ -27,9 +27,9 @@ using namespace Rcpp;
 //' @param save_chol Save cholesky factor
 // [[Rcpp::export]]
 List LinRegChol(
-     const Eigen::MappedSparseMatrix<double> X,
-     const Eigen::MappedSparseMatrix<double> omega,
-     const Eigen::MappedSparseMatrix<double> prior_precision,
+     const Eigen::Map<Eigen::SparseMatrix<double>> X,
+     const Eigen::Map<Eigen::SparseMatrix<double>> omega,
+     const Eigen::Map<Eigen::SparseMatrix<double>> prior_precision,
      const Eigen::Map<Eigen::VectorXd> y,
      const bool save_chol = true
   ){
@@ -76,7 +76,7 @@ List LinRegChol(
 
 // [[Rcpp::export]]
 List calculate_expected_outer_alpha(
-    const Eigen::MappedSparseMatrix<double> L, // L^T L = Var(alpha)
+    const Eigen::Map<Eigen::SparseMatrix<double>> L, // L^T L = Var(alpha)
     const Eigen::Map<Eigen::VectorXd> alpha_mu, // E[alpha]
     const Rcpp::List& re_position_list
 ){

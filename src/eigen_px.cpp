@@ -5,7 +5,7 @@ using namespace Rcpp;
 
 // [[Rcpp::export]]
 Eigen::MatrixXd vecR_ridge_general(
-    const Eigen::MappedSparseMatrix<double> L,    //Decomposition of variance L^T L = VAR(alpha)
+    const Eigen::Map<Eigen::SparseMatrix<double>> L,    //Decomposition of variance L^T L = VAR(alpha)
     const Rcpp::NumericVector pg_mean,
     const Eigen::Map<Eigen::MatrixXd> Z,
     const Eigen::Map<Eigen::MatrixXi> M,
@@ -129,9 +129,9 @@ Eigen::MatrixXd vecR_design(
 
 // [[Rcpp::export]]
 Eigen::VectorXd vecR_fast_ridge(
-    const Eigen::MappedSparseMatrix<double> X,
-    const Eigen::MappedSparseMatrix<double> omega,
-    const Eigen::MappedSparseMatrix<double> prior_precision,
+    const Eigen::Map<Eigen::SparseMatrix<double>> X,
+    const Eigen::Map<Eigen::SparseMatrix<double>> omega,
+    const Eigen::Map<Eigen::SparseMatrix<double>> prior_precision,
     const Eigen::Map<Eigen::VectorXd> y,
     const Eigen::Map<Eigen::VectorXd> adjust_y
 ){
@@ -144,7 +144,7 @@ Eigen::VectorXd vecR_fast_ridge(
 
 // [[Rcpp::export]]
 Eigen::MatrixXd vecR_ridge_new(
-    const Eigen::MappedSparseMatrix<double> L,    //Decomposition of variance L^T L = VAR(alpha)
+    const Eigen::Map<Eigen::SparseMatrix<double>> L,    //Decomposition of variance L^T L = VAR(alpha)
     const Eigen::ArrayXd pg_mean,
     const Rcpp::NumericVector mapping_J, // Where to assign the elements to the larger matrix.
     const Rcpp::NumericVector d,
