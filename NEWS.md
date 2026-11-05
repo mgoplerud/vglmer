@@ -7,7 +7,7 @@
 
 *** IMPORTANT: `summary(object)` reported the incorrect variational mean of q(Sigma_j) [variance components]. This has been fixed; nothing changes in estimation and `object$cov` has always extracted the correct variational distribution of q(Sigma_j). Thank you to Ruggero Bellio for bringing this to my attention.
 
-** Added convergence criterion using "relative" ELBO, i.e. stopping when ELBO/N increases by a small amount where N is the number of observations.
+** Added convergence criterion using "relative" ELBO, i.e. stopping when ELBO/N increases by a small amount where N is the number of observations. Default option is 0 but one can enable it on large datasets.
 
 ** Adjustments to "print", e.g. only showing change in q(alpha,beta) at convergence
 

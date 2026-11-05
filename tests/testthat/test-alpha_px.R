@@ -38,7 +38,7 @@ test_that("Calculate E[alpha alpha^T] comparing cpp and base R", {
   dta <- data.frame(y = 1, g = letters, g2 = LETTERS, g3 = 1:26, a = rnorm(26), x = rnorm(26), z = rnorm(26))
   formula <- y ~ x + (1 + z | g) + (1 + z | g2) + (0 + a | g3)
 
-  mk_Z <- lme4::mkReTrms(lme4::findbars(formula), model.frame(lme4::subbars(formula), data = dta), reorder.terms = FALSE, reorder.vars = FALSE)
+  mk_Z <- reformulas::mkReTrms(reformulas::findbars(formula), model.frame(reformulas::subbars(formula), data = dta), reorder.terms = FALSE, reorder.vars = FALSE)
 
   breaks_for_RE <- c(0, cumsum(diff(mk_Z$Gp)))
   d_j <- c(2, 2, 1)

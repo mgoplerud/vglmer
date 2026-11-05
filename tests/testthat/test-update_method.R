@@ -34,12 +34,16 @@ test_that("Joint vs Cyclical Update", {
     
     ex_vglmer_cyclic <- vglmer(
       formula = y ~ x + (1 | g) + (1 | g2), family = "binomial",
-      data = NULL, control = vglmer_control(factorization_method = v, linpred_method = "cyclical", init = "zero")
+      data = NULL, control = vglmer_control(factorization_method = v, 
+                                            tolerance_rel_elbo = 0,
+                                            linpred_method = "cyclical", init = "zero")
     )
 
     ex_vglmer_joint <- vglmer(
       formula = y ~ x + (1 | g) + (1 | g2), family = "binomial",
-      data = NULL, control = vglmer_control(factorization_method = v, linpred_method = "joint", init = "zero")
+      data = NULL, control = vglmer_control(factorization_method = v, 
+                                            tolerance_rel_elbo = 0, 
+                                            linpred_method = "joint", init = "zero")
     )
 
     fmt_vglmer_cyclic <- format_vglmer(ex_vglmer_cyclic)
@@ -53,7 +57,8 @@ test_that("Joint vs Cyclical Update", {
         formula = y ~ x + (1 | g) + (1 | g2), family = "binomial",
         data = NULL, 
         control = vglmer_control(factorization_method = v, 
-           do_SQUAREM = FALSE,
+          do_SQUAREM = FALSE,
+          tolerance_elbo = 0,
           linpred_method = "solve_normal", init = "zero")
       )
 

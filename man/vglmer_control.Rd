@@ -11,7 +11,7 @@ vglmer_control(
   parameter_expansion = "translation",
   do_SQUAREM = TRUE,
   tolerance_elbo = 1e-08,
-  tolerance_rel_elbo = tolerance_elbo,
+  tolerance_rel_elbo = 0,
   tolerance_parameters = 1e-05,
   force_whole = TRUE,
   print_prog = NULL,
@@ -70,7 +70,7 @@ only \code{"mean"} and \code{"none"} are available.}
 \item{tolerance_elbo}{Default (\code{1e-8}) sets a convergence threshold if
 the change in the ELBO is below the tolerance.}
 
-\item{tolerance_rel_elbo}{Default (\code{1e-8}) sets a convergence threshold
+\item{tolerance_rel_elbo}{Default (\code{0}) sets a convergence threshold
 if the change in the ELBO divided by the number of observations (or number
 of trials if \code{"family"} is binomial).}
 
