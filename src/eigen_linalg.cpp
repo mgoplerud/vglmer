@@ -5,9 +5,9 @@ using namespace Rcpp;
 
 // [[Rcpp::export]]
 Rcpp::List chol_sparse(
-  const Eigen::MappedSparseMatrix<double> X,
-  const Eigen::MappedSparseMatrix<double> omega,
-  const Eigen::MappedSparseMatrix<double> precision
+  const Eigen::Map<Eigen::SparseMatrix<double>> X,
+  const Eigen::Map<Eigen::SparseMatrix<double>> omega,
+  const Eigen::Map<Eigen::SparseMatrix<double>> precision
 ){
   Eigen::SimplicialLLT<Eigen::SparseMatrix<double> > Ch(X.adjoint() * omega * X + precision);
 
@@ -24,8 +24,8 @@ Rcpp::List chol_sparse(
 
 // [[Rcpp::export]]
 Eigen::VectorXd cpp_zVz(
-  const Eigen::MappedSparseMatrix<double> Z,
-  const Eigen::MappedSparseMatrix<double> V
+  const Eigen::Map<Eigen::SparseMatrix<double>> Z,
+  const Eigen::Map<Eigen::SparseMatrix<double>> V
 ){
 
   Eigen::SparseMatrix<double> VZ_t = V * Z.adjoint();
@@ -49,7 +49,7 @@ Eigen::VectorXd cpp_zVz(
 // [[Rcpp::export]]
 List LinRegChol_fe(
     const Eigen::Map<Eigen::MatrixXd> &X,
-    const Eigen::MappedSparseMatrix<double> omega,
+    const Eigen::Map<Eigen::SparseMatrix<double>> omega,
     const Eigen::Map<Eigen::VectorXd> y,
     const bool save_chol = true
 ){
